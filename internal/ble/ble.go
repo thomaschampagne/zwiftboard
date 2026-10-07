@@ -46,15 +46,6 @@ type Target struct {
 // Enable initializes the BLE adapter.
 func Enable() error { return adapter.Enable() }
 
-// NewAddress parses a BLE MAC string into an address.
-func NewAddress(mac string) (bluetooth.Address, error) {
-	m, err := bluetooth.ParseMAC(mac)
-	if err != nil {
-		return bluetooth.Address{}, err
-	}
-	return bluetooth.Address{MACAddress: bluetooth.MACAddress{MAC: m}}, nil
-}
-
 // scanGap is the pause between scan bursts.
 const scanGap = 3 * time.Second
 
