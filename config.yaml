@@ -1,17 +1,36 @@
-# Zwift Click V2 button -> keyboard key.
-# Loaded from the working directory at startup (override with -config).
+# Button -> keyboard key profiles.
+# Loaded from the working directory at startup (-config overrides the path,
+# -p/--profile picks the profile, default: mywhoosh).
 #
 # Keys: single letters a-z, digits 0-9, f1-f12, or named keys —
 #   up, down, left, right, enter, space, tab, esc, backspace, delete,
 #   insert, home, end, pageup, pagedown, shift, ctrl, alt, capslock
 #   and punctuation: - = , . / ; ' [ ] ` \
-LEFT: left
-UP: up
-RIGHT: right
-DOWN: down
-A: a
-B: b
-Y: y
-Z: z
-MIN: pagedown
-PLUS: pageup
+profiles:
+  # MyWhoosh HD shortcuts (mywhooshinfo.com / keyboardista.com):
+  # I/K = gear up/down, arrows/A/D = steer, Space = power-up,
+  # ESC = pause menu, Tab = camera, U = U-turn / minimal UI.
+  mywhoosh:
+    LEFT: left      # steer left / navigate
+    UP: up          # navigate
+    RIGHT: right    # steer right / navigate
+    DOWN: down      # navigate
+    MIN: k          # shift down (easier gear)
+    PLUS: i         # shift up (harder gear)
+    A: space        # use power-up
+    B: esc          # pause / menu
+    Y: u            # U-turn / minimal UI toggle
+    Z: tab          # change camera view
+
+  # Generic profile: everything follows its own name (old flat config.yaml).
+  zwift:
+    LEFT: left
+    UP: up
+    RIGHT: right
+    DOWN: down
+    A: a
+    B: b
+    Y: y
+    Z: z
+    MIN: pagedown
+    PLUS: pageup

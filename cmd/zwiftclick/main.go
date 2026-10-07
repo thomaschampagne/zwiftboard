@@ -1,6 +1,6 @@
 // Zwift Click V2 BLE listener for Windows (WinRT via tinygo.org/x/bluetooth).
 //
-//	go run ./cmd/zwiftclick [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config config.yaml] [-ack=true]
+//	go run ./cmd/zwiftclick [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config config.yaml] [-p mywhoosh] [-ack=true]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
 // keyboard keys (Windows keybd_event).
@@ -26,13 +26,16 @@ import (
 func main() {
 	scanFor := flag.Duration("scan", 10*time.Second, "how long to scan for Zwift controllers")
 	addrList := flag.String("addr", "", "comma-separated BLE addresses (e.g. D4:06:0F:A9:86:04) — skips scanning")
-	configPath := flag.String("config", "config.yaml", "YAML file (cwd) mapping buttons to keyboard keys")
+	configPath := flag.String("config", "config.yaml", "YAML file (cwd) with key mapping profiles")
+	var profile string
+	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
+	flag.StringVar(&profile, "profile", config.DefaultProfile, "config profile to use (same as -p)")
 	flag.BoolVar(&ble.Verbose, "v", false, "log raw frames and unknown bits")
 	flag.BoolVar(&ble.SendAck, "ack", true, "send ff 04 00 to devices that echo RideOn (keeps unlock)")
 	flag.DurationVar(&ble.TapDebounce, "debounce", 200*time.Millisecond, "minimum gap between two taps of the same button")
 	flag.Parse()
 
-	keyMap, err := config.Load(*configPath)
+	keyMap, err := config.Load(*configPath, profile)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
