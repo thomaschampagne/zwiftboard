@@ -19,14 +19,28 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
 	"zwiftboard/internal/ble"
 	"zwiftboard/internal/config"
+	"zwiftboard/internal/keys"
 	"zwiftboard/internal/zwift"
 )
+
+// guarded runs fn, logging a panic (with stack) instead of crashing, so a
+// single bad controller event never takes the process down. Keep at top level
+// (not inside main) to stay reachable from goroutine closures.
+func guarded(where string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Warn("recovered from panic", "where", where, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	fn()
+}
 
 func main() {
 	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
@@ -61,6 +75,12 @@ func main() {
 			}
 		}
 	}
+	if cfg.FocusProgramNameOnClick == "" {
+		slog.Info("focus program on click disabled — keys go to the focused window")
+	} else {
+		slog.Info("focus program on click", "program", cfg.FocusProgramNameOnClick)
+	}
+	keys.SetWindowTarget(cfg.FocusProgramNameOnClick)
 
 	if err := ble.Enable(); err != nil {
 		slog.Error("enable BLE adapter", "error", err)
@@ -87,9 +107,13 @@ func main() {
 		regMu.Unlock()
 		go func() {
 			for {
-				if err := ble.Session(t, cfg.Bindings); err != nil {
-					slog.Warn("session ended", "controller", t.Label, "error", err)
-				}
+				// guarded turns a panic in one controller's session into a
+				// warn + retry, so a single bad event never kills the process.
+				guarded("session "+t.Label, func() {
+					if err := ble.Session(t, cfg.Bindings); err != nil {
+						slog.Warn("session ended", "controller", t.Label, "error", err)
+					}
+				})
 				time.Sleep(5 * time.Second)
 			}
 		}()

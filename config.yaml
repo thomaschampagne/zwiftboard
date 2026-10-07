@@ -5,6 +5,15 @@
 # loglevel: debug | info | warn | error — -v on the CLI forces debug.
 loglevel: info
 #
+# focusProgramNameOnClick (per profile): bring this program's window to the
+# foreground on every button press so the tapped key lands in it. The value
+# matches the window title OR the program .exe name (case-insensitive).
+# null (or "") keeps the default: keys go to whatever window has focus.
+#
+#   focusProgramNameOnClick: null        # disabled (default)
+#   focusProgramNameOnClick: MyWhoosh    # `MyWhoosh` window or MyWhoosh.exe
+#   focusProgramNameOnClick: ZwiftApp    # named by its .exe
+#
 # Keys: single letters a-z, digits 0-9, f1-f12, or named keys —
 #   up, down, left, right, enter, space, tab, esc, backspace, delete,
 #   insert, home, end, pageup, pagedown, shift, ctrl, alt, capslock
@@ -18,6 +27,20 @@ loglevel: info
 #   systm       support.wahoofitness.com "Keyboard shortcuts" (SYSTM)
 # Apps checked and excluded: FulGaz (no shortcuts), BKOOL (undocumented).
 profiles:
+  # Start notepad
+  test-notepad:
+    LEFT: l
+    UP: u 
+    RIGHT: r
+    DOWN: d
+    MIN: m
+    PLUS: p
+    A: a 
+    B: b 
+    Y: y 
+    Z: z 
+    focusProgramNameOnClick: "Notepad"
+
   # Zwift, riding-focused: arrows turn at junctions / U-turn / action bar,
   # space = power-up, esc = menu, pageup/down = FTP bias, F-keys = emotes.
   zwift:
@@ -31,6 +54,7 @@ profiles:
     B: esc        # menu / go back
     Y: f3         # Ride On!
     Z: f1         # elbow flick
+    focusProgramNameOnClick: null   # not set: keys go to the focused window
 
   # MyWhoosh HD: I/K = gear up/down, arrows = steer/navigate,
   # space = power-up, esc = pause menu, tab = camera, u = U-turn / minimal UI.
@@ -45,6 +69,7 @@ profiles:
     B: esc          # pause / menu
     Y: u            # U-turn / minimal UI toggle
     Z: tab          # change camera view
+    focusProgramNameOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
 
   # Rouvy desktop: keyboard is the default remote; '.' / ',' shift gears.
   rouvy:
@@ -58,6 +83,7 @@ profiles:
     B: esc          # back
     Y: k            # kudos
     Z: e            # toggle ERG mode
+    focusProgramNameOnClick: null
 
   # TrainerRoad workout player: arrows = intensity / resistance.
   trainerroad:
@@ -69,6 +95,7 @@ profiles:
     B: t            # cycle trainer mode (ERG/Resistance/Level)
     Y: h            # heart-rate graph
     Z: w            # workout text
+    focusProgramNameOnClick: null
 
   # Wahoo SYSTM workout player: ` toggles ERG, digits pick levels 0-9
   # (add e.g. PLUS: 5 for your usual level — none mapped by default).
@@ -79,3 +106,4 @@ profiles:
     B: "`"          # ERG mode toggle
     Y: m            # mute
     Z: esc          # close settings menu
+    focusProgramNameOnClick: null

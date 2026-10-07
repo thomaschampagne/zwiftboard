@@ -88,6 +88,65 @@ func TestLoadLogLevel(t *testing.T) {
 	}
 }
 
+func TestLoadFocusProgramNameOnClick(t *testing.T) {
+	empty := "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: null\n"
+	cases := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{"absent", "profiles:\n  mywhoosh:\n    A: a\n", ""},
+		{"null", empty, ""},
+		{"empty-string", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: \"\"\n", ""},
+		{"plain", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: MyWhoosh\n", "MyWhoosh"},
+		{"trimmed", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: \" MyWhoosh \"\n", "MyWhoosh"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeConfig(t, tc.yaml)
+			cfg, err := Load(path, "mywhoosh")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.FocusProgramNameOnClick != tc.want {
+				t.Errorf("FocusProgramNameOnClick = %q, want %q", cfg.FocusProgramNameOnClick, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadFocusProgramNameOnClickPerProfile(t *testing.T) {
+	path := writeConfig(t, `profiles:
+  mywhoosh:
+    A: a
+    focusProgramNameOnClick: MyWhoosh
+  zwift:
+    A: a
+`)
+	mywhoosh, err := Load(path, "mywhoosh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mywhoosh.FocusProgramNameOnClick != "MyWhoosh" {
+		t.Errorf("mywhoosh focus = %q, want %q", mywhoosh.FocusProgramNameOnClick, "MyWhoosh")
+	}
+	zwift, err := Load(path, "zwift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if zwift.FocusProgramNameOnClick != "" {
+		t.Errorf("zwift focus = %q, want %q (per-profile, not global)", zwift.FocusProgramNameOnClick, "")
+	}
+}
+
+func TestLoadFocusProgramNameOnClickTopLevelRejected(t *testing.T) {
+	path := writeConfig(t, "focusProgramNameOnClick: MyWhoosh\nprofiles:\n  mywhoosh:\n    A: a\n")
+	_, err := Load(path, "mywhoosh")
+	if err == nil || !strings.Contains(err.Error(), "moved") || !strings.Contains(err.Error(), focusProgramKey) {
+		t.Errorf("want moved-per-profile error, got: %v", err)
+	}
+}
+
 func TestLoadBadLogLevel(t *testing.T) {
 	path := writeConfig(t, "loglevel: loud\nprofiles:\n  mywhoosh:\n    A: a\n")
 	_, err := Load(path, "mywhoosh")

@@ -78,14 +78,15 @@ Y/Z/A/B + plus.
 
 ## Configuration
 
-`config.yaml` sits next to the executable (or pass `-config`). One file, two
-top-level keys:
+`config.yaml` sits next to the executable (or pass `-config`). One file:
+a global `loglevel:` plus a `profiles:` map.
 
 ```yaml
 loglevel: info # debug | info | warn | error
 
 profiles:
   mywhoosh: # pick with -p mywhoosh
+    focusProgramNameOnClick: null # optional, per profile (see below)
     PLUS: i # gear up
     MIN: k # gear down
     A: space # power-up
@@ -94,6 +95,7 @@ profiles:
     Z: tab # camera
 
   my-zwift-setup: # add your own — any name works
+    focusProgramNameOnClick: ZwiftApp
     A: space
     B: esc
 ```
@@ -107,6 +109,29 @@ above).
 If the file is missing, zwiftboard still runs and logs every press — you just
 don't get keystrokes.
 
+### Focus a program on click
+
+By default keys go to whichever window has focus, like a real keyboard. To make
+every click land in the cycling app even if another window stole focus, tell
+zwiftboard which program to bring forward first — per profile, since each game
+window is different:
+
+```yaml
+profiles:
+  mywhoosh:
+    focusProgramNameOnClick: null        # disabled (default): keys → focused window
+    focusProgramNameOnClick: MyWhoosh    # match by window title: "MyWhoosh"
+  zwift:
+    focusProgramNameOnClick: ZwiftApp    # or by .exe name (no path / .exe)
+```
+
+The value matches the window title (case-insensitive contains) or the program
+`.exe` name. On each button press the matching window is restored (if
+minimized) and brought to the foreground, then the key is tapped into it. If
+no window matches, the tap is **dropped and a warning logged** — zwiftboard
+never types into an unrelated app. Windows remembers the focused window, so
+the game stays in front for the whole ride.
+
 ## How it works
 
 ```
@@ -119,7 +144,8 @@ don't get keystrokes.
 │   frame 0x23:              │ notify │   3. decode protobuf bitmap (0=pressed)   │
 │   protobuf bitmap,         │ write  │   4. global debounce (pair MIRRORS        │
 │   0 = pressed              │ indic. │      every press on both units)           │
-│                            │        │   5. keys.Tap → user32 keybd_event        │
+│                            │        │   5. keys.Tap → focus target window, │
+│                            │        │      then user32 keybd_event         │
 └────────────────────────────┘        └───────────────────┬───────────────────────┘
                                                           │ simulated keystroke
                                         ┌─────────────────▼───────────────────────┐
@@ -142,8 +168,9 @@ don't get keystrokes.
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
 5. **Tap** — the pair mirrors every press (both units send the same frame), so
    dedup is global per button name: a second claim within `-debounce`
-   (200ms) is dropped as `duplicate=true`. The key then goes out via Windows
-   `keybd_event` to whatever window has focus.
+   (200ms) is dropped as `duplicate=true`. If `focusProgramNameOnClick` is
+   set, the configured window is brought to the foreground, then the key goes
+   out via Windows `keybd_event`.
 
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.
@@ -156,7 +183,8 @@ connects are serialized so they never overlap an active scan.
 | One press types the key twice                 | Raise `-debounce` (frames should mirror within tens of ms).                                                               |
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
 | Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |
-| Keys land in the wrong window                 | `keybd_event` types into the **foreground** window — focus the game.                                                      |
+| Keys land in the wrong window                 | Set `focusProgramNameOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it. |
+| App quits / stops responding after a while    | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
 | Nothing works with Zwift open                 | Close Zwift / Companion first: one BLE connection per controller.                                                         |
 
 Not a HID keyboard: Zwift itself won't see the Click as a Bluetooth keyboard
