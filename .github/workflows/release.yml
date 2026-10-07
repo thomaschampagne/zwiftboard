@@ -1,0 +1,62 @@
+name: Release
+
+# Semantic versioning via release-please: conventional commits on main drive
+# an automated release PR (feat -> minor, fix -> patch, BREAKING CHANGE ->
+# major). Merging it creates the vX.Y.Z tag + GitHub Release, and this same
+# workflow then builds and uploads the binaries — one workflow on purpose,
+# because a release created with GITHUB_TOKEN does not trigger other workflows.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: go
+
+  build-windows:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: build (windows/amd64)
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/zwiftboard-windows-amd64.exe .
+      - name: upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/zwiftboard-windows-amd64.exe config.yaml --clobber
+
+  build-macos:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: build (macos/arm64)
+        # cgo required (cbgo/CoreBluetooth) — must build natively, not cross-compiled.
+        run: CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/zwiftboard-macos-arm64 .
+      - name: upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/zwiftboard-macos-arm64 --clobber
