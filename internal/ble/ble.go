@@ -79,7 +79,11 @@ func Discover(d time.Duration) []Target {
 		label := fmt.Sprintf("%s/%s", zwift.ShortName(name), zwift.Tail(key))
 		seen[key] = Target{Addr: r.Address, Label: label}
 		order = append(order, key)
-		log.Printf("found %q addr=%s deviceID=%d rssi=%d", name, key, id, r.RSSI)
+		disp := name
+		if disp == "" {
+			disp = label // advertisements without a name: fall back to label
+		}
+		log.Printf("found %s addr=%s deviceID=%d rssi=%d", disp, key, id, r.RSSI)
 	})
 	timer.Stop()
 	if err != nil {
