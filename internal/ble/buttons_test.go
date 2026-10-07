@@ -1,8 +1,10 @@
-package main
+package ble
 
 import (
 	"testing"
 	"time"
+
+	"zwiftclickv2-keyboard/internal/keys"
 )
 
 func resetTapState(t *testing.T) {
@@ -10,10 +12,10 @@ func resetTapState(t *testing.T) {
 	tapMu.Lock()
 	lastTapByName = map[string]time.Time{}
 	tapMu.Unlock()
-	old := tapDebounce
-	tapDebounce = 50 * time.Millisecond
+	old := TapDebounce
+	TapDebounce = 50 * time.Millisecond
 	t.Cleanup(func() {
-		tapDebounce = old
+		TapDebounce = old
 		tapMu.Lock()
 		lastTapByName = map[string]time.Time{}
 		tapMu.Unlock()
@@ -23,9 +25,9 @@ func resetTapState(t *testing.T) {
 func TestButtonHandlerDebounce(t *testing.T) {
 	resetTapState(t)
 
-	keys := map[string]keyBinding{"LEFT": {vk: 0x25, token: "left"}}
+	keyMap := map[string]keys.Binding{"LEFT": {VK: 0x25, Token: "left"}}
 	taps := 0
-	h := buttonHandler("t", keys, func(keyBinding) { taps++ })
+	h := ButtonHandler("t", keyMap, func(keys.Binding) { taps++ })
 
 	press := []byte{0x23, 0x08, 0xFE, 0xFF, 0xFF, 0xFF, 0x0F}
 	idle := []byte{0x23, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}
@@ -56,11 +58,11 @@ func TestButtonHandlerDebounce(t *testing.T) {
 func TestCrossControllerDuplicateTap(t *testing.T) {
 	resetTapState(t)
 
-	keys := map[string]keyBinding{"B": {vk: 0x42, token: "b"}}
+	keyMap := map[string]keys.Binding{"B": {VK: 0x42, Token: "b"}}
 	taps := 0
-	tap := func(keyBinding) { taps++ }
-	right := buttonHandler("right", keys, tap)
-	left := buttonHandler("left", keys, tap)
+	tap := func(keys.Binding) { taps++ }
+	right := ButtonHandler("right", keyMap, tap)
+	left := ButtonHandler("left", keyMap, tap)
 
 	press := []byte{0x23, 0x08, 0xDF, 0xFF, 0xFF, 0xFF, 0x0F}
 	right(press)
@@ -72,10 +74,10 @@ func TestCrossControllerDuplicateTap(t *testing.T) {
 
 func TestButtonHandlerUnmappedButtonNoTap(t *testing.T) {
 	resetTapState(t)
-	tapDebounce = 0
+	TapDebounce = 0
 
 	taps := 0
-	h := buttonHandler("t", nil, func(keyBinding) { taps++ })
+	h := ButtonHandler("t", nil, func(keys.Binding) { taps++ })
 	h([]byte{0x23, 0x08, 0xFE, 0xFF, 0xFF, 0xFF, 0x0F})
 	if taps != 0 {
 		t.Fatalf("taps = %d, want 0 with empty key map", taps)
