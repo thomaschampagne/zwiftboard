@@ -18,4 +18,6 @@
 Self review each step on consistency/quality. Commit each step w/ conventionnal commit
 
 - [x] Write unit test
+- [ ] Write github Action CI/CD pipeline with semantic versioning. Build for windows, macos (arm only) with binaries uploaded in created release should be sgaupported
+
 - [ ] Write README.md
