@@ -9,10 +9,31 @@ loglevel: info
 #   up, down, left, right, enter, space, tab, esc, backspace, delete,
 #   insert, home, end, pageup, pagedown, shift, ctrl, alt, capslock
 #   and punctuation: - = , . / ; ' [ ] ` \
+#
+# Shortcuts verified against each vendor's docs (2026-10-07):
+#   zwift       support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B
+#   mywhoosh    mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts
+#   rouvy       support.rouvy.com "Remote controllers and control mapping"
+#   trainerroad support.trainerroad.com "TrainerRoad Keyboard Shortcuts"
+#   systm       support.wahoofitness.com "Keyboard shortcuts" (SYSTM)
+# Apps checked and excluded: FulGaz (no shortcuts), BKOOL (undocumented).
 profiles:
-  # MyWhoosh HD shortcuts (mywhooshinfo.com / keyboardista.com):
-  # I/K = gear up/down, arrows/A/D = steer, Space = power-up,
-  # ESC = pause menu, Tab = camera, U = U-turn / minimal UI.
+  # Zwift, riding-focused: arrows turn at junctions / U-turn / action bar,
+  # space = power-up, esc = menu, pageup/down = FTP bias, F-keys = emotes.
+  zwift:
+    LEFT: left
+    UP: up
+    RIGHT: right
+    DOWN: down
+    MIN: pagedown
+    PLUS: pageup
+    A: space      # use power-up
+    B: esc        # menu / go back
+    Y: f3         # Ride On!
+    Z: f1         # elbow flick
+
+  # MyWhoosh HD: I/K = gear up/down, arrows = steer/navigate,
+  # space = power-up, esc = pause menu, tab = camera, u = U-turn / minimal UI.
   mywhoosh:
     LEFT: left      # steer left / navigate
     UP: up          # navigate
@@ -25,15 +46,36 @@ profiles:
     Y: u            # U-turn / minimal UI toggle
     Z: tab          # change camera view
 
-  # Generic profile: everything follows its own name (old flat config.yaml).
-  zwift:
+  # Rouvy desktop: keyboard is the default remote; '.' / ',' shift gears.
+  rouvy:
     LEFT: left
     UP: up
     RIGHT: right
     DOWN: down
-    A: a
-    B: b
-    Y: y
-    Z: z
-    MIN: pagedown
-    PLUS: pageup
+    MIN: ","        # shift down
+    PLUS: "."       # shift up
+    A: space        # pause / resume
+    B: esc          # back
+    Y: k            # kudos
+    Z: e            # toggle ERG mode
+
+  # TrainerRoad workout player: arrows = intensity / resistance.
+  trainerroad:
+    UP: up          # intensity +
+    DOWN: down      # intensity -
+    LEFT: left      # resistance -
+    RIGHT: right    # resistance +
+    A: space        # play / pause
+    B: t            # cycle trainer mode (ERG/Resistance/Level)
+    Y: h            # heart-rate graph
+    Z: w            # workout text
+
+  # Wahoo SYSTM workout player: ` toggles ERG, digits pick levels 0-9
+  # (add e.g. PLUS: 5 for your usual level — none mapped by default).
+  systm:
+    UP: up          # intensity +
+    DOWN: down      # intensity -
+    A: space        # pause / play
+    B: "`"          # ERG mode toggle
+    Y: m            # mute
+    Z: esc          # close settings menu

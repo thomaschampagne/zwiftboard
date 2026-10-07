@@ -29,7 +29,8 @@ New flag: `-addr D4:06:0F:A9:86:04,...` skips scanning (no watch for late contro
 
 ### Feature — profiles + leveled logging (2026-10-07 evening)
 - `config.yaml`: top-level `loglevel:` (debug|info|warn|error, default info) and `profiles:` map of profile → button→key bindings. Flat (old) format errors with guidance. Loaded once at startup (`-config` overrides path).
-- `-p` / `--profile` selects the profile; **default `mywhoosh`**; unknown profile errors with the available list. Built-in `mywhoosh` (Click buttons → MyWhoosh HD shortcuts: MIN/PLUS = K/I gears, A = space power-up, B = esc pause, Y = u U-turn/UI, Z = tab camera) and `zwift` (old identity mapping).
+- `-p` / `--profile` selects the profile; **default `mywhoosh`**; unknown profile errors with the available list.
+- Five profiles, shortcuts verified against vendor docs (sources below): `mywhoosh` (K/I gears, space power-up, esc pause, tab camera, u U-turn), `zwift` (arrows turn/U-turn/action bar, space power-up, pageup/down FTP bias, f3 Ride On, f1 elbow flick), `rouvy` (`.`/`,` shift, space pause, k kudos, e ERG), `trainerroad` (arrows intensity/resistance, space pause, t mode, h/w toggles), `systm` (up/down intensity, backtick ERG, m mute). FulGaz (no shortcuts) and BKOOL (undocumented) were checked and excluded.
 - Tokens: `a-z`, `0-9`, `f1`-`f12`, named keys (up/down/left/right/enter/space/tab/esc/backspace/delete/insert/home/end/pageup/pagedown/shift/ctrl/alt/capslock), and single punctuation characters ( - = , . / ; ' [ ] \ and backtick).
 - Logging is `log/slog` only; level from `loglevel:`, `-v` forces debug. Raw frames/service lists/sync-tx = debug, edges/lifecycle = info, recoverable issues = warn, startup failures = error+exit.
 - `internal/keys`: token → VK (`Resolve`) + `Tap` (`user32 keybd_event` on windows, no-op elsewhere so `go test`/`vet` run on linux).
@@ -92,7 +93,11 @@ Click V2 hardware: left module has 4 arrows plus minus; right has Y/Z/A/B plus p
 - ajchellew/zwiftplay (older encrypted Play/Click protocol background): https://github.com/ajchellew/zwiftplay
 - p3dda/RideToWoosh (Click V2 handshake picks characteristics by UUID): https://github.com/p3dda/RideToWoosh
 - OpenBikeControl commit `2cb079fc` (referenced by the PR for the `ff0400` ack; not read directly)
-- MyWhoosh shortcuts (for the default profile): https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts, https://www.keyboardista.com/en/shortcuts/mywhoosh-desktop/
+- MyWhoosh shortcuts (for the mywhoosh profile): https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts, https://www.keyboardista.com/en/shortcuts/mywhoosh-desktop/
+- Zwift shortcuts (official): https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B
+- Rouvy remote/keyboard mapping (official): https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping
+- TrainerRoad keyboard shortcuts (official): https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts
+- Wahoo SYSTM keyboard shortcuts (official): https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-shortcuts
 
 ## Suggested next steps
 1. Run `go run . -v` on real hardware; confirm scan bursts, connect past discovery, handshake log line, per-button names, and `key=...` taps for both controllers.
