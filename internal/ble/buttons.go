@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"zwiftclickv2-keyboard/internal/keys"
-	"zwiftclickv2-keyboard/internal/zwift"
+	"zwiftboard/internal/keys"
+	"zwiftboard/internal/zwift"
 )
 
 // claimTap reserves the right to tap key for button name. Shared by ALL

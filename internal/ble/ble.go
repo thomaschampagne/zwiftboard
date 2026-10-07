@@ -11,8 +11,8 @@ import (
 
 	"tinygo.org/x/bluetooth"
 
-	"zwiftclickv2-keyboard/internal/keys"
-	"zwiftclickv2-keyboard/internal/zwift"
+	"zwiftboard/internal/keys"
+	"zwiftboard/internal/zwift"
 )
 
 var (

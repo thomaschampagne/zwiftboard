@@ -11,8 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"zwiftclickv2-keyboard/internal/keys"
-	"zwiftclickv2-keyboard/internal/zwift"
+	"zwiftboard/internal/keys"
+	"zwiftboard/internal/zwift"
 )
 
 // DefaultProfile is used when -p/--profile is not given.

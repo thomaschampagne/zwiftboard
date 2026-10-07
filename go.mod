@@ -1,4 +1,4 @@
-module zwiftclickv2-keyboard
+module zwiftboard
 
 go 1.27.1
 

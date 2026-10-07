@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"zwiftclickv2-keyboard/internal/ble"
-	"zwiftclickv2-keyboard/internal/config"
-	"zwiftclickv2-keyboard/internal/zwift"
+	"zwiftboard/internal/ble"
+	"zwiftboard/internal/config"
+	"zwiftboard/internal/zwift"
 )
 
 func main() {

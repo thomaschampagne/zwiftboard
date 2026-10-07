@@ -1,7 +1,7 @@
 # HANDOFF: Zwift Click V2 BLE listener (Go, Windows)
 
 ## Goal
-Go program that connects to Zwift Click V2 controllers over Bluetooth LE on Windows, logs button press/release events, and (since 2026-10-07) types the mapped keyboard key on every press — Click acts like a Bluetooth keyboard. Mapping lives in `config.yaml` (cwd): named **profiles** per game, plus the log level.
+`zwiftboard` — Go program that connects to Zwift Click V2 controllers over Bluetooth LE on Windows, logs button press/release events, and (since 2026-10-07) types the mapped keyboard key on every press — Click acts like a Bluetooth keyboard. Mapping lives in `config.yaml` (cwd): named **profiles** per game, plus the log level.
 
 ## Status
 - Compiles clean for Windows (`GOOS=windows go build ./...`). Ran on hardware: scan + connect worked, but service discovery failed (see Fix 1).

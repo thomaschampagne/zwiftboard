@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"zwiftclickv2-keyboard/internal/keys"
+	"zwiftboard/internal/keys"
 )
 
 func resetTapState(t *testing.T) {
