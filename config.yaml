@@ -1,0 +1,17 @@
+# Zwift Click V2 button -> keyboard key.
+# Loaded from the working directory at startup (override with -config).
+#
+# Keys: single letters a-z, digits 0-9, f1-f12, or named keys —
+#   up, down, left, right, enter, space, tab, esc, backspace, delete,
+#   insert, home, end, pageup, pagedown, shift, ctrl, alt, capslock
+#   and punctuation: - = , . / ; ' [ ] ` \
+LEFT: left
+UP: up
+RIGHT: right
+DOWN: down
+A: a
+B: b
+Y: y
+Z: z
+MIN: pagedown
+PLUS: pageup
