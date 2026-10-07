@@ -30,6 +30,9 @@ func claimTap(name string) bool {
 func ButtonHandler(label string, keyMap map[string]keys.Binding, tap func(keys.Binding)) func([]byte) {
 	prev := uint32(0xFFFFFFFF) // all released
 	return func(b []byte) {
+		// Notification callbacks run on the BLE stack's goroutines; a panic
+		// here would crash the process, so absorb it and stay alive.
+		defer recoverLog("button frame " + label)
 		if len(b) == 0 {
 			return
 		}

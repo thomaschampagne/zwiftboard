@@ -172,6 +172,16 @@ the game stays in front for the whole ride.
    set, the configured window is brought to the foreground, then the key goes
    out via Windows `keybd_event`.
 
+**Two pods, one pair.** The Click V2 ships as two pods that work as a *pair*:
+the LEFT pod is the pair's BLE anchor and the RIGHT pod mirrors its state to
+the LEFT over a private RF link. zwiftboard connects to **every** pod it finds
+(each gets its own session) and keepalives each, so a lone RIGHT pod works fine
+too — but with only the RIGHT pod connected its LED stays in advertising mode
+(makes the LED keep blinking) instead of going solid. Connect both pods and the
+LEDs turn solid; the blink is cosmetic, not a fault. Scanning never gives up,
+so you can turn the second pod on minutes later and it joins the pair on the
+spot.
+
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.
 
@@ -180,6 +190,7 @@ connects are serialized so they never overlap an active scan.
 | Symptom                                       | Fix                                                                                                                       |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | LEFT controller silent, logs `0xFF challenge` | Open Zwift once with the controller — LEFT stores a ~24h hardware unlock. `-ack=false` disables the ack if it misbehaves. |
+| Right pod's LED blinks while connected        | Normal when only the RIGHT pod is used: the pair's anchor (LEFT) is missing. Connect the LEFT pod too and the LEDs go solid — the blink doesn't affect button delivery. |
 | One press types the key twice                 | Raise `-debounce` (frames should mirror within tens of ms).                                                               |
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
 | Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |

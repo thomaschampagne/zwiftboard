@@ -45,6 +45,12 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
   ALL services with retry and match characteristics by UUID (`connect`).
 - The Click pair MIRRORS button state: one press arrives as the same frame
   from both units → `claimTap` dedup is global per button name, not per device.
+- The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
+  the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
+  link. Both pods are connected (each gets its own session); with only the
+  RIGHT pod connected its LED keeps blinking (advertising mode) even though its
+  frames decode fine — connect both for a solid LED. The blink is cosmetic, not
+  a fault.
 - Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`) then `00 08 10`
   keepalive every 2s; without it the device sleeps (~56s) and writes fail
   (that failure is also the disconnect signal).

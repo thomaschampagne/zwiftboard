@@ -1,6 +1,7 @@
 package ble
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,46 @@ func TestCrossControllerDuplicateTap(t *testing.T) {
 	left(press) // mirrored frame from the other unit
 	if taps != 1 {
 		t.Fatalf("mirrored press taps = %d, want 1", taps)
+	}
+}
+
+func TestButtonHandlerPanicRecovered(t *testing.T) {
+	resetTapState(t)
+
+	// Simulate a runtime failure inside the tap path (e.g. a Windows BLE
+	// callback hiccup): with recoverLog installed, the panic must not escape
+	// the handler and later frames must still be processed.
+	var mu sync.Mutex
+	taps := 0
+	burst := 0
+	h := ButtonHandler("t", map[string]keys.Binding{"A": {VK: 0x41, Token: "a"}}, func(keys.Binding) {
+		mu.Lock()
+		burst++
+		n := burst
+		mu.Unlock()
+		if n == 1 {
+			panic("boom")
+		}
+		mu.Lock()
+		taps++
+		mu.Unlock()
+	})
+
+	press := []byte{0x23, 0x08, 0xEF, 0xFF, 0xFF, 0xFF, 0x0F} // A pressed
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("panic escaped the button handler: %v", r)
+			}
+		}()
+		h(press) // first press panics inside tap; the handler must absorb it
+	}()
+	time.Sleep(60 * time.Millisecond) // out of the 50ms debounce window
+	h(press)                          // a later press must still land
+	mu.Lock()
+	defer mu.Unlock()
+	if taps != 1 {
+		t.Fatalf("after panic taps = %d, want 1 subsequent tap to still land", taps)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,26 @@ var (
 	rideOn = []byte("RideOn")
 	ackSeq = []byte{0xFF, 0x04, 0x00}
 )
+
+// recoverLog absorbs a panic at a callback or goroutine boundary: it logs the
+// stack clearly and lets the caller continue, so one bad frame or adapter flyer
+// never takes the whole process down. Use with defer.
+func recoverLog(where string) {
+	if r := recover(); r != nil {
+		slog.Warn("recovered from panic", "where", where, "panic", r, "stack", string(debug.Stack()))
+	}
+}
+
+// Guarded runs fn in the same process-protecting way as recoverLog: it logs any
+// panic (with stack) instead of letting it escape, so a bad BLE event or a
+// WinRT fault — e.g. the PC's Bluetooth being switched off mid-run, which makes
+// the adapter disappear and can panic a scan, an Enable, or a session — never
+// takes the whole process down. Use to wrap an entire top-level task such as
+// the Watch scan loop or adapter.Enable(); no panic can then survive it.
+func Guarded(where string, fn func()) {
+	defer recoverLog(where)
+	fn()
+}
 
 // debugEnabled reports whether the active log level shows debug records.
 func debugEnabled() bool {
@@ -59,11 +80,32 @@ func Watch(burst time.Duration, known func(addr string) bool, onFound func(Targe
 		if !foundAny || debugEnabled() {
 			slog.Info("scanning for Zwift controllers (wake them by pressing a button; keeps scanning until found)", "burst", burst)
 		}
-		pending := map[string]Target{}
-		var order []string
+		// scanBurst catches a panicking callback so an adapter hiccup never
+		// stops us looking for a controller that appears minutes later.
+		pending, order, err := scanBurst(burst, known)
+		if err != nil {
+			slog.Warn("scan failed", "error", err)
+		}
 
+		for _, k := range order {
+			onFound(pending[k])
+		}
+		if len(order) > 0 {
+			foundAny = true
+		}
+		time.Sleep(scanGap)
+	}
+}
+
+// scanBurst runs one burst of adapter.Scan and returns the freshly discovered
+// controllers (not known to known() yet) in discovery order.
+func scanBurst(burst time.Duration, known func(addr string) bool) (pending map[string]Target, order []string, err error) {
+	pending = map[string]Target{}
+	func() {
+		defer recoverLog("scan callback")
 		timer := time.AfterFunc(burst, func() { _ = adapter.StopScan() })
-		err := adapter.Scan(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
+		defer timer.Stop()
+		err = adapter.Scan(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
 			id, isZwift := zwift.IsZwift(r)
 			if !isZwift {
 				return
@@ -82,19 +124,8 @@ func Watch(burst time.Duration, known func(addr string) bool, onFound func(Targe
 			}
 			slog.Info("found controller", "name", disp, "addr", key, "deviceID", id, "rssi", r.RSSI)
 		})
-		timer.Stop()
-		if err != nil {
-			slog.Warn("scan failed", "error", err)
-		}
-
-		for _, k := range order {
-			onFound(pending[k])
-		}
-		if len(order) > 0 {
-			foundAny = true
-		}
-		time.Sleep(scanGap)
-	}
+	}()
+	return pending, order, err
 }
 
 // Session connects, handshakes and listens on one controller until the link
@@ -115,6 +146,7 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 	acked := false
 	if syncTx != nil {
 		err := syncTx.EnableNotifications(func(b []byte) {
+			defer recoverLog("sync-tx frame " + t.Label)
 			slog.Debug("sync-tx", "controller", t.Label, "frame", fmt.Sprintf("% X", b))
 			if len(b) == 0 {
 				return
@@ -125,7 +157,10 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 					acked = true
 					slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
 					if SendAck {
-						go func() { _, _ = writeChar(syncRx, ackSeq) }()
+						go func() {
+							defer recoverLog("ack write " + t.Label)
+							_, _ = writeChar(syncRx, ackSeq)
+						}()
 					}
 				}
 			case 0xFF:
