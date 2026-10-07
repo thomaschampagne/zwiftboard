@@ -6,7 +6,10 @@
 // keyboard keys (Windows keybd_event).
 //
 // Click V2 is a pair of devices (LEFT: arrows + minus, RIGHT: Y/Z/A/B + plus).
-// This connects to every Zwift device it finds and logs button edges.
+// Scanning runs in bursts until controllers appear and keeps listening for
+// new ones (a second controller may be turned on much later); it never gives
+// up after the -scan window. Each found controller gets a reconnecting
+// session goroutine.
 //
 // Close Zwift / Companion first: each controller accepts a single BLE connection.
 package main
@@ -24,7 +27,7 @@ import (
 )
 
 func main() {
-	scanFor := flag.Duration("scan", 10*time.Second, "how long to scan for Zwift controllers")
+	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
 	addrList := flag.String("addr", "", "comma-separated BLE addresses (e.g. D4:06:0F:A9:86:04) — skips scanning")
 	configPath := flag.String("config", "config.yaml", "YAML file (cwd) with key mapping profiles")
 	var profile string
@@ -44,7 +47,34 @@ func main() {
 		log.Fatalf("enable BLE adapter: %v", err)
 	}
 
-	var targets []ble.Target
+	// Registry of controllers we already have a session goroutine for.
+	var regMu sync.Mutex
+	registry := map[string]bool{}
+	registered := func(addr string) bool {
+		regMu.Lock()
+		defer regMu.Unlock()
+		return registry[addr]
+	}
+
+	// add starts one reconnecting session goroutine per controller.
+	add := func(t ble.Target) {
+		regMu.Lock()
+		if registry[t.Addr.String()] {
+			regMu.Unlock()
+			return
+		}
+		registry[t.Addr.String()] = true
+		regMu.Unlock()
+		go func() {
+			for {
+				if err := ble.Session(t, keyMap); err != nil {
+					log.Printf("[%s] %v", t.Label, err)
+				}
+				time.Sleep(5 * time.Second)
+			}
+		}()
+	}
+
 	if *addrList != "" {
 		for _, s := range strings.Split(*addrList, ",") {
 			s = strings.TrimSpace(s)
@@ -52,28 +82,11 @@ func main() {
 			if err != nil {
 				log.Fatalf("bad -addr %q: %v", s, err)
 			}
-			targets = append(targets, ble.Target{Addr: addr, Label: "zwift/" + zwift.Tail(s)})
+			add(ble.Target{Addr: addr, Label: "zwift/" + zwift.Tail(s)})
 		}
 	} else {
-		targets = ble.Discover(*scanFor)
-	}
-	if len(targets) == 0 {
-		log.Fatal("no Zwift controllers found — wake them (press a button), close Zwift, retry")
-	}
-
-	var wg sync.WaitGroup
-	for _, t := range targets {
-		wg.Add(1)
-		go func(t ble.Target) {
-			defer wg.Done()
-			for {
-				if err := ble.Session(t, keyMap); err != nil {
-					log.Printf("[%s] %v", t.Label, err)
-				}
-				time.Sleep(5 * time.Second)
-			}
-		}(t)
+		go ble.Watch(*scanFor, registered, add)
 	}
 	log.Println("running — Ctrl+C to quit")
-	wg.Wait()
+	select {}
 }

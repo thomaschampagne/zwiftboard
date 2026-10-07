@@ -59,42 +59,55 @@ func NewAddress(mac string) (bluetooth.Address, error) {
 	return bluetooth.Address{MACAddress: bluetooth.MACAddress{MAC: m}}, nil
 }
 
-// Discover scans for d and returns the Zwift controllers seen.
-func Discover(d time.Duration) []Target {
-	log.Printf("scanning %s for Zwift controllers (wake them by pressing a button)...", d)
-	seen := map[string]Target{}
-	var order []string
+// scanGap is the pause between scan bursts.
+const scanGap = 3 * time.Second
 
-	timer := time.AfterFunc(d, func() { _ = adapter.StopScan() })
-	err := adapter.Scan(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
-		id, isZwift := zwift.IsZwift(r)
-		if !isZwift {
-			return
+// Watch scans for Zwift controllers forever, in bursts of burst length. For
+// every controller not already registered (known reports that), onFound is
+// called ONCE — after the burst ends, so the adapter is not scanning while
+// sessions connect. Callers keep the process alive; Watch never returns.
+func Watch(burst time.Duration, known func(addr string) bool, onFound func(Target)) {
+	foundAny := false
+	for {
+		if !foundAny || Verbose {
+			log.Printf("scanning %s for Zwift controllers (wake them by pressing a button; keeps scanning until found)...", burst)
 		}
-		name := r.LocalName()
-		key := r.Address.String()
-		if _, dup := seen[key]; dup {
-			return
-		}
-		label := fmt.Sprintf("%s/%s", zwift.ShortName(name), zwift.Tail(key))
-		seen[key] = Target{Addr: r.Address, Label: label}
-		order = append(order, key)
-		disp := name
-		if disp == "" {
-			disp = label // advertisements without a name: fall back to label
-		}
-		log.Printf("found %s addr=%s deviceID=%d rssi=%d", disp, key, id, r.RSSI)
-	})
-	timer.Stop()
-	if err != nil {
-		log.Printf("scan: %v", err)
-	}
+		pending := map[string]Target{}
+		var order []string
 
-	out := make([]Target, 0, len(order))
-	for _, k := range order {
-		out = append(out, seen[k])
+		timer := time.AfterFunc(burst, func() { _ = adapter.StopScan() })
+		err := adapter.Scan(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
+			id, isZwift := zwift.IsZwift(r)
+			if !isZwift {
+				return
+			}
+			name := r.LocalName()
+			key := r.Address.String()
+			if _, dup := pending[key]; dup || known(key) {
+				return
+			}
+			label := fmt.Sprintf("%s/%s", zwift.ShortName(name), zwift.Tail(key))
+			pending[key] = Target{Addr: r.Address, Label: label}
+			order = append(order, key)
+			disp := name
+			if disp == "" {
+				disp = label // advertisements without a name: fall back to label
+			}
+			log.Printf("found %s addr=%s deviceID=%d rssi=%d", disp, key, id, r.RSSI)
+		})
+		timer.Stop()
+		if err != nil {
+			log.Printf("scan: %v", err)
+		}
+
+		for _, k := range order {
+			onFound(pending[k])
+		}
+		if len(order) > 0 {
+			foundAny = true
+		}
+		time.Sleep(scanGap)
 	}
-	return out
 }
 
 // Session connects, handshakes and listens on one controller until the link
