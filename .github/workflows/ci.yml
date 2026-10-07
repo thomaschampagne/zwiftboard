@@ -31,15 +31,3 @@ jobs:
         run: go test ./...
       - name: build (windows/amd64)
         run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...
-
-  build-darwin:
-    name: build (macos/arm64, cgo)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      # cbgo (CoreBluetooth) needs cgo, so this cannot cross-compile from linux.
-      - name: build (darwin/arm64)
-        run: CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build ./...

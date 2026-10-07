@@ -3,7 +3,7 @@
 **Your Zwift Click V2 controllers, as a keyboard remote for ANY PC cycling app.**
 
 [![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20macOS%20arm64-blue)](#quick-start)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](#quick-start)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-green)](.github/workflows)
 
 Zwift Click V2 is an inexpensive pair of wireless BLE controllers — but they only
@@ -22,7 +22,7 @@ Wahoo SYSTM, and whatever comes next.
 
 1. **Download** the latest release: grab `zwiftboard-windows-amd64.exe` and
    `config.yaml` from the [Releases](../../releases) page. Put both in the same
-   folder. (macOS arm64 users: `zwiftboard-macos-arm64`.)
+   folder.
 2. **Close Zwift / the Companion app** — each controller accepts only one BLE
    connection at a time.
 3. **Run it** and press any button on each controller while it scans:
@@ -177,12 +177,6 @@ gofmt -l .                        # must print nothing
 GOOS=windows go build ./...       # target build (also vets tap_windows.go)
 ```
 
-macOS arm64 builds need cgo (CoreBluetooth) and must compile natively:
-
-```sh
-CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build ./...
-```
-
 Layout — a single binary, entry point at the repo root:
 
 ```
@@ -198,7 +192,7 @@ and [HANDOFF.md](HANDOFF.md) for the full debugging history and sources.
 
 ## Releases
 
-CI runs `gofmt`, `go vet`, `go test`, and cross-builds Windows + macOS on
+CI runs `gofmt`, `go vet`, `go test`, and cross-builds Windows on
 every push and pull request ([ci.yml](.github/workflows/ci.yml)).
 
 Versions follow [semver](https://semver.org) and are generated from
@@ -208,7 +202,6 @@ Versions follow [semver](https://semver.org) and are generated from
 PR creates the `vX.Y.Z` tag and a GitHub Release with:
 
 - `zwiftboard-windows-amd64.exe`
-- `zwiftboard-macos-arm64`
 - `config.yaml` (the reference profiles)
 
 ## Credits
