@@ -12,7 +12,7 @@ go test ./...                        # must pass (runs on linux via stubs)
 go vet ./...
 gofmt -l .                           # must print nothing
 GOOS=windows go build ./...          # target platform; also required for vet of tap_windows.go
-go run ./cmd/zwiftclick              # on real Windows + Bluetooth hardware
+go run .                           # on real Windows + Bluetooth hardware
 ```
 
 No hardware here: `Watch`/`Session` correctness is reviewed, not tested.
@@ -20,7 +20,8 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 
 ## Layout
 
-- `cmd/zwiftclick/` — flags, logger setup, target registry, wiring only
+- `main.go` (root) — flags, logger setup, target registry, wiring only; a
+  single-binary app, so the entry point lives at the repo root (not `cmd/`)
 - `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, global tap dedup
 - `internal/keys/` — config token → Windows VK code; `Tap` (keybd_event on windows, no-op elsewhere)
 - `internal/config/` — config.yaml: `loglevel:` + `profiles:` map; returns errors (never exits)

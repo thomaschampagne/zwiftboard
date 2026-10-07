@@ -9,8 +9,8 @@ Go program that connects to Zwift Click V2 controllers over Bluetooth LE on Wind
 - 12 unit tests pass on linux (`go test ./...`); BLE paths are compile-checked only.
 
 ### Restructure (2026-10-07 evening)
-`main.go` monolith split into `cmd/zwiftclick` (flags, logger, target registry) and
-`internal/{ble,keys,config,zwift}`; tests moved next to their packages.
+`main.go` split into `internal/{ble,keys,config,zwift}`; the entry point lives at the repo
+root (`main.go`, single-binary layout — `cmd/` was tried and dropped); tests moved next to their packages.
 `config.Load` returns errors instead of calling `log.Fatal`.
 
 ### Fix 1 — service discovery (2026-10-07)
@@ -45,7 +45,7 @@ Fix: `claimTap(name)` in `internal/ble` — one tap window per button NAME, shar
 
 ## Setup
 ```
-go run ./cmd/zwiftclick -v        # flags: -v (log level debug), -scan 10s (burst), -addr MAC,...,
+go run . -v                # flags: -v (log level debug), -scan 10s (burst), -addr MAC,...,
                                   # -config config.yaml, -p mywhoosh/--profile, -debounce 200ms, -ack=true
 ```
 Edit `config.yaml` in cwd (profiles + loglevel). Close the Zwift / Companion app first (each controller accepts one BLE connection). Press a button on each controller during a scan burst to wake it.
@@ -56,7 +56,7 @@ Edit `config.yaml` in cwd (profiles + loglevel). Close the Zwift / Companion app
 - `ScanResult.ManufacturerData()` returns elements with `CompanyID` and `Data`.
 - `Scan` blocks until `StopScan`.
 
-## Design (`cmd/zwiftclick` + `internal/*`)
+## Design (root `main.go` + `internal/*`)
 1. `ble.Watch`: scan bursts forever; keep devices with manufacturer company ID `0x094A` or a name starting with "zwift". Zwift device ID = first byte of manufacturer data (logged). `-addr` bypasses the watch.
 2. Main keeps an address→registered registry; each new controller gets one goroutine with a reconnect loop (`ble.Session`, 5s backoff). Connects are serialized by `connectMu`.
 3. `connect`: connect, enumerate all GATT services (with retry), find Async/SyncRX/SyncTX chars by UUID across any service; async + syncRx required, syncTx optional.
@@ -95,7 +95,7 @@ Click V2 hardware: left module has 4 arrows plus minus; right has Y/Z/A/B plus p
 - MyWhoosh shortcuts (for the default profile): https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts, https://www.keyboardista.com/en/shortcuts/mywhoosh-desktop/
 
 ## Suggested next steps
-1. Run `go run ./cmd/zwiftclick -v` on real hardware; confirm scan bursts, connect past discovery, handshake log line, per-button names, and `key=...` taps for both controllers.
+1. Run `go run . -v` on real hardware; confirm scan bursts, connect past discovery, handshake log line, per-button names, and `key=...` taps for both controllers.
 2. If still "characteristics missing", the `-v` service list / error line shows actual UUIDs — adjust match.
 3. If LEFT stays silent, try `-ack=false` or open Zwift once (24h unlock).
 4. Verify continuous scan on hardware: kill nothing, turn the second controller on 10 min later; watch `found controller`.
