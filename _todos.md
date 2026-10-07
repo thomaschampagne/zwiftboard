@@ -15,7 +15,7 @@
 - Set a proper folder/project golang structure
 - Write AGENTS.md
 
-Commit each step w/ conventionnal commit
+Self review each step on consistency/quality. Commit each step w/ conventionnal commit
 
 - Write unit test
 - Write README.md

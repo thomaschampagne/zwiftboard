@@ -2,6 +2,9 @@
 # Loaded from the working directory at startup (-config overrides the path,
 # -p/--profile picks the profile, default: mywhoosh).
 #
+# loglevel: debug | info | warn | error — -v on the CLI forces debug.
+loglevel: info
+#
 # Keys: single letters a-z, digits 0-9, f1-f12, or named keys —
 #   up, down, left, right, enter, space, tab, esc, backspace, delete,
 #   insert, home, end, pageup, pagedown, shift, ctrl, alt, capslock

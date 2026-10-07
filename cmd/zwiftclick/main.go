@@ -3,7 +3,8 @@
 //	go run ./cmd/zwiftclick [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config config.yaml] [-p mywhoosh] [-ack=true]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
-// keyboard keys (Windows keybd_event).
+// keyboard keys (Windows keybd_event). Log level comes from config.yaml
+// (loglevel: debug|info|warn|error); -v forces debug.
 //
 // Click V2 is a pair of devices (LEFT: arrows + minus, RIGHT: Y/Z/A/B + plus).
 // Scanning runs in bursts until controllers appear and keeps listening for
@@ -16,7 +17,8 @@ package main
 
 import (
 	"flag"
-	"log"
+	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -33,18 +35,36 @@ func main() {
 	var profile string
 	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
 	flag.StringVar(&profile, "profile", config.DefaultProfile, "config profile to use (same as -p)")
-	flag.BoolVar(&ble.Verbose, "v", false, "log raw frames and unknown bits")
+	var verbose bool
+	flag.BoolVar(&verbose, "v", false, "log raw frames and taps (forces log level debug)")
 	flag.BoolVar(&ble.SendAck, "ack", true, "send ff 04 00 to devices that echo RideOn (keeps unlock)")
 	flag.DurationVar(&ble.TapDebounce, "debounce", 200*time.Millisecond, "minimum gap between two taps of the same button")
 	flag.Parse()
 
-	keyMap, err := config.Load(*configPath, profile)
+	cfg, err := config.Load(*configPath, profile)
+	level := cfg.Level
+	if verbose {
+		level = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 	if err != nil {
-		log.Fatalf("%v", err)
+		slog.Error("bad config", "error", err)
+		os.Exit(1)
+	}
+	if cfg.Missing {
+		slog.Warn("no key mapping — button logging only", "file", *configPath)
+	} else {
+		slog.Info("profile loaded", "profile", cfg.Profile, "bindings", len(cfg.Bindings))
+		for _, name := range config.ButtonNames() {
+			if b, ok := cfg.Bindings[name]; ok {
+				slog.Info("key mapping", "button", name, "key", b.Token)
+			}
+		}
 	}
 
 	if err := ble.Enable(); err != nil {
-		log.Fatalf("enable BLE adapter: %v", err)
+		slog.Error("enable BLE adapter", "error", err)
+		os.Exit(1)
 	}
 
 	// Registry of controllers we already have a session goroutine for.
@@ -67,8 +87,8 @@ func main() {
 		regMu.Unlock()
 		go func() {
 			for {
-				if err := ble.Session(t, keyMap); err != nil {
-					log.Printf("[%s] %v", t.Label, err)
+				if err := ble.Session(t, cfg.Bindings); err != nil {
+					slog.Warn("session ended", "controller", t.Label, "error", err)
 				}
 				time.Sleep(5 * time.Second)
 			}
@@ -80,13 +100,14 @@ func main() {
 			s = strings.TrimSpace(s)
 			addr, err := ble.NewAddress(s)
 			if err != nil {
-				log.Fatalf("bad -addr %q: %v", s, err)
+				slog.Error("bad -addr", "value", s, "error", err)
+				os.Exit(1)
 			}
 			add(ble.Target{Addr: addr, Label: "zwift/" + zwift.Tail(s)})
 		}
 	} else {
 		go ble.Watch(*scanFor, registered, add)
 	}
-	log.Println("running — Ctrl+C to quit")
+	slog.Info("running — Ctrl+C to quit")
 	select {}
 }

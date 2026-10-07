@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,34 +30,69 @@ profiles:
 func TestLoadProfile(t *testing.T) {
 	path := writeConfig(t, profilesYAML)
 
-	m, err := Load(path, "mywhoosh")
+	cfg, err := Load(path, "mywhoosh")
 	if err != nil {
 		t.Fatal(err)
 	}
+	m := cfg.Bindings
 	if len(m) != 3 {
 		t.Fatalf("got %d bindings, want 3", len(m))
 	}
 	if m["LEFT"].VK != 0x25 || m["PLUS"].VK != 0x21 || m["A"].VK != 0x74 {
 		t.Errorf("wrong vk codes: %+v", m)
 	}
+	if cfg.Level != slog.LevelInfo {
+		t.Errorf("default level = %v, want info", cfg.Level)
+	}
 
-	m, err = Load(path, "zwift")
+	cfg, err = Load(path, "zwift")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m) != 1 || m["A"].VK != 0x41 {
-		t.Errorf("zwift profile wrong: %+v", m)
+	if len(cfg.Bindings) != 1 || cfg.Bindings["A"].VK != 0x41 {
+		t.Errorf("zwift profile wrong: %+v", cfg.Bindings)
 	}
 }
 
 func TestLoadDefaultProfile(t *testing.T) {
 	path := writeConfig(t, profilesYAML)
-	m, err := Load(path, "") // empty -> DefaultProfile
+	cfg, err := Load(path, "") // empty -> DefaultProfile
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m) != 3 {
-		t.Fatalf("default profile: got %d bindings, want 3", len(m))
+	if cfg.Profile != DefaultProfile {
+		t.Errorf("profile = %q, want %q", cfg.Profile, DefaultProfile)
+	}
+	if len(cfg.Bindings) != 3 {
+		t.Fatalf("default profile: got %d bindings, want 3", len(cfg.Bindings))
+	}
+}
+
+func TestLoadLogLevel(t *testing.T) {
+	path := writeConfig(t, "loglevel: debug\nprofiles:\n  mywhoosh:\n    A: a\n")
+	cfg, err := Load(path, "mywhoosh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Level != slog.LevelDebug {
+		t.Errorf("level = %v, want debug", cfg.Level)
+	}
+
+	path = writeConfig(t, "loglevel: WARN\nprofiles:\n  mywhoosh:\n    A: a\n")
+	cfg, err = Load(path, "mywhoosh")
+	if err != nil {
+		t.Fatalf("WARN should be accepted: %v", err)
+	}
+	if cfg.Level != slog.LevelWarn {
+		t.Errorf("level = %v, want warn", cfg.Level)
+	}
+}
+
+func TestLoadBadLogLevel(t *testing.T) {
+	path := writeConfig(t, "loglevel: loud\nprofiles:\n  mywhoosh:\n    A: a\n")
+	_, err := Load(path, "mywhoosh")
+	if err == nil || !strings.Contains(err.Error(), "bad loglevel") {
+		t.Errorf("want bad loglevel error, got: %v", err)
 	}
 }
 
@@ -81,12 +117,12 @@ func TestLoadNoProfiles(t *testing.T) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	m, err := Load(filepath.Join(t.TempDir(), "nope.yaml"), "mywhoosh")
+	cfg, err := Load(filepath.Join(t.TempDir(), "nope.yaml"), "mywhoosh")
 	if err != nil {
 		t.Fatalf("missing file must not error: %v", err)
 	}
-	if m != nil {
-		t.Errorf("want nil for missing file, got %+v", m)
+	if !cfg.Missing || cfg.Bindings != nil {
+		t.Errorf("want Missing with nil bindings, got %+v", cfg)
 	}
 }
 

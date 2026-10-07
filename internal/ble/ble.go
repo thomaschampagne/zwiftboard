@@ -1,17 +1,10 @@
-// Package ble connects to Zwift Click V2 controllers over Bluetooth LE
-// (WinRT via tinygo.org/x/bluetooth) and turns button frames into key taps.
-//
-// Service discovery note: WinRT often returns a partial service list right
-// after connect, so we discover ALL services (with retry) and match
-// characteristics by UUID instead of filtering by service UUID.
-//
-// Close Zwift / Companion first: each controller accepts a single BLE connection.
 package ble
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -26,8 +19,6 @@ var (
 	adapter   = bluetooth.DefaultAdapter
 	connectMu sync.Mutex // Windows copes better with serialized connects
 
-	// Verbose gates raw frames, service lists and tap logging (-v).
-	Verbose bool
 	// SendAck sends ff 04 00 to devices that echo RideOn (keeps unlock) (-ack).
 	SendAck = true
 	// TapDebounce is the minimum gap between two taps of the same button.
@@ -40,6 +31,11 @@ var (
 	rideOn = []byte("RideOn")
 	ackSeq = []byte{0xFF, 0x04, 0x00}
 )
+
+// debugEnabled reports whether the active log level shows debug records.
+func debugEnabled() bool {
+	return slog.Default().Enabled(context.Background(), slog.LevelDebug)
+}
 
 // Target is a controller to connect to.
 type Target struct {
@@ -69,8 +65,8 @@ const scanGap = 3 * time.Second
 func Watch(burst time.Duration, known func(addr string) bool, onFound func(Target)) {
 	foundAny := false
 	for {
-		if !foundAny || Verbose {
-			log.Printf("scanning %s for Zwift controllers (wake them by pressing a button; keeps scanning until found)...", burst)
+		if !foundAny || debugEnabled() {
+			slog.Info("scanning for Zwift controllers (wake them by pressing a button; keeps scanning until found)", "burst", burst)
 		}
 		pending := map[string]Target{}
 		var order []string
@@ -93,11 +89,11 @@ func Watch(burst time.Duration, known func(addr string) bool, onFound func(Targe
 			if disp == "" {
 				disp = label // advertisements without a name: fall back to label
 			}
-			log.Printf("found %s addr=%s deviceID=%d rssi=%d", disp, key, id, r.RSSI)
+			slog.Info("found controller", "name", disp, "addr", key, "deviceID", id, "rssi", r.RSSI)
 		})
 		timer.Stop()
 		if err != nil {
-			log.Printf("scan: %v", err)
+			slog.Warn("scan failed", "error", err)
 		}
 
 		for _, k := range order {
@@ -128,9 +124,7 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 	acked := false
 	if syncTx != nil {
 		err := syncTx.EnableNotifications(func(b []byte) {
-			if Verbose {
-				log.Printf("[%s] sync-tx % X", t.Label, b)
-			}
+			slog.Debug("sync-tx", "controller", t.Label, "frame", fmt.Sprintf("% X", b))
 			if len(b) == 0 {
 				return
 			}
@@ -138,17 +132,17 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 			case 'R':
 				if !acked {
 					acked = true
-					log.Printf("[%s] unlocked (RideOn echoed)", t.Label)
+					slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
 					if SendAck {
 						go func() { _, _ = writeChar(syncRx, ackSeq) }()
 					}
 				}
 			case 0xFF:
-				log.Printf("[%s] locked (crypto challenge) — open Zwift once to unlock, buttons may stay silent", t.Label)
+				slog.Warn("locked (crypto challenge) — open Zwift once to unlock, buttons may stay silent", "controller", t.Label)
 			}
 		})
 		if err != nil {
-			log.Printf("[%s] sync-tx subscribe failed (non-fatal): %v", t.Label, err)
+			slog.Warn("sync-tx subscribe failed (non-fatal)", "controller", t.Label, "error", err)
 		}
 	}
 
@@ -164,7 +158,7 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	log.Printf("[%s] connected, handshake sent, listening", t.Label)
+	slog.Info("connected, handshake sent, listening", "controller", t.Label)
 
 	// Keepalive: device sleeps (~56s idle) without periodic 00 08 10. A failed
 	// write doubles as disconnect detection.
@@ -208,12 +202,12 @@ func connect(t Target) (dev bluetooth.Device, async, syncRx, syncTx *bluetooth.D
 		fail(fmt.Errorf("service discovery: %w", e))
 		return
 	}
-	if Verbose {
+	if debugEnabled() {
 		list := make([]string, len(svcs))
 		for i := range svcs {
 			list[i] = svcs[i].UUID().String()
 		}
-		log.Printf("[%s] services: %s", t.Label, strings.Join(list, " "))
+		slog.Debug("services", "controller", t.Label, "uuids", strings.Join(list, " "))
 	}
 
 	// Match characteristics by UUID across every service: WinRT may return a

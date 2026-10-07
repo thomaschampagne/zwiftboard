@@ -2,7 +2,7 @@ package ble
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"zwiftclickv2-keyboard/internal/keys"
@@ -33,9 +33,7 @@ func ButtonHandler(label string, keyMap map[string]keys.Binding, tap func(keys.B
 		if len(b) == 0 {
 			return
 		}
-		if Verbose {
-			log.Printf("[%s] raw % X", label, b)
-		}
+		slog.Debug("raw frame", "controller", label, "frame", fmt.Sprintf("% X", b))
 		if b[0] != zwift.MsgKeyPad {
 			return // 0x15 / 0x19 idle & status frames
 		}
@@ -44,7 +42,7 @@ func ButtonHandler(label string, keyMap map[string]keys.Binding, tap func(keys.B
 			return
 		}
 		changed := cur ^ prev
-		if !Verbose {
+		if !debugEnabled() {
 			changed &= zwift.KnownMask
 		}
 		for bit := 0; bit < 32; bit++ {
@@ -60,22 +58,22 @@ func ButtonHandler(label string, keyMap map[string]keys.Binding, tap func(keys.B
 			if cur&m == 0 {
 				state = "pressed"
 			}
-			suffix := ""
+			args := []any{"controller", label, "button", name, "state", state}
 			if state == "pressed" {
 				if bnd, mapped := keyMap[name]; mapped {
 					// claimTap is GLOBAL across controllers: the pair mirrors
 					// button state, so one physical press arrives as the same
 					// frame from both units (and possibly retransmitted).
 					// One claim per button inside the window = one key.
+					args = append(args, "key", bnd.Token)
 					if claimTap(name) {
 						tap(bnd)
-						suffix = " -> " + bnd.Token
 					} else {
-						suffix = " -> " + bnd.Token + " (duplicate)"
+						args = append(args, "duplicate", true)
 					}
 				}
 			}
-			log.Printf("[%s] %-10s %s%s", label, name, state, suffix)
+			slog.Info("button", args...)
 		}
 		prev = cur
 	}
