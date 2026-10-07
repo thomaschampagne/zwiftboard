@@ -18,6 +18,5 @@
 Self review each step on consistency/quality. Commit each step w/ conventionnal commit
 
 - [x] Write unit test
-- [ ] Write github Action CI/CD pipeline with semantic versioning. Build for windows, macos (arm only) with binaries uploaded in created release should be sgaupported
-
-- [ ] Write README.md
+- [x] Write github Action CI/CD pipeline with semantic versioning. Build for windows, macos (arm only) with binaries uploaded in created release should be supported
+- [x] Write README.md (Fast explain what problem it solves for a new user (promote it), how to download, how to configure, how it works technically (make ascii diagram when needed), how to run/build/test @dev). Make 2026 top-notch readme
