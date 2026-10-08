@@ -224,7 +224,54 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		}, func() { _ = dev.Disconnect() })
 	}()
 
-	if err := async.EnableNotifications(ButtonHandler(t.Label, keyMap, keys.Tap)); err != nil {
+	// Activation sequence from ZwiftBridge (verified on Click V2 hardware).
+	activation := [][]byte{
+		append(append([]byte(nil), rideOn...), 0x02, 0x03), // "RideOn" 02 03
+		{0x00, 0x08, 0x00},
+		{0x00, 0x08, 0x10},
+	}
+
+	// rearm pokes a controller back into streaming button frames without
+	// dropping the link. challengeRearm (short ff 04 00 ack) answers the 0xFF
+	// question that arrives on async and keeps an unlocked pod from turning
+	// silent; the full silenceRearm adds the activation trio once the stream
+	// has already stopped. The ff 04 00 ack alone is not the solved crypto
+	// response, so this is a best-effort — the silence watchdog below is what
+	// guarantees recovery.
+	challengeRearm := func() {
+		if !SendAck {
+			return
+		}
+		if _, err := writeChar(syncRx, ackSeq); err != nil {
+			slog.Debug("challenge re-arm write failed", "controller", t.Label, "error", err)
+		}
+	}
+	silenceRearm := func() {
+		if SendAck {
+			if _, err := writeChar(syncRx, ackSeq); err != nil {
+				slog.Debug("silence re-arm ack write failed", "controller", t.Label, "error", err)
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		for _, m := range activation {
+			if _, err := writeChar(syncRx, m); err != nil {
+				slog.Debug("silence re-arm write failed", "controller", t.Label, "error", err)
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// pod watches the 0x23 stream: the LEFT pod can stop sending button frames
+	// while the BLE link stays up (Zwift's crypto watchdog), and without it the
+	// session would never notice, so the left arrows/MIN would stay dead until
+	// restart. The keepalive loop below escalates silence to a reconnect.
+	// asyncNotify also answers 0xFF challenges (they arrive on async, not
+	// sync-tx) and records button frames.
+	pod := newPodWatcher(time.Now())
+	handler := ButtonHandler(t.Label, keyMap, keys.Tap)
+	if err := async.EnableNotifications(asyncNotify(time.Now, pod, challengeRearm, handler)); err != nil {
 		return fmt.Errorf("subscribe async: %w", err)
 	}
 
@@ -236,20 +283,18 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 			if len(b) == 0 {
 				return
 			}
-			switch b[0] {
-			case 'R':
-				if !acked {
-					acked = true
-					slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
-					if SendAck {
-						go func() {
-							defer recoverLog("ack write " + t.Label)
-							_, _ = writeChar(syncRx, ackSeq)
-						}()
-					}
+			// Only the RideOn echo is indicated on sync-tx (0x52...). The 0xFF
+			// crypto challenge arrives on the async characteristic and is
+			// handled by asyncNotify above.
+			if b[0] == 'R' && !acked {
+				acked = true
+				slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
+				if SendAck {
+					go func() {
+						defer recoverLog("ack write " + t.Label)
+						_, _ = writeChar(syncRx, ackSeq)
+					}()
 				}
-			case 0xFF:
-				slog.Warn("locked (crypto challenge) — open Zwift once to unlock, buttons may stay silent", "controller", t.Label)
 			}
 		})
 		if err != nil {
@@ -257,12 +302,6 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		}
 	}
 
-	// Activation sequence from ZwiftBridge (verified on Click V2 hardware).
-	activation := [][]byte{
-		append(append([]byte(nil), rideOn...), 0x02, 0x03), // "RideOn" 02 03
-		{0x00, 0x08, 0x00},
-		{0x00, 0x08, 0x10},
-	}
 	for _, m := range activation {
 		if _, err := writeChar(syncRx, m); err != nil {
 			return fmt.Errorf("handshake: %w", err)
@@ -272,13 +311,23 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 	slog.Info("connected, handshake sent, listening", "controller", t.Label)
 
 	// Keepalive: device sleeps (~56s idle) without periodic 00 08 10. A failed
-	// write doubles as disconnect detection.
+	// write doubles as disconnect detection. Each tick also re-checks the
+	// silence watchdog: a pod that stopped streaming button frames while the
+	// link is otherwise fine is re-armed in place, then reconnected (a fresh
+	// session re-runs the handshake and re-enters its healthy window).
 	keep := []byte{0x00, 0x08, 0x10}
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	for range tick.C {
 		if _, err := writeChar(syncRx, keep); err != nil {
 			return fmt.Errorf("disconnected: %w", err)
+		}
+		switch pod.decide(time.Now(), silenceRearmAfter, silenceReconnectAfter, silenceRearmGap) {
+		case actRearm:
+			slog.Warn("button stream silent — re-arming controller in place", "controller", t.Label)
+			silenceRearm()
+		case actReconnect:
+			return fmt.Errorf("button stream silent for %v — ending session so the controller reconnects and re-arms", silenceReconnectAfter)
 		}
 	}
 	return nil

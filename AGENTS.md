@@ -58,6 +58,15 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
   locked; `ff 04 00` keeps an unlocked device unlocked, disable with `-ack=false`).
+- The LEFT pod can STOP sending `0x23` button frames while the BLE link stays
+  up (crypto watchdog once the unlock lapses): it still answers keepalives, so
+  a session would never notice. The `0xFF` challenge arrives on the ASYNC
+  characteristic, not sync-tx. `podWatcher` (kept by `Session`) re-arms a
+  silent pod in place (`ff 04 00` + activation trio) and, if it stays silent
+  for `silenceReconnectAfter`, returns an error so the caller reconnects —
+  the raw `ff 04 00` is NOT the solved crypto response, so a reconnect is the
+  guaranteed re-arm; the pod streams all-released frames ~every 100ms, so a
+  multi-second gap is an unambiguous fault, not an idle user.
 - Scanning runs in bursts forever (`Watch`): never Fatal when nothing is
   found, never stop looking for a controller that appears 10 minutes later.
 - `connect` is serialized (`connectMu`); `onFound` fires after the scan burst

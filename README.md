@@ -190,7 +190,7 @@ connects are serialized so they never overlap an active scan.
 
 | Symptom                                       | Fix                                                                                                                       |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| LEFT controller silent, logs `0xFF challenge` | Open Zwift once with the controller — LEFT stores a ~24h hardware unlock. `-ack=false` disables the ack if it misbehaves. |
+| LEFT controller silent, logs `0xFF challenge` | zwiftboard now self-heals: when a pod stops sending button frames while the link is still up (Zwift's crypto watchdog on the LEFT), it re-arms it in place (`ff 04 00` + activation trio, logged `re-arming controller`) and, if it stays silent, ends the session so it reconnects (~15s, logged `button stream silent`). For a rock-solid LEFT, connect it to Zwift once — it stores a ~24h hardware unlock. `-ack=false` disables the ack if it misbehaves. |
 | Right pod's LED blinks while connected        | Normal when only the RIGHT pod is used: the pair's anchor (LEFT) is missing. Connect the LEFT pod too and the LEDs go solid — the blink doesn't affect button delivery. |
 | One press types the key twice                 | Raise `-debounce` (frames should mirror within tens of ms).                                                               |
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
