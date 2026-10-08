@@ -196,7 +196,7 @@ connects are serialized so they never overlap an active scan.
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
 | Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |
 | Keys land in the wrong window                 | Set `focusProgramNameOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it. |
-| App quits / stops responding after a while    | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
+| App quits / stops responding after a while    | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. Switching Windows Bluetooth off mid-run also survives: sessions end, scanning retries every 3s, and it reconnects when Bluetooth comes back. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
 | Nothing works with Zwift open                 | Close Zwift / Companion first: one BLE connection per controller.                                                         |
 
 Not a HID keyboard: Zwift itself won't see the Click as a Bluetooth keyboard

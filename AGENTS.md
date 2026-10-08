@@ -62,3 +62,11 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
   found, never stop looking for a controller that appears 10 minutes later.
 - `connect` is serialized (`connectMu`); `onFound` fires after the scan burst
   so connects do not overlap an active scan.
+- Teardown must PROBE before `Device.Disconnect()`: when BT goes off, tinygo's
+  `ConnectionStatusChanged` handler already ran `Disconnect()` and freed the
+  GATT session; calling it again is an unrecoverable AV (0xc0000005 —
+  `crash-after-disable-bt-windows.log`). Writes and service discovery fail
+  gracefully on a dead session — use them as the probe (`endSession`) and skip
+  `Disconnect` when the device no longer answers. Residual accepted: a device
+  dying in the microseconds between probe and Disconnect can still AV (needs a
+  tinygo fix).
