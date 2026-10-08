@@ -1,6 +1,6 @@
 // Zwift Click V2 BLE listener for Windows (WinRT via tinygo.org/x/bluetooth).
 //
-//	go run . [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config config.yaml] [-p mywhoosh] [-ack=true]
+//	go run . [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config config.yaml] [-p mywhoosh] [-ack=true] [-log zwiftboard.log]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
 // keyboard keys (Windows keybd_event). Log level comes from config.yaml
@@ -21,6 +21,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log/slog"
 	"os"
 	"runtime/debug"
@@ -57,6 +58,7 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "log raw frames and taps (forces log level debug)")
 	flag.BoolVar(&ble.SendAck, "ack", true, "send ff 04 00 to devices that echo RideOn (keeps unlock)")
 	flag.DurationVar(&ble.TapDebounce, "debounce", 200*time.Millisecond, "minimum gap between two taps of the same button")
+	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath, profile)
@@ -64,7 +66,20 @@ func main() {
 	if verbose {
 		level = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+	// Tee to the -log file when asked: same TextHandler, same level and
+	// records on both writers. Handler-internal locking keeps concurrent
+	// session goroutines from interleaving lines; writes are unbuffered, so
+	// no flush/close handling is needed.
+	var w io.Writer = os.Stderr
+	if *logPath != "" {
+		f, ferr := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if ferr != nil {
+			slog.Error("open log file", "path", *logPath, "error", ferr)
+			os.Exit(1)
+		}
+		w = io.MultiWriter(os.Stderr, f)
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
 	if err != nil {
 		slog.Error("bad config", "error", err)
 		os.Exit(1)

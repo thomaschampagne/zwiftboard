@@ -58,6 +58,7 @@ zwiftboard [flags]
 | `-debounce`       | `200ms`       | Minimum gap between two taps of the same button (mirrored pair)      |
 | `-ack`            | `true`        | Send `ff 04 00` to keep an unlocked LEFT controller unlocked         |
 | `-v`              | `false`       | Force `debug` log level (raw frames, service list)                   |
+| `-log`            | _(none)_      | Also write log lines to this file (truncated at startup)             |
 
 Log level otherwise comes from `loglevel:` in `config.yaml`
 (`debug` | `info` | `warn` | `error`, default `info`).
