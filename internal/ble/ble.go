@@ -29,8 +29,47 @@ var (
 	tapMu         sync.Mutex
 	lastTapByName = map[string]time.Time{}
 
+	// lastSeenAt records the last scan sighting of every Zwift controller
+	// (registered or not). A fresh sighting is the only honest signal that a
+	// right pod is awake enough to accept a connect, so reconnection is gated
+	// on it instead of hammering a sleeping pod by address (see SeenRecently).
+	seenMu     sync.Mutex
+	lastSeenAt = map[string]time.Time{}
+	// sideSeenAt records the last scan sighting of each pod SIDE (left/right
+	// from the Zwift manufacturer record), used for the observational pair status
+	// in main.go. Nothing is gated on it: both pods are simply connected.
+	sideSeenAt = map[zwift.Pod]time.Time{}
+	// nowFn is the clock used by markSeen/SeenRecently; injectable for tests.
+	nowFn = time.Now
+
 	rideOn = []byte("RideOn")
 	ackSeq = []byte{0xFF, 0x04, 0x00}
+	keep   = []byte{0x00, 0x08, 0x10} // teardown / connect-failure probe (any write works)
+
+	// resetPod is OpenBikeControl's pod-reset byte: a lone 0x18 written to
+	// sync-rx makes a Click V2 pod reboot and re-advertise instead of falling
+	// into its ~65s idle sleep. See keepaliveTick / IdleReset.
+	resetPod = []byte{0x18}
+
+	// IdleReset arms a proactive pod reset after this much button silence.
+	// OpenBikeControl does the same on a ~1 min cadence (their closed ClickLogic
+	// "periodic RESET recovery", per connection.dart "reconnections after an
+	// automatic reset happen every minute") so the pod reboots ON OUR SCHEDULE,
+	// before its ~65s idle watchdog strands it asleep for 30-40s; the scan-gated
+	// caller then reconnects within seconds. 0 disables the reset (-idle-reset).
+	IdleReset = 55 * time.Second
+
+	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
+	// once after connect. The periodic keepalive re-sends plain rideOn ("RideOn").
+	// Nothing we write to sync-rx holds a LONE RIGHT pod: the pod drops the link
+	// ~65s after its last OWN transmission (a button frame) no matter what —
+	// qdomyos's "RideOn"+02 03, 00 08 10, 00 08 00 and plain "RideOn" were each
+	// observed failing identically on Windows. The keepalive's real job is
+	// liveness: a successful write proves the session is up, a failed one
+	// detects the disconnect, and reconnect is scan-gated (main.go waits for the
+	// pod to advertise again). The qdomyos keepalive that holds the link belongs
+	// to the LEFT pod path (unlocked pair), which this right-only build dropped.
+	handshakeStart = append(append([]byte(nil), rideOn...), 0x02, 0x03)
 )
 
 // recoverLog absorbs a panic at a callback or goroutine boundary: it logs the
@@ -62,6 +101,10 @@ func debugEnabled() bool {
 type Target struct {
 	Addr  bluetooth.Address
 	Label string
+	// Side is the pod side decoded from the advertisement's Zwift manufacturer
+	// record (PodUnknown for manually listed -addr targets, which the user
+	// manages explicitly).
+	Side zwift.Pod
 }
 
 // Enable initializes the BLE adapter.
@@ -167,11 +210,15 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 			}
 			name := r.LocalName()
 			key := r.Address.String()
+			// Record the sighting even for a registered controller — this is how
+			// reconnection learns the pod woke up after its ~65s idle sleep.
+			markSeen(key)
+			markSeenSide(zwift.PodSide(id))
 			if known(key) {
 				return
 			}
 			label := fmt.Sprintf("%s/%s", zwift.ShortName(name), zwift.Tail(key))
-			if !c.add(key, Target{Addr: r.Address, Label: label}) {
+			if !c.add(key, Target{Addr: r.Address, Label: label, Side: zwift.PodSide(id)}) {
 				return
 			}
 			disp := name
@@ -185,15 +232,106 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 	return pending, order, err
 }
 
+// keepaliveTick decides one keepalive-ticker action for a live session.
+// While the pod has been active recently it returns a plain liveness ping
+// (the RideOn write that doubles as disconnect detection). After IdleReset of
+// button silence it returns a pod reset INSTEAD, exactly once: writing 0x18
+// reboots the pod on our schedule, before its ~65s idle watchdog can strand
+// it asleep for 30-40s — the pod re-advertises within seconds and the
+// scan-gated caller reconnects. This is OpenBikeControl's periodic RESET
+// recovery. Observed on Windows: with the LEFT pod detected nearby the
+// right pod STILL dropped ~67-72s after its last button, so the reset is sent
+// regardless of the left pod.
+func keepaliveTick(resetSent bool, lastActivity, now time.Time) (reset, ping bool) {
+	if IdleReset > 0 && !resetSent && now.Sub(lastActivity) >= IdleReset {
+		return true, false
+	}
+	return false, true
+}
+
+// markSeen records that addr was advertising just now. Every Zwift device is
+// recorded, known or not: the sighting is what connect() latches onto, so a
+// known-but-sleeping controller can be reconnected the moment its radio wakes.
+func markSeen(key string) {
+	seenMu.Lock()
+	lastSeenAt[key] = nowFn()
+	seenMu.Unlock()
+}
+
+// SeenRecently reports whether addr was seen advertising within the window.
+// Keys are the canonical r.Address.String() strings, the same form main.go's
+// registry uses, so look them up directly.
+func SeenRecently(addr string, within time.Duration) bool {
+	seenMu.Lock()
+	at, ok := lastSeenAt[addr]
+	seenMu.Unlock()
+	return ok && nowFn().Sub(at) <= within
+}
+
+// connected counts live sessions per pod side (observational only: nothing
+// is gated on it — a connected pod may stop advertising). main.go reports
+// "ready" once both pods hold a session.
+var (
+	connMu    sync.Mutex
+	connected = map[zwift.Pod]int{}
+)
+
+func markConnected(p zwift.Pod, up bool) {
+	connMu.Lock()
+	defer connMu.Unlock()
+	if up {
+		connected[p]++
+	} else if connected[p] > 0 {
+		connected[p]--
+	}
+}
+
+// Connected reports whether a session to a pod of side p is live.
+func Connected(p zwift.Pod) bool {
+	connMu.Lock()
+	defer connMu.Unlock()
+	return connected[p] > 0
+}
+
+// ClearSighting forgets a controller's last advertisement. Called when a
+// session ends: reconnection must then wait for a sighting STRICTLY AFTER the
+// drop. A pod may advertise throughout its connected session, so without this
+// the gate would stay open for ~30s after the link died and retry the sleeping
+// pod by address — leaking a GattSession per attempt again.
+func ClearSighting(addr string) {
+	seenMu.Lock()
+	delete(lastSeenAt, addr)
+	seenMu.Unlock()
+}
+
+// markSeenSide records that a pod of side p was advertising just now, so the
+// status can tell which controllers are detected. Each side is tracked even
+// when its pod has no session yet. The LEFT pod is the pair's BLE anchor and
+// is connected like the right one (connecting only the right pod drops it).
+func markSeenSide(p zwift.Pod) {
+	seenMu.Lock()
+	sideSeenAt[p] = nowFn()
+	seenMu.Unlock()
+}
+
+// SideSeenRecently reports whether a pod of side p was seen advertising within
+// the window (observational; see pairStatus in main.go).
+func SideSeenRecently(p zwift.Pod, within time.Duration) bool {
+	seenMu.Lock()
+	at, ok := sideSeenAt[p]
+	seenMu.Unlock()
+	return ok && nowFn().Sub(at) <= within
+}
+
 // endSession tears down a connection safely: it Disconnects ONLY if the
 // device still answers the probe. When the PC's Bluetooth is switched off,
 // tinygo's ConnectionStatusChanged handler has already run Device.Disconnect()
 // and closed the GATT session; a second Disconnect on the freed session is a
 // use-after-free that kills the process with an unrecoverable AV (0xc0000005,
-// crash-after-disable-bt-windows.log). Writes and service discovery fail
-// gracefully on a dead session — only Disconnect crashes — so probe first and
-// let the library own the teardown when the device is gone. probe/disconnect
-// are injectable for tests.
+// crash-after-disable-bt-windows.log). Writes fail gracefully on a dead
+// session — service discovery does NOT (listing services AVs on the freed
+// COM object, observed on Windows), so the probe is always a write, never a
+// discover. probe/disconnect are injectable for tests.
 func endSession(where string, probe func() error, disconnect func()) {
 	if err := probe(); err != nil {
 		slog.Debug("device no longer answers — skipping disconnect", "where", where, "probe", err)
@@ -212,32 +350,33 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		return err
 	}
 	defer func() {
-		// Probe with one-shot service discovery, not a keepalive write: on a
-		// live session discovery returns cached services immediately, while a
-		// write can fail transiently on a live device and would wrongly skip
-		// Disconnect — leaking the controller's single connection slot. On a
-		// dead session (BT off) discovery fails gracefully, so the AV-prone
-		// Disconnect is skipped.
+		// Probe with a keepalive write, not service discovery: on a dead session
+		// (BT off) DiscoverServices itself AVs on the freed COM object (0xc0000005,
+		// same family as the Disconnect crash — observed during the podwatch run),
+		// while writes fail gracefully. So probe with the same write the keepalive
+		// loop queues and Disconnect only when it answers. A transient write
+		// failure on a LIVE device just defers the release of the controller's
+		// single connection slot to the device's own sleep timeout (~56s) — losing
+		// the slot for a minute beats an unrecoverable crash.
 		endSession("session "+t.Label, func() error {
-			_, err := dev.DiscoverServices(nil)
+			if syncRx == nil {
+				return errors.New("no sync-rx characteristic to probe")
+			}
+			_, err := writeChar(syncRx, keep)
 			return err
 		}, func() { _ = dev.Disconnect() })
 	}()
 
 	// Activation sequence from ZwiftBridge (verified on Click V2 hardware).
 	activation := [][]byte{
-		append(append([]byte(nil), rideOn...), 0x02, 0x03), // "RideOn" 02 03
+		handshakeStart, // "RideOn" 02 03
 		{0x00, 0x08, 0x00},
 		{0x00, 0x08, 0x10},
 	}
 
-	// rearm pokes a controller back into streaming button frames without
-	// dropping the link. challengeRearm (short ff 04 00 ack) answers the 0xFF
-	// question that arrives on async and keeps an unlocked pod from turning
-	// silent; the full silenceRearm adds the activation trio once the stream
-	// has already stopped. The ff 04 00 ack alone is not the solved crypto
-	// response, so this is a best-effort — the silence watchdog below is what
-	// guarantees recovery.
+	// challengeRearm answers the 0xFF crypto challenge that arrives on async
+	// (not sync-tx): a short ff 04 00 ack keeps an already-unlocked pod's button
+	// stream from going silent.
 	challengeRearm := func() {
 		if !SendAck {
 			return
@@ -246,32 +385,13 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 			slog.Debug("challenge re-arm write failed", "controller", t.Label, "error", err)
 		}
 	}
-	silenceRearm := func() {
-		if SendAck {
-			if _, err := writeChar(syncRx, ackSeq); err != nil {
-				slog.Debug("silence re-arm ack write failed", "controller", t.Label, "error", err)
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		for _, m := range activation {
-			if _, err := writeChar(syncRx, m); err != nil {
-				slog.Debug("silence re-arm write failed", "controller", t.Label, "error", err)
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 
-	// pod watches the 0x23 stream: the LEFT pod can stop sending button frames
-	// while the BLE link stays up (Zwift's crypto watchdog), and without it the
-	// session would never notice, so the left arrows/MIN would stay dead until
-	// restart. The keepalive loop below escalates silence to a reconnect.
-	// asyncNotify also answers 0xFF challenges (they arrive on async, not
-	// sync-tx) and records button frames.
-	pod := newPodWatcher(time.Now())
 	handler := ButtonHandler(t.Label, keyMap, keys.Tap)
-	if err := async.EnableNotifications(asyncNotify(time.Now, pod, challengeRearm, handler)); err != nil {
+	// lastActivity tracks the pod's last own transmission (any received frame).
+	// It gates the proactive pod reset so an active session is never rebooted.
+	lastActivity := time.Now()
+	noteActivity := func() { lastActivity = time.Now() }
+	if err := async.EnableNotifications(asyncNotify(t.Label, challengeRearm, noteActivity, handler)); err != nil {
 		return fmt.Errorf("subscribe async: %w", err)
 	}
 
@@ -283,6 +403,7 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 			if len(b) == 0 {
 				return
 			}
+			noteActivity()
 			// Only the RideOn echo is indicated on sync-tx (0x52...). The 0xFF
 			// crypto challenge arrives on the async characteristic and is
 			// handled by asyncNotify above.
@@ -309,28 +430,65 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	slog.Info("connected, handshake sent, listening", "controller", t.Label)
+	markConnected(t.Side, true)
+	defer markConnected(t.Side, false)
 
-	// Keepalive: device sleeps (~56s idle) without periodic 00 08 10. A failed
-	// write doubles as disconnect detection. Each tick also re-checks the
-	// silence watchdog: a pod that stopped streaming button frames while the
-	// link is otherwise fine is re-armed in place, then reconnected (a fresh
-	// session re-runs the handshake and re-enters its healthy window).
-	keep := []byte{0x00, 0x08, 0x10}
-	tick := time.NewTicker(2 * time.Second)
+	// Keepalive every 3s: re-send the raw "RideOn" opcode frame to sync-rx.
+	// This is qdomyos-zwift PR #4743's keepalive byte-for-byte. On a LONE RIGHT
+	// pod it does NOT hold the link — the pod still drops ~65s after its last
+	// own transmission; every payload (RideOn alone, "RideOn"+02 03, 00 08 10,
+	// 00 08 00, with and without jitter) fails identically on Windows. The write
+	// is kept as the LIVENESS probe: Idle button silence is normal (0x23 frames
+	// only stream on presses), so the only trustworthy disconnect signal is a
+	// failed keepalive write, and that is why the session is not ended on frame
+	// silence.
+	//
+	// After IdleReset of silence the tick sends a single pod RESET (0x18)
+	// instead — OpenBikeControl's periodic reset recovery for a right-only pod:
+	// the pod reboots on our schedule before its ~65s idle watchdog can strand
+	// it asleep for 30-40s, re-advertises within seconds, and the scan-gated
+	// caller reconnects. Button activity restarts the idle clock, so a session
+	// in use is never rebooted.
+	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
+	resetSent := false
 	for range tick.C {
-		if _, err := writeChar(syncRx, keep); err != nil {
-			return fmt.Errorf("disconnected: %w", err)
+		if reset, _ := keepaliveTick(resetSent, lastActivity, time.Now()); reset {
+			resetSent = true
+			slog.Debug("idle — sending pod reset (0x18) to reboot before the ~65s sleep watchdog", "controller", t.Label, "idle", IdleReset)
+			if _, err := writeChar(syncRx, resetPod); err != nil {
+				return fmt.Errorf("reset: %w", err)
+			}
+			continue
 		}
-		switch pod.decide(time.Now(), silenceRearmAfter, silenceReconnectAfter, silenceRearmGap) {
-		case actRearm:
-			slog.Warn("button stream silent — re-arming controller in place", "controller", t.Label)
-			silenceRearm()
-		case actReconnect:
-			return fmt.Errorf("button stream silent for %v — ending session so the controller reconnects and re-arms", silenceReconnectAfter)
+		if _, err := writeChar(syncRx, rideOn); err != nil {
+			return fmt.Errorf("disconnected: %w", err)
 		}
 	}
 	return nil
+}
+
+// asyncNotify wraps one controller's async (keypad) notification stream — the
+// characteristic that carries 0x23 button frames AND the Zwift 0xFF crypto
+// challenge (delivered here, NOT on sync-tx). A 0xFF 03 challenge triggers the
+// re-arm ack (ff 04 00) so an already-unlocked pod keeps its button stream
+// alive; the routine 0xFF 05 battery/status frame is deliberately ignored.
+// Every frame still reaches bh unchanged for decode/logging; any frame counts
+// as pod activity (it proves the pod's own radio woke enough to transmit),
+// which is what keeps the idle-reset from firing during a close session.
+func asyncNotify(label string, rearm func(), activity func(), bh func([]byte)) func([]byte) {
+	return func(b []byte) {
+		defer recoverLog("async frame")
+		if len(b) == 0 {
+			return
+		}
+		activity()
+		if b[0] == 0xFF && len(b) > 1 && b[1] == 0x03 {
+			slog.Debug("crypto challenge from click — acking to keep the button stream alive", "controller", label, "frame", fmt.Sprintf("% X", b))
+			rearm()
+		}
+		bh(b)
+	}
 }
 
 // writeChar writes without response, falling back to write-with-response for
@@ -356,15 +514,27 @@ func connect(t Target) (dev bluetooth.Device, async, syncRx, syncTx *bluetooth.D
 		return
 	}
 	// fail tears the fresh connection down through endSession's probe: on a
-	// live device (e.g. a transient discovery error) the probe succeeds and
-	// Disconnect frees the controller's single connection slot; when BT died
-	// mid-connect the probe fails and Disconnect — which would AV on the
-	// freed session — is skipped. One-shot discovery: no retry loop here.
+	// live device the probe (a keepalive write) succeeds and Disconnect frees
+	// the controller's single connection slot; when BT died mid-connect the
+	// write fails and Disconnect — which would AV on the freed session — is
+	// skipped. Service discovery is NOT a safe probe: on a freed session it
+	// AVs (0xc0000005, observed on Windows). When no characteristic is in hand
+	// there is nothing safe to write to, so skip Disconnect and let the device
+	// release the slot on its own link timeout.
 	fail := func(e error) {
-		endSession("connect "+t.Label, func() error {
-			_, de := dev.DiscoverServices(nil)
-			return de
-		}, func() { _ = dev.Disconnect() })
+		probe := syncRx
+		if probe == nil {
+			probe = async
+		}
+		if probe != nil {
+			endSession("connect "+t.Label,
+				func() error {
+					_, we := writeChar(probe, keep)
+					return we
+				}, func() { _ = dev.Disconnect() })
+		} else {
+			slog.Debug("no characteristic available to probe — skipping disconnect (slot releases on the device's own link timeout)", "controller", t.Label)
+		}
 		err = e
 	}
 

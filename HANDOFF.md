@@ -1,108 +1,78 @@
-# HANDOFF: Zwift Click V2 BLE listener (Go, Windows)
+# HANDOFF
+
+State as of commit `3713786` (branch checked out in `/home/smith/workspace`).
 
 ## Goal
-`zwiftboard` — Go program that connects to Zwift Click V2 controllers over Bluetooth LE on Windows, logs button press/release events, and (since 2026-10-07) types the mapped keyboard key on every press — Click acts like a Bluetooth keyboard. Mapping lives in `config.yaml` (cwd): named **profiles** per game, plus the log level.
 
-## Status
-- Compiles clean for Windows (`GOOS=windows go build ./...`). Ran on hardware: scan + connect worked, but service discovery failed (see Fix 1).
-- Only V2 is handled. The V1 `0x37` decode from the first draft was dropped.
-- 12 unit tests pass on linux (`go test ./...`); BLE paths are compile-checked only.
+Startup flow for zwiftboard, text/logs only (a TUI comes later):
 
-### Restructure (2026-10-07 evening)
-`main.go` split into `internal/{ble,keys,config,zwift}`; the entry point lives at the repo
-root (`main.go`, single-binary layout — `cmd/` was tried and dropped); tests moved next to their packages.
-`config.Load` returns errors instead of calling `log.Fatal`.
+1. Check system Bluetooth; if off, ask the user to turn it on and keep retrying.
+2. Ask the user to switch on the LEFT and RIGHT Click V2 controllers.
+3. Once both are present, listen to click events and map them to keys.
 
-### Fix 1 — service discovery (2026-10-07)
-Errors: `zwift service not found: bluetooth: did not find all requested services` then `async operation failed with status 2` on reconnect.
-Cause: `DiscoverServices([]UUID{svc})` on WinRT returns a partial/empty list right after connect; the UUID filter then errors. Fix: enumerate ALL services (retry 3x, 750ms apart) and match characteristics `...0002/0003/0004...` by UUID across every service; log service list at debug (`-v`), and on failure the error lists services seen.
+Hard requirement: stay as stable as commit `0f7872e` (no disconnects after
+10+ min idle with both controllers on; confirmed by the user on real hardware).
 
-### Fix 2 — handshake (adopted from working Python impl)
-Old `RideOn`-only handshake was never actually exercised (died at discovery). Now matches ZwiftBridge exactly:
-1. `52 69 64 65 4F 6E 02 03` (`"RideOn" 02 03`), 2. `00 08 00`, 3. `00 08 10` — 100ms apart.
-Keepalive = `00 08 10` every 2s (was `RideOn` every 3s). Write tries WriteWithoutResponse, falls back to Write.
+## What was done
 
-### Fix 3 — button bits (decoded from ZwiftBridge's frame table)
-Verified: LEFT 0x1, UP 0x2, RIGHT 0x4, DOWN 0x8, A 0x10, B 0x20, Y 0x40, Z 0x80, MIN 0x100 (left module), PLUS 0x1000 (right module). Old Ride-derived map was wrong (had 0x100=Z, 0x1000=ONOFF_L, no 0x80).
+| Commit | Summary |
+|---|---|
+| `43a153e` | `zwift.Pod`, `PodSide(id)`: decode left (`0x0B`) / right (`0x0A`) from the manufacturer-data first byte |
+| `d2758e4` | Per-side sighting tracking, Bluetooth-off retry, pair gate (later found wrong, see below) |
+| `a3af2e5` | Restored the idle `0x18` reset, made the gate opt-in |
+| `3713786` | **Current.** Reverted to `0f7872e` behavior: both pods connected. Added observational `pairStatus` |
 
-New flag: `-addr D4:06:0F:A9:86:04,...` skips scanning (no watch for late controllers in this mode).
+## Key finding (do not regress)
 
-### Feature — profiles + leveled logging (2026-10-07 evening)
-- `config.yaml`: top-level `loglevel:` (debug|info|warn|error, default info) and `profiles:` map of profile → button→key bindings. Flat (old) format errors with guidance. Loaded once at startup (`-config` overrides path).
-- `-p` / `--profile` selects the profile; **default `mywhoosh`**; unknown profile errors with the available list.
-- Five profiles, shortcuts verified against vendor docs (sources below): `mywhoosh` (K/I gears, space power-up, esc pause, tab camera, u U-turn), `zwift` (arrows turn/U-turn/action bar, space power-up, pageup/down FTP bias, f3 Ride On, f1 elbow flick), `rouvy` (`.`/`,` shift, space pause, k kudos, e ERG), `trainerroad` (arrows intensity/resistance, space pause, t mode, h/w toggles), `systm` (up/down intensity, backtick ERG, m mute). FulGaz (no shortcuts) and BKOOL (undocumented) were checked and excluded.
-- Tokens: `a-z`, `0-9`, `f1`-`f12`, named keys (up/down/left/right/enter/space/tab/esc/backspace/delete/insert/home/end/pageup/pagedown/shift/ctrl/alt/capslock), and single punctuation characters ( - = , . / ; ' [ ] \ and backtick).
-- Logging is `log/slog` only; level from `loglevel:`, `-v` forces debug. Raw frames/service lists/sync-tx = debug, edges/lifecycle = info, recoverable issues = warn, startup failures = error+exit.
-- `internal/keys`: token → VK (`Resolve`) + `Tap` (`user32 keybd_event` on windows, no-op elsewhere so `go test`/`vet` run on linux).
+The right pod's ~65s idle drop is NOT fixed by the left pod being *detected*.
+Log evidence: drops at ~67s and ~72s after the last button with the left pod
+detected nearby. In `0f7872e` the left pod was *connected* (`add()` opened a
+session for every controller found); that is what is stable. My detect-only
+change was the regression. Also, suppressing the idle reset when the left was
+present removed the only working mitigation.
 
-### Fix 4 — duplicate key taps (2026-10-07, revised after log analysis)
-Symptom: one physical press typed the key 2x, mainly right-module buttons (Y/Z/A/B).
-Root cause (from user logs): the pair MIRRORS button state — pressing B produced the identical frame `23 08 DF FF FF FF 0F` from BOTH units (`10:21` and `86:04`) within the same second. First attempt used a per-device debounce, useless here: each unit's frame was the first for its own handler.
-Fix: `claimTap(name)` in `internal/ble` — one tap window per button NAME, shared across all controllers (mutex-guarded). A second claim inside `-debounce` (default 200ms) logs `duplicate=true` and skips the key. Also covers single-device retransmit bursts. `ButtonHandler` takes the tap func as a param (testable); `internal/ble/buttons_test.go` has `TestCrossControllerDuplicateTap`.
+Consequences encoded in the code:
+- Every controller found gets a session, left and right (`main.go` `add`).
+- Nothing is gated on pod side. A connected pod may stop advertising, so a gate
+  on the other side's sighting can deadlock a reconnect (a 10 minute wait was
+  observed with the gate).
+- The idle reset (`keepaliveTick`) runs regardless of the left pod.
 
-### Feature — continuous scan (2026-10-07 evening)
-- `Watch` replaces the one-shot discover: endless scan bursts (`-scan` = burst length, 3s gap), never gives up when nothing is found, and picks up a controller turned on 10 minutes later (its own session goroutine, registry dedups).
-- `onFound` fires after the burst so connects never overlap an active scan. `-addr` mode stays fixed-list (no watch).
+## Current behavior
 
-## Setup
-```
-go run . -v                # flags: -v (log level debug), -scan 10s (burst), -addr MAC,...,
-                                  # -config config.yaml, -p mywhoosh/--profile, -debounce 200ms, -ack=true
-```
-Edit `config.yaml` in cwd (profiles + loglevel). Close the Zwift / Companion app first (each controller accepts one BLE connection). Press a button on each controller during a scan burst to wake it.
+- Startup: `Enable()` retried every 5s with an Error log while Bluetooth is off,
+  then an Info prompt to switch on both controllers.
+- `ble.Watch` scans forever; each controller's session goroutine connects only
+  when it was seen advertising within `-reconnect` (unchanged from baseline).
+- `pairStatus` (main.go, skipped in `-addr` mode) logs on change:
+  `left|right` x `not detected | detected | connected`; "ready" when both are
+  connected, "waiting" when a side is not detected.
+- Backed by `ble.SideSeenRecently` (scan sightings per side) and `ble.Connected`
+  (live sessions per side, set in `Session` after the handshake).
+- `Target.Side` is set from the advert; `-addr` targets have `PodUnknown`.
 
-## Library
-`tinygo.org/x/bluetooth` (WinRT backend, works with standard Go on Windows). Verified from its source (`dev` branch):
-- `EnableNotifications` prefers Notify and falls back to Indicate (needed for SyncTX).
-- `ScanResult.ManufacturerData()` returns elements with `CompanyID` and `Data`.
-- `Scan` blocks until `StopScan`.
+## Verification status
 
-## Design (root `main.go` + `internal/*`)
-1. `ble.Watch`: scan bursts forever; keep devices with manufacturer company ID `0x094A` or a name starting with "zwift". Zwift device ID = first byte of manufacturer data (logged). `-addr` bypasses the watch.
-2. Main keeps an address→registered registry; each new controller gets one goroutine with a reconnect loop (`ble.Session`, 5s backoff). Connects are serialized by `connectMu`.
-3. `connect`: connect, enumerate all GATT services (with retry), find Async/SyncRX/SyncTX chars by UUID across any service; async + syncRx required, syncTx optional.
-4. `Session`: subscribe Async (notify) + SyncTX (indicate), send activation trio, then `00 08 10` every 2s. A failed write is treated as a disconnect.
-5. SyncTX handler: reply starting with `'R'` (0x52) means unlocked, so send `ff 04 00` once (if `-ack`). Reply starting with `0xFF` means locked (crypto challenge); logged as warn.
-6. Async handler: frames starting `0x23` are protobuf; field 1 is a uint32 bitmap where **0 = pressed**. Edges are logged; on press `claimTap` gates `Tap` — global per-button window across BOTH controllers (mirrored pair), `-debounce` (default 200ms).
+- `go test ./...`, `go vet ./...`, `GOOS=windows go vet ./...` and
+  `GOOS=windows go build ./...` pass.
+- NOT yet run on hardware after `3713786`. Next step: run
+  `go run . -p test-notepad` on Windows with both controllers on, idle 10+ min,
+  then click the right controller. Expect "ready" after both connect, and no
+  "session ended" beyond the periodic reset/reconnect cycle seen in `0f7872e`.
+  Also try one pod only and check the "waiting" log.
 
-## GATT UUIDs (Zwift custom service)
-- Service `00000001-19ca-4651-86e5-fa29dcdd09d1`
-- Async (notify) `...0002...`, SyncRX (write) `...0003...`, SyncTX (indicate) `...0004...` (same suffix `-19ca-4651-86e5-fa29dcdd09d1`)
+## Known caveats
 
-## Button bits (Click V2, decoded from ZwiftBridge's working frame table)
-LEFT 0x1, UP 0x2, RIGHT 0x4, DOWN 0x8, A 0x10, B 0x20, Y 0x40, Z 0x80, MIN 0x100, PLUS 0x1000.
-Click V2 hardware: left module has 4 arrows plus minus; right has Y/Z/A/B plus plus.
+- `gofmt -l` lists ~16 files, including untouched ones: the working tree is CRLF
+  (git normalizes). It is not a real format issue. Edit with care: a plain
+  `sed`/script on LF content will not match CRLF files.
+- `_todos.md` has uncommitted changes that are not part of this work; left alone.
+- `pairStatus` "detected" uses a fixed 30s window rather than `-reconnect`.
+- Left-pod unlock: a locked left pod needs the ~24h unlock from the Zwift app;
+  we only answer the `0xFF` challenge with `ff 04 00` (unchanged baseline).
 
-## Known risks / unverified
-- Button bits now from ZwiftBridge frame table (verified working there), not from this program's own hardware run. Confirm with `-v` on real presses; unknown bits log as `BITn` (only at debug level).
-- LEFT controller needs a hardware unlock set by the Zwift app (~24h). Without it, expect the `0xFF` challenge and silent buttons. The right controller needs no unlock.
-- Right controller deep-sleeps ~56s idle without keepalive; keepalive now `00 08 10` every 2s (per ZwiftBridge), still untested here.
-- ZwiftBridge does NOT use SyncTX (`...0004...`) nor `ff 04 00`; both kept from Ride/qdomyos work, may be unnecessary or wrong for Click V2. Disable with `-ack=false`.
-- Connecting to an asleep/non-advertising device on Windows may hang; no connect timeout is implemented.
-- `async operation failed with status 2` seen once on fast reconnect — transient; loop retries after 5s.
-- Continuous scan (repeated `adapter.Scan` while sessions hold connections) is untested on hardware — if connects degrade, add a longer gap (`scanGap`) or pause watching while any session is up.
-- Keyboard output uses legacy `keybd_event` (works everywhere, target window must have focus; not a real HID keyboard — Zwift itself will not see Click as a BLE keyboard, only the Windows foreground app will).
-- If a key still duplicates beyond the window: log line shows `duplicate=true` — raise `-debounce` (mirrored frames should arrive within tens of ms; if they lag, e.g. 400ms, raise the flag). Two `state=pressed` lines BOTH WITHOUT `duplicate=true` = mirror gap wider than window.
-- Pair mirrors button state (both units report every press) — dedup relies on frames arriving inside `-debounce`.
-- `GOOS=windows` is required at build time on non-Windows hosts; BLE needs a real Windows machine with Bluetooth.
+## Possible next steps
 
-## Sources
-- ZwiftBridge (working Python Click V2 bridge — handshake, keepalive, button frames): https://github.com/jimhoefnagels/ZwiftBridge
-- Makinolo, Zwift Ride protocol (0x23 frame, bitmap, RideOn echo): https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/
-- qdomyos-zwift PR #4743 (Click V2 keepalive, unlock detection, `ff0400`): https://github.com/cagnulein/qdomyos-zwift/pull/4743
-- ajchellew/zwiftplay (older encrypted Play/Click protocol background): https://github.com/ajchellew/zwiftplay
-- p3dda/RideToWoosh (Click V2 handshake picks characteristics by UUID): https://github.com/p3dda/RideToWoosh
-- OpenBikeControl commit `2cb079fc` (referenced by the PR for the `ff0400` ack; not read directly)
-- MyWhoosh shortcuts (for the mywhoosh profile): https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts, https://www.keyboardista.com/en/shortcuts/mywhoosh-desktop/
-- Zwift shortcuts (official): https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B
-- Rouvy remote/keyboard mapping (official): https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping
-- TrainerRoad keyboard shortcuts (official): https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts
-- Wahoo SYSTM keyboard shortcuts (official): https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-shortcuts
-
-## Suggested next steps
-1. Run `go run . -v` on real hardware; confirm scan bursts, connect past discovery, handshake log line, per-button names, and `key=...` taps for both controllers.
-2. If still "characteristics missing", the `-v` service list / error line shows actual UUIDs — adjust match.
-3. If LEFT stays silent, try `-ack=false` or open Zwift once (24h unlock).
-4. Verify continuous scan on hardware: kill nothing, turn the second controller on 10 min later; watch `found controller`.
-5. Tune `mywhoosh` profile bindings in `config.yaml` to taste (per-game profiles now exist).
-6. Optional: hot-reload config on change; battery level (frame type `0x19`) decoding; real HID keyboard emulation (ViGEm) if target app ignores simulated input.
+- TUI that renders the same `pairStatus` states.
+- Make the status window follow `-reconnect`.
+- If drops reappear, compare against `0f7872e` first (`git diff 0f7872e`).

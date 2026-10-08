@@ -4,7 +4,9 @@
 // Protocol notes (Click V2, verified against jimhoefnagels/ZwiftBridge which works):
 //   - activation: write "RideOn"+02 03, then 00 08 00, then 00 08 10 (100ms apart);
 //     unlocked device echoes "RideOn" on SyncTX, a locked one sends a 0xFF challenge
-//   - keepalive: write 00 08 10 every 2s (device sleeps otherwise)
+//   - keepalive: re-send the raw "RideOn" opcode frame every 3s (qdomyos-zwift
+//     PR #4743 payload); this stops the pod's ~1 min deep-sleep. "RideOn"+02 03
+//     and 00 08 10 (alone or combined) did not hold the link on Windows
 //   - button frames: 0x23 + protobuf; field 1 = uint32 bitmap, bit==0 means pressed
 //   - LEFT needs a ~24h hardware unlock done by the Zwift app; "ff 04 00" keeps an
 //     already-unlocked device unlocked
@@ -28,7 +30,48 @@ const (
 
 	// MsgKeyPad is the frame type carrying the button bitmap.
 	MsgKeyPad = 0x23
+
+	// Pod device-type bytes (manufacturer data first byte, company 0x094A).
+	// The Click V2 is a PAIR and the side is encoded in the advertisement:
+	// 0x0B = LEFT pod (the pair's BLE anchor), 0x0A = RIGHT pod. Verified
+	// against OpenBikeControl's ZwiftConstants CLICK_V2_LEFT/RIGHT_SIDE.
+	PodRightDeviceID = 0x0A
+	PodLeftDeviceID  = 0x0B
 )
+
+// Pod is one side of the Click V2 pod pair (both are connected; see AGENTS.md).
+type Pod int
+
+const (
+	PodUnknown Pod = iota
+	PodLeft
+	PodRight
+)
+
+// String names a pod for labels and log messages.
+func (p Pod) String() string {
+	switch p {
+	case PodLeft:
+		return "left"
+	case PodRight:
+		return "right"
+	default:
+		return "unknown"
+	}
+}
+
+// PodSide maps a Zwift manufacturer-data device byte to its pod side, so the
+// scanner can tell which pod it found without connecting.
+func PodSide(id byte) Pod {
+	switch id {
+	case PodLeftDeviceID:
+		return PodLeft
+	case PodRightDeviceID:
+		return PodRight
+	default:
+		return PodUnknown
+	}
+}
 
 // Buttons maps Click V2 button bits to names. Bit == 0 in the frame means
 // pressed. Decoded from ZwiftBridge's known-good frame table (the full Zwift

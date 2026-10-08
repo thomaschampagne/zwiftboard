@@ -1,37 +1,23 @@
-- [x] Fix found empty in logs:
-  2026/10/07 21:05:52 scanning 10s for Zwift controllers (wake them by pressing a button)...
-  2026/10/07 21:05:56 found "" addr=D4:06:0F:A9:86:04 deviceID=11 rssi=-72
-  2026/10/07 21:05:57 found "" addr=D4:06:0F:93:10:21 deviceID=10 rssi=-6
-- [x] Add support for a `-p` / `--profile` CLI argument to select a specific configuration profile from the YAML config file.
-  1. Update the YAML config structure to accept a list/map of profiles.
-  2. Each profile defines its own mapping of SwiftClick v2 buttons to keyboard keys.
-  3. When the user passes `-p <profile_name>` or `--profile <profile_name>`:
-     - Check if the specified profile exists in the YAML config.
-     - If it exists, apply its key/button mapping.
-     - If it does not exist (or is missing), handle the error gracefully with a clear message.
-     - Default profile is the MyWhoosh one (see game KB shortcuts for this and map with my zwift click controllers)
-- [x] Wait until connection. Do not quit after 10 sec. Listen any new controller that could connect (if I connect 1 controller at start, and maybe the second one 10 min later or more...)
-- [x] Put logging system with debug,info,wanr,error like (get level from config.yaml)
-- [x] Set a proper folder/project golang structure
-- [x] Write AGENTS.md
+- [ ] 
+ 
+  **System Role & Objective:**
+  You are an expert Go developer specializing in TUI (Terminal User Interface) applications using Charm's Bubble Tea framework (`github.com/charmbracelet/bubbletea`) and Lip Gloss (`github.com/charmbracelet/lipgloss`). Your goal is to write a clean, idiomatic Go program that displays real-time hardware/bluetooth connectivity status and input mapping for virtual cycling controllers.
 
-Self review each step on consistency/quality. Commit each step w/ conventionnal commit
+  **Requirements:**
 
-- [x] Write unit test
-- [x] Write github Action CI/CD pipeline with semantic versioning. Build for windows, macos (arm only) with binaries uploaded in created release should be supported
-- [x] Write README.md (Fast explain what problem it solves for a new user (promote it), how to download, how to configure, how it works technically (make ascii diagram when needed), how to run/build/test @dev). Make 2026 top-notch readme
-- [x] Dont crash program, perform try/catch like if possible and log a error.
-  Go has no try/catch; the fix is recover at every runtime boundary. Added
-  `recoverLog` in internal/ble (guards scan bursts, the ack goroutine, sync-tx
-  and button-frame notification callbacks) and `guarded` in main.go (session
-  retry goroutine). A panic now logs `recovered from panic` + stack and the
-  loop continues instead of killing the process. The only os.Exit calls left
-  are startup failures (bad config, adapter enable, bad -addr) per convention.
-- [x] Support only 1 controller being used (eg. we can use only right one if we want actually for mywhoosh)
-  Symptom reported: with only the RIGHT controller connected the program
-  stopped after a moment. All runtime exits were already startup-only, so the
-  stop was an uncaught panic in the WinRT BLE notification path — covered by
-  the panic guards above (a one-off fault now logs and the session/scan loops
-  retry forever). Adding a per-profile/CLI "which module" filter was NOT done;
-  the app connects any controller it finds. Verify on hardware: right-only,
-  no panic lines, session keeps reconnecting if BLE drops.
+  1. **Bluetooth System Status Check:**
+     - Display the current system Bluetooth state.
+     - If Bluetooth is disabled/inactive, halt further setup steps and explicitly prompt the user to enable system Bluetooth.
+
+  2. **Controller Status Check (Dual Controllers):**
+     - Track and display the active status for both **Left Controller** and **Right Controller**.
+     - If either controller is inactive/disconnected, display an explicit, individual prompt asking the user to turn on or connect that specific controller (e.g., *"Right controller disconnected: please activate the Right Controller"*).
+
+  3. **Current Profile & Key Binding Visualizer:**
+     - Display the active configuration profile name.
+     - Render a formatted key mapping table specifically for the **Right SwiftClick V2** controller, mapping each controller button (e.g., Up, Down, Select, Trigger) to its corresponding keyboard stroke/emulated HID key.
+
+  4. **Technical Constraints:**
+     - Write fully functional Go code using `bubbletea` for model/update/view architecture and `lipgloss` for styling (borders, active/inactive colors, layout).
+     - Include interactive toggle keys (or mock events) in `Update()` so the user can test switching Bluetooth and controller statuses dynamically.
+     - Provide clear instructions to build and run the code.

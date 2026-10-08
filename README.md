@@ -56,7 +56,7 @@ zwiftboard [flags]
 | `-scan`           | `10s`         | Length of one scan burst; bursts repeat until all controllers are up |
 | `-addr`           | _(scanning)_  | Comma-separated BLE MACs — skip scanning, connect straight to these  |
 | `-debounce`       | `200ms`       | Minimum gap between two taps of the same button (mirrored pair)      |
-| `-ack`            | `true`        | Send `ff 04 00` to keep an unlocked LEFT controller unlocked         |
+| `-ack`            | `true`        | Answer a `0xFF 03` challenge with `ff 04 00` (keeps an unlocked pod streaming) |
 | `-v`              | `false`       | Force `debug` log level (raw frames, service list)                   |
 | `-log`            | _(none)_      | Also write log lines to this file (truncated at startup)             |
 
@@ -67,15 +67,16 @@ Log level otherwise comes from `loglevel:` in `config.yaml`
 
 | Profile       | Click becomes…                                             | Source                                                                                                              |
 | ------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `mywhoosh`    | I/K gears, space power-up, esc pause, tab camera, u U-turn | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                     |
-| `zwift`       | arrows steer/U-turn, space power-up, pgup/pgdn FTP bias    | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                     |
-| `rouvy`       | `.`/`,` gears, space pause, k kudos, e ERG                 | [Rouvy mapping](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)  |
-| `trainerroad` | arrows intensity/resistance, space pause, t mode           | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts) |
-| `systm`       | up/down intensity, `` ` `` ERG, m mute                     | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)              |
+| `mywhoosh`    | `+` gear up, space power-up, esc pause, tab camera, u U-turn | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                     |
+| `zwift`       | space power-up, esc menu, pgup FTP bias, f3 Ride On, f1 elbow | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                     |
+| `rouvy`       | `.` gear up, space pause, k kudos, e ERG                   | [Rouvy mapping](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)  |
+| `trainerroad` | space pause, t mode, h heart-rate, w workout               | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts) |
+| `systm`       | space pause, `` ` `` ERG, m mute                           | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)              |
 
-Button names: `LEFT` `UP` `RIGHT` `DOWN` (left module), `A` `B` `Y` `Z`
-(right module), `MIN` `PLUS`. Left module = arrows + minus, right module =
-Y/Z/A/B + plus.
+**Right pod only.** This build uses the RIGHT Click V2 pod: buttons `A` `B` `Y`
+`Z` `PLUS`. The LEFT pod (`A`-column arrows + minus) is unreliable to keep
+connected and is not used. Gear down was `MIN` on the left pod, so the profiles
+that shifted gears (`mywhoosh`, `rouvy`) keep only gear **up** on `PLUS`.
 
 ## Configuration
 
@@ -89,7 +90,6 @@ profiles:
   mywhoosh: # pick with -p mywhoosh
     focusProgramNameOnClick: null # optional, per profile (see below)
     PLUS: i # gear up
-    MIN: k # gear down
     A: space # power-up
     B: esc # pause menu
     Y: u # U-turn
@@ -141,7 +141,7 @@ the game stays in front for the whole ride.
 │                            │        │                                           │
 │   LEFT            RIGHT    │  BLE   │  zwiftboard.exe                           │
 │   [arrows -]  [Y Z A B +]  │◄──────►│   1. scan bursts (Zwift vendor filter)    │
-│                            │  GATT  │   2. connect + handshake, keepalive 2s    │
+│                            │  GATT  │   2. connect + handshake, keepalive 3s    │
 │   frame 0x23:              │ notify │   3. decode protobuf bitmap (0=pressed)   │
 │   protobuf bitmap,         │ write  │   4. global debounce (pair MIRRORS        │
 │   0 = pressed              │ indic. │      every press on both units)           │
@@ -162,8 +162,9 @@ the game stays in front for the whole ride.
    UUID across _all_ services: Async `…0002` (notify), SyncRX `…0003` (write),
    SyncTX `…0004` (indicate) of service `00000001-19ca-4651-86e5-fa29dcdd09d1`.
 3. **Handshake** — the ZwiftBridge activation trio (`RideOn 02 03`, `00 08 00`,
-   `00 08 10`) then a `00 08 10` keepalive every 2s; without it the RIGHT
-   controller deep-sleeps after ~56s and writes start failing.
+   `00 08 10`), then a keepalive every 3s re-sending the raw `RideOn` opcode
+   frame — the qdomyos-zwift PR #4743 payload that stops the RIGHT controller's
+   ~1 min deep-sleep.
 4. **Decode** — button frames start with `0x23`; protobuf field 1 is a bitmap
    where **0 = pressed**. Bits: `LEFT 0x1 UP 0x2 RIGHT 0x4 DOWN 0x8 A 0x10
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
@@ -173,15 +174,13 @@ the game stays in front for the whole ride.
    set, the configured window is brought to the foreground, then the key goes
    out via Windows `keybd_event`.
 
-**Two pods, one pair.** The Click V2 ships as two pods that work as a *pair*:
-the LEFT pod is the pair's BLE anchor and the RIGHT pod mirrors its state to
-the LEFT over a private RF link. zwiftboard connects to **every** pod it finds
-(each gets its own session) and keepalives each, so a lone RIGHT pod works fine
-too — but with only the RIGHT pod connected its LED stays in advertising mode
-(makes the LED keep blinking) instead of going solid. Connect both pods and the
-LEDs turn solid; the blink is cosmetic, not a fault. Scanning never gives up,
-so you can turn the second pod on minutes later and it joins the pair on the
-spot.
+**Right pod only.** The Click V2 ships as two pods that work as a *pair*: the
+LEFT pod is the pair's BLE anchor and the RIGHT pod mirrors its state to the
+LEFT over a private RF link. This build uses the RIGHT pod only (the LEFT pod is
+unreliable to keep connected); with only the RIGHT pod connected its LED stays
+in advertising mode (keeps blinking) instead of going solid. The blink is
+cosmetic, not a fault. Scanning never gives up, so a pod turned on minutes later
+still joins.
 
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.
@@ -190,8 +189,8 @@ connects are serialized so they never overlap an active scan.
 
 | Symptom                                       | Fix                                                                                                                       |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| LEFT controller silent, logs `0xFF challenge` | zwiftboard now self-heals: when a pod stops sending button frames while the link is still up (Zwift's crypto watchdog on the LEFT), it re-arms it in place (`ff 04 00` + activation trio, logged `re-arming controller`) and, if it stays silent, ends the session so it reconnects (~15s, logged `button stream silent`). For a rock-solid LEFT, connect it to Zwift once — it stores a ~24h hardware unlock. `-ack=false` disables the ack if it misbehaves. |
-| Right pod's LED blinks while connected        | Normal when only the RIGHT pod is used: the pair's anchor (LEFT) is missing. Connect the LEFT pod too and the LEDs go solid — the blink doesn't affect button delivery. |
+| Right pod drops, logs `session ended`        | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again. |
+| Right pod's LED blinks while connected        | Normal: this build uses the RIGHT pod only and the pair's anchor (LEFT) is missing, so the LED stays in advertising mode. Cosmetic — button delivery is unaffected. |
 | One press types the key twice                 | Raise `-debounce` (frames should mirror within tens of ms).                                                               |
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
 | Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |

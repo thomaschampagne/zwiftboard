@@ -26,29 +26,25 @@ loglevel: info
 #   trainerroad support.trainerroad.com "TrainerRoad Keyboard Shortcuts"
 #   systm       support.wahoofitness.com "Keyboard shortcuts" (SYSTM)
 # Apps checked and excluded: FulGaz (no shortcuts), BKOOL (undocumented).
+#
+# RIGHT POD ONLY: this build uses the RIGHT Click V2 pod (Z Y A B PLUS). The
+# LEFT pod (LEFT UP RIGHT DOWN MIN — the arrows and minus) is unreliable to
+# keep connected and is not used; do not add those button names below. Gear
+# down was MIN on the left pod, so profiles that shifted gears (mywhoosh,
+# rouvy) keep only gear UP on PLUS.
 profiles:
   # Start notepad
   test-notepad:
-    LEFT: l
-    UP: u 
-    RIGHT: r
-    DOWN: d
-    MIN: m
     PLUS: p
-    A: a 
-    B: b 
-    Y: y 
-    Z: z 
+    A: a
+    B: b
+    Y: y
+    Z: z
     focusProgramNameOnClick: "Notepad"
 
-  # Zwift, riding-focused: arrows turn at junctions / U-turn / action bar,
-  # space = power-up, esc = menu, pageup/down = FTP bias, F-keys = emotes.
+  # Zwift, riding-focused: space = power-up, esc = menu, pageup = FTP bias up,
+  # F-keys = emotes. (Arrows and FTP bias down were on the left pod.)
   zwift:
-    LEFT: left
-    UP: up
-    RIGHT: right
-    DOWN: down
-    MIN: pagedown
     PLUS: pageup
     A: space      # use power-up
     B: esc        # menu / go back
@@ -56,14 +52,9 @@ profiles:
     Z: f1         # elbow flick
     focusProgramNameOnClick: null   # not set: keys go to the focused window
 
-  # MyWhoosh HD: I/K = gear up/down, arrows = steer/navigate,
-  # space = power-up, esc = pause menu, tab = camera, u = U-turn / minimal UI.
+  # MyWhoosh HD: I = gear up, space = power-up, esc = pause menu, tab = camera,
+  # u = U-turn / minimal UI. (Gear down (K) was MIN on the left pod — unmapped.)
   mywhoosh:
-    LEFT: left      # steer left / navigate
-    UP: up          # navigate
-    RIGHT: right    # steer right / navigate
-    DOWN: down      # navigate
-    MIN: k          # shift down (easier gear)
     PLUS: i         # shift up (harder gear)
     A: space        # use power-up
     B: esc          # pause / menu
@@ -71,13 +62,9 @@ profiles:
     Z: tab          # change camera view
     focusProgramNameOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
 
-  # Rouvy desktop: keyboard is the default remote; '.' / ',' shift gears.
+  # Rouvy desktop: keyboard is the default remote; '.' shifts gears up.
+  # (Gear down (',') was MIN on the left pod — unmapped.)
   rouvy:
-    LEFT: left
-    UP: up
-    RIGHT: right
-    DOWN: down
-    MIN: ","        # shift down
     PLUS: "."       # shift up
     A: space        # pause / resume
     B: esc          # back
@@ -85,12 +72,8 @@ profiles:
     Z: e            # toggle ERG mode
     focusProgramNameOnClick: null
 
-  # TrainerRoad workout player: arrows = intensity / resistance.
+  # TrainerRoad workout player: (intensity/resistance arrows were on the left pod.)
   trainerroad:
-    UP: up          # intensity +
-    DOWN: down      # intensity -
-    LEFT: left      # resistance -
-    RIGHT: right    # resistance +
     A: space        # play / pause
     B: t            # cycle trainer mode (ERG/Resistance/Level)
     Y: h            # heart-rate graph
@@ -99,9 +82,8 @@ profiles:
 
   # Wahoo SYSTM workout player: ` toggles ERG, digits pick levels 0-9
   # (add e.g. PLUS: 5 for your usual level — none mapped by default).
+  # (Intensity up/down arrows were on the left pod.)
   systm:
-    UP: up          # intensity +
-    DOWN: down      # intensity -
     A: space        # pause / play
     B: "`"          # ERG mode toggle
     Y: m            # mute

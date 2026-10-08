@@ -7,18 +7,23 @@ import (
 	"time"
 
 	"tinygo.org/x/bluetooth"
+
+	"zwiftboard/internal/zwift"
 )
 
 // fakePayload implements bluetooth.AdvertisementPayload so tests can fabricate
 // a ScanResult without BLE hardware.
-type fakePayload struct{ name string }
+type fakePayload struct {
+	name string
+	mfr  []bluetooth.ManufacturerDataElement
+}
 
 func (f fakePayload) LocalName() string                  { return f.name }
 func (f fakePayload) HasServiceUUID(bluetooth.UUID) bool { return false }
 func (f fakePayload) ServiceUUIDs() []bluetooth.UUID     { return nil }
 func (f fakePayload) Bytes() []byte                      { return nil }
 func (f fakePayload) ManufacturerData() []bluetooth.ManufacturerDataElement {
-	return nil
+	return f.mfr
 }
 func (f fakePayload) ServiceData() []bluetooth.ServiceDataElement { return nil }
 
@@ -32,6 +37,20 @@ func zwiftResult(addr string) bluetooth.ScanResult {
 		RSSI:                 -50,
 		AdvertisementPayload: fakePayload{name: "Zwift Click"},
 	}
+}
+
+// zwiftPodResult fabricates a ScanResult for a specific pod: the Click V2
+// side lives in the Zwift manufacturer record's FIRST byte (0x0B left, 0x0A
+// right), the same record the real scanner decodes.
+func zwiftPodResult(addr string, id byte) bluetooth.ScanResult {
+	r := zwiftResult(addr)
+	r.AdvertisementPayload = fakePayload{
+		name: "Zwift Click",
+		mfr: []bluetooth.ManufacturerDataElement{
+			{CompanyID: zwift.CompanyID, Data: []byte{id}},
+		},
+	}
+	return r
 }
 
 type scanCallback = func(*bluetooth.Adapter, bluetooth.ScanResult)

@@ -47,26 +47,61 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
   from both units → `claimTap` dedup is global per button name, not per device.
 - The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
   the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
-  link. Both pods are connected (each gets its own session); with only the
-  RIGHT pod connected its LED keeps blinking (advertising mode) even though its
-  frames decode fine — connect both for a solid LED. The blink is cosmetic, not
-  a fault.
-- Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`) then `00 08 10`
-  keepalive every 2s; without it the device sleeps (~56s) and writes fail
-  (that failure is also the disconnect signal).
+  link. Both pods are connected (see BOTH PODS ARE CONNECTED); only the
+  RIGHT pod's buttons (Y Z A B PLUS) are normally mapped. A lone RIGHT pod's
+  LED keeps blinking (advertising mode) even though its frames decode fine —
+  cosmetic, not a fault.
+- Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`), then a keepalive
+  every 3s re-sending the raw `RideOn` opcode frame — byte-for-byte the
+  qdomyos-zwift PR #4743 keepalive. PROVEN NOT TO HOLD A LONE RIGHT POD: on
+  Windows the link still dies ~65s after the pod's LAST OWN TRANSMISSION (a
+  button frame), deterministically (~64-68s), no matter the payload — plain
+  `RideOn`, `RideOn 02 03`, `00 08 10`, `00 08 00`, with and without ±5s keepalive
+  jitter all failed identically. The right pod's idle watchdog is reset only by
+  its own inbound frames; nothing we write to sync-rx resets it, and there is no
+  unlock/firmware hook for the lone right pod. The keepalive's real job is
+  LIVENESS: a successful write proves the session is up, a failed write is the
+  ONLY disconnect signal (idle 0x23 silence is normal), and a 3s write cadence
+  also keeps us inside WinRT's connection timer. The qdomyos keepalive that
+  actually holds a link belongs to the LEFT pod (24h-unlocked pair), which this
+  right-only build dropped.
+  (OpenBikeControl's real keep-awake is closed source in the private `prop`
+  package, so qdomyos is the open reference.)
+- RECONNECT IS SCAN-GATED, never address-hammered. `Connect(addr)` on a sleeping
+  pod leaks one Windows `GattSession` with `SetMaintainConnection(true)` per
+  attempt (tinygo gap_windows.go creates it unconditionally and only
+  `Disconnect()` releases it, which never runs for a device that didn't
+  physically connect); hundreds of leaked sessions over a long outage wedged the
+  Windows BLE stack and stalled recovery ~54 minutes. The scanner records every
+  sighting (`markSeen`), and a controller's session goroutine only calls
+  `Session` when it was seen advertising within `-reconnect` (default 30s); a
+  fresh sighting means the pod is awake, the connect succeeds, and nothing
+  leaks. A session END also clears the sighting (`ClearSighting`): the pod may
+  advertise all session long (keeping the gate open), so without the clear a
+  drop would be followed by retries of the now-sleeping pod by address.
+- PERIODIC POD RESET defeats the ~65s idle sleep (`-idle-reset`, default 55s):
+  after that much button silence the keepalive tick writes a lone `0x18` to
+  sync-rx instead of the RideOn ping — OpenBikeControl's "periodic RESET
+  recovery" (Opcode.RESET=24, per their protocol enum; the dbg Reset pill in
+  zwift_unlock.dart writes `[opcode.value]` to sync-rx withoutResponse, and
+  connection.dart notes "reconnections after an automatic reset happen every
+  minute"). The pod reboots ON OUR SCHEDULE, before its ~65s watchdog strands
+  it asleep for 30-40s; it re-advertises within seconds (`ClickLogic` is
+  otherwise closed source in the `prop` submodule) and the scan gate reconnects.
+  Activity (any received frame) restarts the idle clock and suppresses the
+  reset, so a session in use is never rebooted.
 - Button frame `0x23` + protobuf field 1 = bitmap, **0 = pressed**; bits are
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
   locked; `ff 04 00` keeps an unlocked device unlocked, disable with `-ack=false`).
-- The LEFT pod can STOP sending `0x23` button frames while the BLE link stays
-  up (crypto watchdog once the unlock lapses): it still answers keepalives, so
-  a session would never notice. The `0xFF` challenge arrives on the ASYNC
-  characteristic, not sync-tx. `podWatcher` (kept by `Session`) re-arms a
-  silent pod in place (`ff 04 00` + activation trio) and, if it stays silent
-  for `silenceReconnectAfter`, returns an error so the caller reconnects —
-  the raw `ff 04 00` is NOT the solved crypto response, so a reconnect is the
-  guaranteed re-arm; the pod streams all-released frames ~every 100ms, so a
-  multi-second gap is an unambiguous fault, not an idle user.
+- Right-only liveness: the keepalive write is the ONLY signal. The old
+  LEFT-anchor silence watchdog (`podWatcher`) was removed with LEFT support — an
+  idle pod legitimately stops streaming `0x23` frames, and idle silence must
+  NEVER end a session (the right controller must stay usable after a long idle
+  for virtual shifting). A session ends only when a keepalive write actually
+  fails (a real disconnect); the caller reconnects. The `0xFF` challenge still
+  arrives on the ASYNC characteristic, not sync-tx, and the `0xFF` 03 challenge
+  is answered immediately (`ff 04 00`) so an unlocked pod keeps streaming.
 - Scanning runs in bursts forever (`Watch`): never Fatal when nothing is
   found, never stop looking for a controller that appears 10 minutes later.
 - `connect` is serialized (`connectMu`); `onFound` fires after the scan burst
@@ -74,8 +109,25 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 - Teardown must PROBE before `Device.Disconnect()`: when BT goes off, tinygo's
   `ConnectionStatusChanged` handler already ran `Disconnect()` and freed the
   GATT session; calling it again is an unrecoverable AV (0xc0000005 —
-  `crash-after-disable-bt-windows.log`). Writes and service discovery fail
-  gracefully on a dead session — use them as the probe (`endSession`) and skip
-  `Disconnect` when the device no longer answers. Residual accepted: a device
-  dying in the microseconds between probe and Disconnect can still AV (needs a
-  tinygo fix).
+  `crash-after-disable-bt-windows.log`). Only WRITES fail gracefully on a dead
+  session — service discovery does NOT (DiscoverServices AVs on the freed COM
+  object, observed on Windows) — so the probe (`endSession`) is always a
+  keepalive write, never a discover; skip `Disconnect` when the device no
+  longer answers, and when no characteristic is in hand skip `Disconnect` too
+  (the device releases its slot on its own link timeout). Residual accepted: a
+  device dying in the microseconds between probe and Disconnect can still AV
+  (needs a tinygo fix).
+- BOTH PODS ARE CONNECTED (commit 0f7872e is the proven-stable baseline: no
+  drops after 10+ min idle with both controllers on). Every controller found —
+  left AND right — gets its own session, handshake and keepalive. DISPROVEN
+  twice on Windows: connecting only the right pod, and merely DETECTING the
+  left one (the pair gate, -wait-left), both still dropped the right pod
+  ~67-72s after its last button. Do not stop connecting the left pod. The pod
+  side is in the advertisement (Zwift manufacturer record 0x094A, first byte:
+  `0x0B` LEFT, `0x0A` RIGHT — `zwift.PodSide`); it is used for the
+  OBSERVATIONAL pair status only (`pairStatus` in main.go: per side
+  not detected / detected / connected, "ready" when both are connected).
+  Never gate a session on it: a connected pod may stop advertising, so a gate
+  on the other side's sighting can deadlock a reconnect.
+- Startup: Bluetooth off is not fatal — `Enable()` is retried every 5s with a
+  "turn it ON" message until the radio is on.
