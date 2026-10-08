@@ -24,7 +24,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -34,18 +33,6 @@ import (
 	"zwiftboard/internal/keys"
 	"zwiftboard/internal/zwift"
 )
-
-// guarded runs fn, logging a panic (with stack) instead of crashing, so a
-// single bad controller event never takes the process down. Keep at top level
-// (not inside main) to stay reachable from goroutine closures.
-func guarded(where string, fn func()) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Warn("recovered from panic", "where", where, "panic", r, "stack", string(debug.Stack()))
-		}
-	}()
-	fn()
-}
 
 func main() {
 	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
@@ -148,9 +135,9 @@ func main() {
 		}
 		go func() {
 			for {
-				// guarded turns a panic in one controller's session into a
+				// ble.Guarded turns a panic in one controller's session into a
 				// warn + retry, so a single bad event never kills the process.
-				guarded("session "+t.Label, func() {
+				ble.Guarded("session "+t.Label, func() {
 					if err := ble.Session(t, cfg.Bindings); err != nil {
 						slog.Warn("session ended", "controller", t.Label, "error", err)
 					}
@@ -171,17 +158,10 @@ func main() {
 			add(ble.Target{Addr: addr, Label: "zwift/" + zwift.Tail(s)})
 		}
 	} else {
-		// Watch loops forever with no recover of its own: a panic-escaping
-		// scan (e.g. the PC's Bluetooth was switched off) would otherwise take
-		// the whole process down. Guard the spawn so the loop can never crash it.
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Warn("recovered from panic", "where", "watch loop", "panic", r, "stack", string(debug.Stack()))
-				}
-			}()
-			go ble.Watch(*scanFor, registered, add)
-		}()
+		// Watch guards each iteration itself (recoverLog "watch iteration"
+		// inside the loop): the old recover here was dead code — a nested
+		// `go ble.Watch` made the outer defer unreachable.
+		go ble.Watch(*scanFor, registered, add)
 	}
 	slog.Info("running — Ctrl+C to quit")
 	select {}

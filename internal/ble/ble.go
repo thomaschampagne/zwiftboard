@@ -70,6 +70,14 @@ func Enable() error { return adapter.Enable() }
 // scanGap is the pause between scan bursts.
 const scanGap = 3 * time.Second
 
+// scanFn/stopScanFn wrap the adapter calls: injected in tests so the scan
+// logic is verifiable without BLE hardware (same DI pattern as ButtonHandler's
+// tap parameter).
+var (
+	scanFn     = adapter.Scan
+	stopScanFn = func() { _ = adapter.StopScan() }
+)
+
 // Watch scans for Zwift controllers forever, in bursts of burst length. For
 // every controller not already registered (known reports that), onFound is
 // called ONCE — after the burst ends, so the adapter is not scanning while
@@ -77,47 +85,95 @@ const scanGap = 3 * time.Second
 func Watch(burst time.Duration, known func(addr string) bool, onFound func(Target)) {
 	foundAny := false
 	for {
-		if !foundAny || debugEnabled() {
-			slog.Info("scanning for Zwift controllers (wake them by pressing a button; keeps scanning until found)", "burst", burst)
-		}
-		// scanBurst catches a panicking callback so an adapter hiccup never
-		// stops us looking for a controller that appears minutes later.
-		pending, order, err := scanBurst(burst, known)
-		if err != nil {
-			slog.Warn("scan failed", "error", err)
-		}
+		// One guarded iteration: a panic in a scan or in onFound (e.g. the
+		// PC's Bluetooth was switched off mid-burst) costs one burst, never
+		// the watch loop — we must keep looking for a controller that
+		// appears minutes later (hard-won fact).
+		func() {
+			defer recoverLog("watch iteration")
+			if !foundAny || debugEnabled() {
+				slog.Info("scanning for Zwift controllers (wake them by pressing a button; keeps scanning until found)", "burst", burst)
+			}
+			pending, order, err := scanBurst(burst, known)
+			if err != nil {
+				slog.Warn("scan failed", "error", err)
+			}
 
-		for _, k := range order {
-			onFound(pending[k])
-		}
-		if len(order) > 0 {
-			foundAny = true
-		}
+			for _, k := range order {
+				onFound(pending[k])
+			}
+			if len(order) > 0 {
+				foundAny = true
+			}
+		}()
 		time.Sleep(scanGap)
 	}
 }
 
-// scanBurst runs one burst of adapter.Scan and returns the freshly discovered
+// collector accumulates one burst's discoveries. The scan callback runs on
+// the platform's BLE event goroutine and may fire after Scan has already
+// returned, so every access is locked; snapshot hands out copies so a late
+// callback can only write the (now unread) originals, never race the reader —
+// a bare concurrent map read and write is an uncatchable fatal error.
+type collector struct {
+	mu      sync.Mutex
+	pending map[string]Target
+	order   []string
+}
+
+// add records a freshly discovered controller; false when already pending.
+func (c *collector) add(key string, t Target) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, dup := c.pending[key]; dup {
+		return false
+	}
+	c.pending[key] = t
+	c.order = append(c.order, key)
+	return true
+}
+
+// snapshot returns copies of the current state.
+func (c *collector) snapshot() (map[string]Target, []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	pending := make(map[string]Target, len(c.pending))
+	for k, v := range c.pending {
+		pending[k] = v
+	}
+	return pending, append([]string(nil), c.order...)
+}
+
+// scanBurst runs one burst of scanFn and returns the freshly discovered
 // controllers (not known to known() yet) in discovery order.
-func scanBurst(burst time.Duration, known func(addr string) bool) (pending map[string]Target, order []string, err error) {
-	pending = map[string]Target{}
-	func() {
-		defer recoverLog("scan callback")
-		timer := time.AfterFunc(burst, func() { _ = adapter.StopScan() })
+func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Target, []string, error) {
+	c := &collector{pending: map[string]Target{}}
+	err := func() (err error) {
+		// Covers a panicking scanFn call (same goroutine); the callback and
+		// the StopScan timer each recover their own — they run elsewhere.
+		defer recoverLog("scan")
+		timer := time.AfterFunc(burst, func() {
+			defer recoverLog("stop scan") // AfterFunc runs on its own goroutine
+			stopScanFn()
+		})
 		defer timer.Stop()
-		err = adapter.Scan(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
+		return scanFn(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
+			// This runs on the platform's event goroutine, where scanBurst's
+			// defers can never reach it: a panic here would kill the process.
+			defer recoverLog("scan callback")
 			id, isZwift := zwift.IsZwift(r)
 			if !isZwift {
 				return
 			}
 			name := r.LocalName()
 			key := r.Address.String()
-			if _, dup := pending[key]; dup || known(key) {
+			if known(key) {
 				return
 			}
 			label := fmt.Sprintf("%s/%s", zwift.ShortName(name), zwift.Tail(key))
-			pending[key] = Target{Addr: r.Address, Label: label}
-			order = append(order, key)
+			if !c.add(key, Target{Addr: r.Address, Label: label}) {
+				return
+			}
 			disp := name
 			if disp == "" {
 				disp = label // advertisements without a name: fall back to label
@@ -125,7 +181,25 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (pending map[s
 			slog.Info("found controller", "name", disp, "addr", key, "deviceID", id, "rssi", r.RSSI)
 		})
 	}()
+	pending, order := c.snapshot()
 	return pending, order, err
+}
+
+// endSession tears down a connection safely: it Disconnects ONLY if the
+// device still answers the probe. When the PC's Bluetooth is switched off,
+// tinygo's ConnectionStatusChanged handler has already run Device.Disconnect()
+// and closed the GATT session; a second Disconnect on the freed session is a
+// use-after-free that kills the process with an unrecoverable AV (0xc0000005,
+// crash-after-disable-bt-windows.log). Writes and service discovery fail
+// gracefully on a dead session — only Disconnect crashes — so probe first and
+// let the library own the teardown when the device is gone. probe/disconnect
+// are injectable for tests.
+func endSession(where string, probe func() error, disconnect func()) {
+	if err := probe(); err != nil {
+		slog.Debug("device no longer answers — skipping disconnect", "where", where, "probe", err)
+		return
+	}
+	disconnect()
 }
 
 // Session connects, handshakes and listens on one controller until the link
@@ -137,7 +211,18 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 	if err != nil {
 		return err
 	}
-	defer dev.Disconnect()
+	defer func() {
+		// Probe with one-shot service discovery, not a keepalive write: on a
+		// live session discovery returns cached services immediately, while a
+		// write can fail transiently on a live device and would wrongly skip
+		// Disconnect — leaking the controller's single connection slot. On a
+		// dead session (BT off) discovery fails gracefully, so the AV-prone
+		// Disconnect is skipped.
+		endSession("session "+t.Label, func() error {
+			_, err := dev.DiscoverServices(nil)
+			return err
+		}, func() { _ = dev.Disconnect() })
+	}()
 
 	if err := async.EnableNotifications(ButtonHandler(t.Label, keyMap, keys.Tap)); err != nil {
 		return fmt.Errorf("subscribe async: %w", err)
@@ -221,7 +306,18 @@ func connect(t Target) (dev bluetooth.Device, async, syncRx, syncTx *bluetooth.D
 	if err != nil {
 		return
 	}
-	fail := func(e error) { _ = dev.Disconnect(); err = e }
+	// fail tears the fresh connection down through endSession's probe: on a
+	// live device (e.g. a transient discovery error) the probe succeeds and
+	// Disconnect frees the controller's single connection slot; when BT died
+	// mid-connect the probe fails and Disconnect — which would AV on the
+	// freed session — is skipped. One-shot discovery: no retry loop here.
+	fail := func(e error) {
+		endSession("connect "+t.Label, func() error {
+			_, de := dev.DiscoverServices(nil)
+			return de
+		}, func() { _ = dev.Disconnect() })
+		err = e
+	}
 
 	svcs, e := discoverServices(dev)
 	if e != nil {
