@@ -31,7 +31,7 @@ func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath str
 		Profile:    cfg.Profile,
 		Bindings:   b,
 		Buttons:    rightButtons,
-		Focus:      cfg.FocusProgramNameOnClick,
+		Focus:      cfg.FocusProgramNamePrefixOnClick,
 		NoMapping:  cfg.Missing,
 		Demo:       demo,
 		Logs:       logs,
@@ -82,7 +82,7 @@ func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Durati
 
 	startListening(cfg, scanFor, reconnect, addrList)
 	src := tui.Sources{BT: ble.ScanHealthy, Connected: ble.Connected, Seen: ble.SideSeenRecently}
-	if cfg.FocusProgramNameOnClick != "" {
+	if cfg.FocusProgramNamePrefixOnClick != "" {
 		// EnumWindows + process lookups are heavier than the other reads: cache
 		// for a second instead of running them on every 250ms poll.
 		var at time.Time

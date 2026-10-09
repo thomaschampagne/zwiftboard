@@ -66,11 +66,11 @@ zwiftboard [flags]
 
 The TUI is the default. It shows Bluetooth state, Left/Right controller state
 (with a "please activate the ... Controller" prompt per missing pod), the
-active profile, the focus-window target (`focusProgramNameOnClick`, or `off`)
+active profile, the focus-window target (`focusProgramNamePrefixOnClick`, or `off`)
 and the Right Click V2 key table; a button row lights up briefly when clicked.
 Both controllers must be on, but only the Right one's clicks are mapped. With
 Bluetooth off only the "turn Bluetooth ON" prompt is shown until it is on.
-`e` opens the config file in an editor (Notepad on Windows; restart to apply edits); `l` toggles a log panel (scroll with j/k or the mouse wheel; wider than the cards); an ALERT shows when `focusProgramNameOnClick` names a window that is not running (clicks are dropped then; demo: `f`); `q` / Ctrl+C quits. Bluetooth OFF after start-up is detected from the scan loop failing (it needs a scan burst to fail, so it can take a few seconds); a pod shows disconnected once a keepalive write fails (up to ~3s).
+`e` opens the config file in an editor (Notepad on Windows; restart to apply edits); `l` toggles a log panel (scroll with j/k or the mouse wheel; wider than the cards); an ALERT shows when `focusProgramNamePrefixOnClick` names a window that is not running (clicks are dropped then; demo: `f`); `q` / Ctrl+C quits. Bluetooth OFF after start-up is detected from the scan loop failing (it needs a scan burst to fail, so it can take a few seconds); a pod shows disconnected once a keepalive write fails (up to ~3s).
 
 ```sh
 go build -o zwiftboard.exe .
@@ -110,7 +110,7 @@ loglevel: info # debug | info | warn | error
 
 profiles:
   mywhoosh: # pick with -p mywhoosh
-    focusProgramNameOnClick: null # optional, per profile (see below)
+    focusProgramNamePrefixOnClick: null # optional, per profile (see below)
     PLUS: i # gear up
     A: space # power-up
     B: esc # pause menu
@@ -118,7 +118,7 @@ profiles:
     Z: tab # camera
 
   my-zwift-setup: # add your own — any name works
-    focusProgramNameOnClick: ZwiftApp
+    focusProgramNamePrefixOnClick: ZwiftApp
     A: space
     B: esc
 ```
@@ -142,14 +142,15 @@ window is different:
 ```yaml
 profiles:
   mywhoosh:
-    focusProgramNameOnClick: null        # disabled (default): keys → focused window
-    focusProgramNameOnClick: MyWhoosh    # match by window title: "MyWhoosh"
+    focusProgramNamePrefixOnClick: null        # disabled (default): keys → focused window
+    focusProgramNamePrefixOnClick: MyWhoosh    # window title contains "MyWhoosh"
   zwift:
-    focusProgramNameOnClick: ZwiftApp    # or by .exe name (no path / .exe)
+    focusProgramNamePrefixOnClick: ZwiftApp    # or .exe name starts with it (ZwiftApp.exe)
 ```
 
-The value matches the window title (case-insensitive contains) or the program
-`.exe` name. On each button press the matching window is restored (if
+The value matches the window title (case-insensitive contains) or the start of
+the program `.exe` name (case-insensitive prefix) — so `MyWhoosh` matches
+`MyWhooshHD.exe`. On each button press the matching window is restored (if
 minimized) and brought to the foreground, then the key is tapped into it. If
 no window matches, the tap is **dropped and a warning logged** — zwiftboard
 never types into an unrelated app. Windows remembers the focused window, so
@@ -192,7 +193,7 @@ the game stays in front for the whole ride.
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
 5. **Tap** — the pair mirrors every press (both units send the same frame), so
    dedup is global per button name: a second claim within `-debounce`
-   (200ms) is dropped as `duplicate=true`. If `focusProgramNameOnClick` is
+   (200ms) is dropped as `duplicate=true`. If `focusProgramNamePrefixOnClick` is
    set, the configured window is brought to the foreground, then the key goes
    out via Windows `keybd_event`.
 
@@ -216,7 +217,7 @@ connects are serialized so they never overlap an active scan.
 | One press types the key twice                 | Raise `-debounce` (frames should mirror within tens of ms).                                                               |
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
 | Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |
-| Keys land in the wrong window                 | Set `focusProgramNameOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it. |
+| Keys land in the wrong window                 | Set `focusProgramNamePrefixOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it. |
 | App quits / stops responding after a while    | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. Switching Windows Bluetooth off mid-run also survives: sessions end, scanning retries every 3s, and it reconnects when Bluetooth comes back. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
 | Nothing works with Zwift open                 | Close Zwift / Companion first: one BLE connection per controller.                                                         |
 

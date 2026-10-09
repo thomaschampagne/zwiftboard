@@ -149,7 +149,7 @@ func (m Model) table() string {
 			focus += sBad.Render("  ✗ not found")
 		}
 	}
-	return strings.TrimRight(b.String(), "\n") + "\n\n" + sMuted.Render("Auto-focus window on click: ") + focus
+	return strings.TrimRight(b.String(), "\n") + "\n\n" + sMuted.Render("Auto-focus window on click starting with name: ") + focus
 }
 
 func (m Model) logsPanel() string {

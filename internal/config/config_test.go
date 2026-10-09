@@ -88,8 +88,8 @@ func TestLoadLogLevel(t *testing.T) {
 	}
 }
 
-func TestLoadFocusProgramNameOnClick(t *testing.T) {
-	empty := "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: null\n"
+func TestLoadFocusProgramNamePrefixOnClick(t *testing.T) {
+	empty := "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNamePrefixOnClick: null\n"
 	cases := []struct {
 		name string
 		yaml string
@@ -97,9 +97,9 @@ func TestLoadFocusProgramNameOnClick(t *testing.T) {
 	}{
 		{"absent", "profiles:\n  mywhoosh:\n    A: a\n", ""},
 		{"null", empty, ""},
-		{"empty-string", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: \"\"\n", ""},
-		{"plain", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: MyWhoosh\n", "MyWhoosh"},
-		{"trimmed", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNameOnClick: \" MyWhoosh \"\n", "MyWhoosh"},
+		{"empty-string", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNamePrefixOnClick: \"\"\n", ""},
+		{"plain", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNamePrefixOnClick: MyWhoosh\n", "MyWhoosh"},
+		{"trimmed", "profiles:\n  mywhoosh:\n    A: a\n    focusProgramNamePrefixOnClick: \" MyWhoosh \"\n", "MyWhoosh"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,18 +108,18 @@ func TestLoadFocusProgramNameOnClick(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.FocusProgramNameOnClick != tc.want {
-				t.Errorf("FocusProgramNameOnClick = %q, want %q", cfg.FocusProgramNameOnClick, tc.want)
+			if cfg.FocusProgramNamePrefixOnClick != tc.want {
+				t.Errorf("FocusProgramNamePrefixOnClick = %q, want %q", cfg.FocusProgramNamePrefixOnClick, tc.want)
 			}
 		})
 	}
 }
 
-func TestLoadFocusProgramNameOnClickPerProfile(t *testing.T) {
+func TestLoadFocusProgramNamePrefixOnClickPerProfile(t *testing.T) {
 	path := writeConfig(t, `profiles:
   mywhoosh:
     A: a
-    focusProgramNameOnClick: MyWhoosh
+    focusProgramNamePrefixOnClick: MyWhoosh
   zwift:
     A: a
 `)
@@ -127,20 +127,20 @@ func TestLoadFocusProgramNameOnClickPerProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mywhoosh.FocusProgramNameOnClick != "MyWhoosh" {
-		t.Errorf("mywhoosh focus = %q, want %q", mywhoosh.FocusProgramNameOnClick, "MyWhoosh")
+	if mywhoosh.FocusProgramNamePrefixOnClick != "MyWhoosh" {
+		t.Errorf("mywhoosh focus = %q, want %q", mywhoosh.FocusProgramNamePrefixOnClick, "MyWhoosh")
 	}
 	zwift, err := Load(path, "zwift")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if zwift.FocusProgramNameOnClick != "" {
-		t.Errorf("zwift focus = %q, want %q (per-profile, not global)", zwift.FocusProgramNameOnClick, "")
+	if zwift.FocusProgramNamePrefixOnClick != "" {
+		t.Errorf("zwift focus = %q, want %q (per-profile, not global)", zwift.FocusProgramNamePrefixOnClick, "")
 	}
 }
 
-func TestLoadFocusProgramNameOnClickTopLevelRejected(t *testing.T) {
-	path := writeConfig(t, "focusProgramNameOnClick: MyWhoosh\nprofiles:\n  mywhoosh:\n    A: a\n")
+func TestLoadFocusProgramNamePrefixOnClickTopLevelRejected(t *testing.T) {
+	path := writeConfig(t, "focusProgramNamePrefixOnClick: MyWhoosh\nprofiles:\n  mywhoosh:\n    A: a\n")
 	_, err := Load(path, "mywhoosh")
 	if err == nil || !strings.Contains(err.Error(), "moved") || !strings.Contains(err.Error(), focusProgramKey) {
 		t.Errorf("want moved-per-profile error, got: %v", err)

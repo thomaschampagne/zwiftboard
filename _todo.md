@@ -1,0 +1,16 @@
+- [x] Focus window as startWith to match MyWhooshHD for example when settings only MyWhoosh
+- [ ] Emulate long key pressed until clicks are released (to support steering in mywhoosh like long press left/right keys)
+- [ ] Store config under ~\AppData\Local\zwiftboard\config.yml + remove release of config.yml zipped w/ .exe
+- [ ] Cleanup cli options: only meaningfull for user. Drop deprecated according current codebase.
+- [ ] Clean reference to any externals projects
+- [ ] Review README.md + AGENTS.md according code base and git history changes (HANDOFF.md and docs/ might help)
+- [ ] Define simple projet tagline: "Your Zwift Click V2 controller as a bluetooth keyboard" 
+  - Support any virtual cycling platorm (virtual shifting, steering, cameras, ...) with the right controller. Support any program
+  - No 24h controller unlock or similar tricdk, works out of the box, just need Windows with bluetooth connection
+  - Can focus the program first to ensure mapped keyboard keys
+  - Profile based
+  - No paid feature, free !
+  - Zwift Click V2 only, Windows only at the moment
+- [ ] Drop docs + superpowers
+- [ ] Reset repo and start semantic-release to 1.0.0
+- [ ] Scoop package when ready

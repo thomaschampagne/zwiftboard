@@ -21,12 +21,12 @@ const DefaultProfile = "mywhoosh"
 // focusProgramKey is the per-profile YAML key selecting the window zwiftboard
 // brings to the foreground before each tap; null/"" disables the feature. It
 // must not collide with a button name.
-const focusProgramKey = "focusProgramNameOnClick"
+const focusProgramKey = "focusProgramNamePrefixOnClick"
 
 // doc is the config.yaml structure.
 type doc struct {
 	LogLevel                string                       `yaml:"loglevel"`
-	FocusProgramNameOnClick *string                      `yaml:"focusProgramNameOnClick"` // set at top level = error (moved into profiles)
+	FocusProgramNamePrefixOnClick *string                      `yaml:"focusProgramNamePrefixOnClick"` // set at top level = error (moved into profiles)
 	Profiles                map[string]map[string]string `yaml:"profiles"`
 }
 
@@ -36,10 +36,10 @@ type Config struct {
 	Profile  string                  // resolved profile name
 	Level    slog.Level              // from loglevel:, default info
 	Missing  bool                    // config file not found
-	// FocusProgramNameOnClick is the program (window title or .exe name,
+	// FocusProgramNamePrefixOnClick is the program (window title or .exe name,
 	// per-profile key) brought to the foreground before every key tap; ""
-	// disables the feature (focusProgramNameOnClick: null).
-	FocusProgramNameOnClick string
+	// disables the feature (focusProgramNamePrefixOnClick: null).
+	FocusProgramNamePrefixOnClick string
 }
 
 // Load reads path and returns the config for profile (empty selects
@@ -68,7 +68,7 @@ func Load(path, profile string) (Config, error) {
 			return cfg, fmt.Errorf("%s: bad loglevel %q (use debug, info, warn, error)", path, d.LogLevel)
 		}
 	}
-	if d.FocusProgramNameOnClick != nil {
+	if d.FocusProgramNamePrefixOnClick != nil {
 		return cfg, fmt.Errorf("%s: %s moved — it is now a per-profile key, put it inside the profile block (e.g. under `%s:`)", path, focusProgramKey, DefaultProfile)
 	}
 	if len(d.Profiles) == 0 {
@@ -81,9 +81,9 @@ func Load(path, profile string) (Config, error) {
 
 	cfg.Bindings = make(map[string]keys.Binding, len(raw))
 	if v, ok := raw[focusProgramKey]; ok {
-		// Value comes in as "" for focusProgramNameOnClick: null; trim so a
+		// Value comes in as "" for focusProgramNamePrefixOnClick: null; trim so a
 		// padded value still disables via "".
-		cfg.FocusProgramNameOnClick = strings.TrimSpace(v)
+		cfg.FocusProgramNamePrefixOnClick = strings.TrimSpace(v)
 		delete(raw, focusProgramKey)
 	}
 	for btn, token := range raw {

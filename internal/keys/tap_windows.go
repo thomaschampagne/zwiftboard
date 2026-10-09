@@ -28,7 +28,7 @@ const (
 
 // windowTarget is the program (window title or .exe name) brought to the
 // foreground before every tap; set by SetWindowTarget from config
-// (focusProgramNameOnClick). Empty means Taps go to whichever window has
+// (focusProgramNamePrefixOnClick). Empty means Taps go to whichever window has
 // focus, as before.
 var windowTarget string
 
@@ -58,22 +58,17 @@ func Tap(b Binding) {
 }
 
 // findTargetWindow returns the handle of a visible top-level window whose
-// title contains program or whose process .exe name equals it
+// process .exe name starts with program or whose title contains it
 // (case-insensitive), plus whether it is already focused. Both match kinds are
 // accepted because game titles vary while the .exe name usually doesn't.
 func findTargetWindow(program string) (hwnd uintptr, focused bool, ok bool) {
-	target := strings.ToLower(program)
 	cb := windows.NewCallback(func(h uintptr, _ uintptr) uintptr {
 		if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
 			return 1 // keep enumerating; we only want visible windows
 		}
 		var pid uint32
 		_, _ = windows.GetWindowThreadProcessId(windows.HWND(h), &pid)
-		if strings.EqualFold(windowProcessName(pid), target) {
-			hwnd = h
-			return 0
-		}
-		if strings.Contains(strings.ToLower(windowTitle(h)), target) {
+		if windowMatches(windowProcessName(pid), windowTitle(h), program) {
 			hwnd = h
 			return 0
 		}

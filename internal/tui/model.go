@@ -26,7 +26,7 @@ type Config struct {
 	Profile    string
 	Bindings   map[string]string // button -> key token
 	Buttons    []string          // ordered table rows (right pod)
-	Focus      string            // focusProgramNameOnClick; "" = off
+	Focus      string            // focusProgramNamePrefixOnClick; "" = off
 	NoMapping  bool              // config file missing
 	Demo       bool              // enable mock toggle keys
 	Logs       *LogBuffer        // log panel source; nil = none

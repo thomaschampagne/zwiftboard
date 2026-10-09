@@ -118,12 +118,12 @@ func main() {
 			}
 		}
 	}
-	if cfg.FocusProgramNameOnClick == "" {
+	if cfg.FocusProgramNamePrefixOnClick == "" {
 		slog.Info("focus program on click disabled — keys go to the focused window")
 	} else {
-		slog.Info("focus program on click", "program", cfg.FocusProgramNameOnClick)
+		slog.Info("focus program on click", "program", cfg.FocusProgramNamePrefixOnClick)
 	}
-	keys.SetWindowTarget(cfg.FocusProgramNameOnClick)
+	keys.SetWindowTarget(cfg.FocusProgramNamePrefixOnClick)
 
 	if tuiMode {
 		// Validate -addr now so a typo is reported on stderr, not lost in the

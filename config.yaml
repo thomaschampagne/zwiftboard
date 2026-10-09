@@ -5,14 +5,16 @@
 # loglevel: debug | info | warn | error — -v on the CLI forces debug.
 loglevel: info
 #
-# focusProgramNameOnClick (per profile): bring this program's window to the
-# foreground on every button press so the tapped key lands in it. The value
-# matches the window title OR the program .exe name (case-insensitive).
+# focusProgramNamePrefixOnClick (per profile): bring this program's window to the
+# foreground on every button press so the tapped key lands in it. The value is
+# matched against the program .exe name as a case-insensitive PREFIX (so
+# "MyWhoosh" matches "MyWhooshHD.exe") and against the window title as a
+# case-insensitive substring.
 # null (or "") keeps the default: keys go to whatever window has focus.
 #
-#   focusProgramNameOnClick: null        # disabled (default)
-#   focusProgramNameOnClick: MyWhoosh    # `MyWhoosh` window or MyWhoosh.exe
-#   focusProgramNameOnClick: ZwiftApp    # named by its .exe
+#   focusProgramNamePrefixOnClick: null        # disabled (default)
+#   focusProgramNamePrefixOnClick: MyWhoosh    # `MyWhoosh` prefix of MyWhooshHD.exe
+#   focusProgramNamePrefixOnClick: ZwiftApp    # named by its .exe
 #
 # Keys: single letters a-z, digits 0-9, f1-f12, or named keys —
 #   up, down, left, right, enter, space, tab, esc, backspace, delete,
@@ -39,7 +41,7 @@ profiles:
     B: k            # shift down (easier gear)
     Y: tab          # change camera view
     Z: left
-    focusProgramNameOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
+    focusProgramNamePrefixOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
 
   # TrainerRoad workout player: (intensity/resistance arrows were on the left pod.)
   trainerroad:
@@ -47,7 +49,7 @@ profiles:
     B: t            # cycle trainer mode (ERG/Resistance/Level)
     Y: h            # heart-rate graph
     Z: w            # workout text
-    focusProgramNameOnClick: null
+    focusProgramNamePrefixOnClick: null
 
   # Wahoo SYSTM workout player: ` toggles ERG, digits pick levels 0-9
   # (add e.g. PLUS: 5 for your usual level — none mapped by default).
@@ -57,7 +59,7 @@ profiles:
     B: "`"          # ERG mode toggle
     Y: m            # mute
     Z: esc          # close settings menu
-    focusProgramNameOnClick: null
+    focusProgramNamePrefixOnClick: null
 
   # Start notepad
   test-notepad:
@@ -66,4 +68,4 @@ profiles:
     B: b
     Y: y
     Z: z
-    focusProgramNameOnClick: "Notepad"
+    focusProgramNamePrefixOnClick: "Notepad"
