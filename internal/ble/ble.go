@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tinygo.org/x/bluetooth"
@@ -187,10 +188,22 @@ func (c *collector) snapshot() (map[string]Target, []string) {
 	return pending, append([]string(nil), c.order...)
 }
 
+// scanBroken is set when the last scan burst errored or panicked, which is how
+// a switched-off Bluetooth radio shows up at runtime (Enable only runs once at
+// start). Observational: the UI reads it; nothing in a session waits on it.
+var scanBroken atomic.Bool
+
+func setScanHealthy(ok bool) { scanBroken.Store(!ok) }
+
+// ScanHealthy reports whether the most recent scan burst ran cleanly. True
+// until a burst fails, so a fresh start never claims Bluetooth is off.
+func ScanHealthy() bool { return !scanBroken.Load() }
+
 // scanBurst runs one burst of scanFn and returns the freshly discovered
 // controllers (not known to known() yet) in discovery order.
 func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Target, []string, error) {
 	c := &collector{pending: map[string]Target{}}
+	healthy := false // stays false if scanFn panics (recovered below, err stays nil)
 	err := func() (err error) {
 		// Covers a panicking scanFn call (same goroutine); the callback and
 		// the StopScan timer each recover their own — they run elsewhere.
@@ -200,7 +213,7 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 			stopScanFn()
 		})
 		defer timer.Stop()
-		return scanFn(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
+		err = scanFn(func(a *bluetooth.Adapter, r bluetooth.ScanResult) {
 			// This runs on the platform's event goroutine, where scanBurst's
 			// defers can never reach it: a panic here would kill the process.
 			defer recoverLog("scan callback")
@@ -227,7 +240,10 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 			}
 			slog.Info("found controller", "name", disp, "addr", key, "deviceID", id, "rssi", r.RSSI)
 		})
+		healthy = err == nil
+		return err
 	}()
+	setScanHealthy(healthy)
 	pending, order := c.snapshot()
 	return pending, order, err
 }

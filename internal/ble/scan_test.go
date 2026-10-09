@@ -148,3 +148,36 @@ func TestStopScanPanicRecovered(t *testing.T) {
 		t.Fatal("StopScan timer never fired")
 	}
 }
+
+// ScanHealthy is the TUI's runtime Bluetooth signal: a burst whose scan call
+// errors or panics (radio switched off) marks it unhealthy; the next clean
+// burst recovers it.
+func TestScanHealthyTracksBursts(t *testing.T) {
+	none := func(string) bool { return false }
+	t.Cleanup(func() { setScanHealthy(true) })
+
+	stubScan(t, func(scanCallback) error { return fmt.Errorf("bluetooth disabled") })
+	scanBurst(time.Second, none)
+	if ScanHealthy() {
+		t.Fatal("scan error must mark unhealthy")
+	}
+
+	stubScan(t, func(scanCallback) error { return nil })
+	scanBurst(time.Second, none)
+	if !ScanHealthy() {
+		t.Fatal("clean burst must recover")
+	}
+
+	stubScan(t, func(scanCallback) error { panic("adapter gone") })
+	scanBurst(time.Second, none)
+	if ScanHealthy() {
+		t.Fatal("scan panic must mark unhealthy")
+	}
+}
+
+func TestScanHealthyDefaultsTrue(t *testing.T) {
+	setScanHealthy(true)
+	if !ScanHealthy() {
+		t.Fatal("unknown/fresh state must not claim Bluetooth is off")
+	}
+}
