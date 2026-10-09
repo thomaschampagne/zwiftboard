@@ -26,6 +26,9 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 - `internal/keys/` — config token → Windows VK code; `Tap` (keybd_event on windows, no-op elsewhere)
 - `internal/config/` — config.yaml: `loglevel:` + `profiles:` map; returns errors (never exits)
 - `internal/zwift/` — protocol facts: GATT UUIDs, button bits, frame decode, label helpers
+- `internal/tui/` — Bubble Tea status screen (default UI; `-plain` = logs). OBSERVATIONAL
+  only: fed by `ble.Connected`/`SideSeenRecently`/`ble.OnTap`; never gate a session on it.
+  `tuirun.go` (root) wires it; in TUI mode slog goes to the log file, not stderr
 
 ## Conventions
 

@@ -73,6 +73,8 @@ Consequences encoded in the code:
 
 ## Possible next steps
 
-- TUI that renders the same `pairStatus` states.
+- DONE: TUI (default; `-plain` for logs, `-demo` for mock) in `internal/tui`,
+  plan `docs/superpowers/plans/2026-10-09-tui-status.md`. Needs a hardware run
+  (idle 10+ min, both pods) to confirm no stability change vs `0f7872e`.
 - Make the status window follow `-reconnect`.
 - If drops reappear, compare against `0f7872e` first (`git diff 0f7872e`).
