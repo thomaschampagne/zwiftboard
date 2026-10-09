@@ -190,14 +190,16 @@ the game stays in front for the whole ride.
 4. **Decode** — button frames start with `0x23`; protobuf field 1 is a bitmap
    where **0 = pressed**. Bits: `LEFT 0x1 UP 0x2 RIGHT 0x4 DOWN 0x8 A 0x10
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
-5. **Hold** — a mapped key goes **down** on the pressed transition and
+ 5. **Hold** — a mapped key goes **down** on the pressed transition and
    **up** on the released one, so holding a button holds the key (steering
-   in MyWhoosh needs the left/right hold). The pair mirrors every press
-   (both units send the same frame), so dedup is edge-triggered: a handler
-   only acts on bits that changed since the previous frame, and an identical
-   mirrored bitmap changes nothing. If `focusProgramNamePrefixOnClick` is
-   set, the configured window is brought to the foreground before the key
-   goes out via Windows `keybd_event`.
+   in MyWhoosh needs the left/right hold). While held, the key auto-repeats
+   like a real keyboard (250ms delay, ~33ms interval — a synthetic press is
+   otherwise a single event, so letters would not repeat in text apps).
+   The pair mirrors every press (both units send the same frame), so dedup
+   is edge-triggered: a handler only acts on bits that changed since the
+   previous frame, and an identical mirrored bitmap changes nothing. If
+   `focusProgramNamePrefixOnClick` is set, the configured window is brought
+   to the foreground before the key goes out via Windows `keybd_event`.
 
 **Right pod only.** The Click V2 ships as two pods that work as a *pair*: the
 LEFT pod is the pair's BLE anchor and the RIGHT pod mirrors its state to the

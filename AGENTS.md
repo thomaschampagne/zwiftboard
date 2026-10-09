@@ -50,6 +50,12 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
   from both units → dedup is edge-triggered per handler: only bits that
   changed since the previous frame act, so an identical mirrored bitmap
   changes nothing.
+- A synthetic `keybd_event` down has NO OS auto-repeat: it is a single event
+  and the keyboard driver does not repeat it for you. Games that poll the key
+  state see the hold, but text apps (Notepad, chat) need the repeated
+  WM_KEYDOWN a physical key produces while it is held down — so `Down`
+  re-sends the press (250ms delay, ~33ms interval) until `Up`. Do not regress
+  this or held letters stop repeating in text fields.
 - The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
   the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
   link. Both pods are connected (see BOTH PODS ARE CONNECTED); only the

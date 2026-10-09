@@ -36,6 +36,10 @@ baseline `0f7872e`.
 
 - Mapped keys HOLD: `ButtonHandler` downs on the pressed transition, ups on
   the released one. Steering = hold left/right in MyWhoosh.
+- Held keys AUTO-REPEAT like a real keyboard (250ms delay, ~33ms interval):
+  a synthetic `keybd_event` down has no OS auto-repeat, so without the
+  re-send letters would not repeat in text apps (Notepad, chat). Games see
+  the hold either way.
 - Dedup for the mirrored pair is two-layer: edge-triggered diff per handler +
   per-VK idempotency (`ble.holdKeys`, package-level `heldVK` shared across
   handlers). `claimTap`/`TapDebounce`/`-debounce` removed.
@@ -58,6 +62,8 @@ baseline `0f7872e`.
 - Two different buttons mapped to the SAME VK token: hold tracking is per-VK,
   so releasing the first button releases the key while the second is still
   physically pressed (pre-existing config weirdness; not handled).
+- Auto-repeat values are fixed at real-keyboard rates (250ms delay, 33ms
+  interval); no flag to tune them yet.
 
 ## Possible next steps
 

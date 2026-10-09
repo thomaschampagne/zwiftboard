@@ -5,6 +5,8 @@ package keys
 import (
 	"log/slog"
 	"strings"
+	"sync"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -24,6 +26,20 @@ const (
 	keyEventKeyUp = 0x0002 // KEYEVENTF_KEYUP
 	vkMenu        = 0x12   // VK_MENU, used to release the foreground lock
 	swRestore     = 9      // SW_RESTORE
+
+	// keyRepeatDelay/keyRepeatInterval mimic a real keyboard: Windows' shortest
+	// repeat delay and its default repeat rate. A synthetic keybd_event down is
+	// a single event with NO OS auto-repeat — games that poll the key state see
+	// the hold, but text apps (Notepad, chat) need the repeated WM_KEYDOWN a
+	// physical key produces, so Down re-sends the press on this schedule.
+	keyRepeatDelay    = 250 * time.Millisecond
+	keyRepeatInterval = 33 * time.Millisecond
+)
+
+// repeatStop cancels a held key's repeat goroutine (closed to stop).
+var (
+	repeatMu   sync.Mutex
+	repeatStop = map[uint16]chan struct{}{}
 )
 
 // windowTarget is the program (window title or .exe name) brought to the
@@ -62,15 +78,20 @@ func Tap(b Binding) {
 }
 
 // Down presses a virtual key and leaves it held (a button is being held).
+// It also starts keyboard auto-repeat: without it a synthetic press is a
+// single event and repeated presses in a text app (Notepad, chat) never
+// happen while the button is held.
 func Down(b Binding) {
 	if !focusTarget() {
 		return
 	}
+	startRepeat(b.VK)
 	procKeybdEvent.Call(uintptr(b.VK), 0, 0, 0)
 }
 
 // Up releases a virtual key previously pressed with Down (button released).
 func Up(b Binding) {
+	stopRepeat(b.VK)
 	procKeybdEvent.Call(uintptr(b.VK), 0, keyEventKeyUp, 0)
 }
 
@@ -78,7 +99,50 @@ func Up(b Binding) {
 // every key still held when a session dies or the process exits, so a dropped
 // controller can never leave a key stuck down.
 func ReleaseVK(vk uint16) {
+	stopRepeat(vk)
 	procKeybdEvent.Call(uintptr(vk), 0, keyEventKeyUp, 0)
+}
+
+// startRepeat idempotently re-sends vk as a press after keyRepeatDelay and
+// every keyRepeatInterval until stopped — the WM_KEYDOWN repeat stream a
+// physical keyboard produces. Safe to call for an already-repeating key.
+func startRepeat(vk uint16) {
+	repeatMu.Lock()
+	if _, ok := repeatStop[vk]; ok {
+		repeatMu.Unlock()
+		return
+	}
+	stop := make(chan struct{})
+	repeatStop[vk] = stop
+	repeatMu.Unlock()
+	go func() {
+		select {
+		case <-time.After(keyRepeatDelay):
+		case <-stop:
+			return
+		}
+		t := time.NewTicker(keyRepeatInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				procKeybdEvent.Call(uintptr(vk), 0, 0, 0)
+			}
+		}
+	}()
+}
+
+// stopRepeat cancels a started repeat (no-op when not repeating).
+func stopRepeat(vk uint16) {
+	repeatMu.Lock()
+	stop, ok := repeatStop[vk]
+	delete(repeatStop, vk)
+	repeatMu.Unlock()
+	if ok {
+		close(stop)
+	}
 }
 
 // findTargetWindow returns the handle of a visible top-level window whose
