@@ -35,6 +35,7 @@ import (
 	"zwiftboard/internal/ble"
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
+	"zwiftboard/internal/tui"
 	"zwiftboard/internal/zwift"
 )
 
@@ -73,6 +74,7 @@ func main() {
 	if tuiMode && *logPath == "" {
 		*logPath = "zwiftboard.log"
 	}
+	logBuf := tui.NewLogBuffer(200)
 	var w io.Writer = os.Stderr
 	if *logPath != "" {
 		f, ferr := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
@@ -81,7 +83,8 @@ func main() {
 			os.Exit(1)
 		}
 		if tuiMode {
-			w = f
+			// File + the in-app log panel (never stderr: the screen owns it).
+			w = io.MultiWriter(f, logBuf)
 		} else {
 			w = io.MultiWriter(os.Stderr, f)
 		}
@@ -124,9 +127,9 @@ func main() {
 			}
 		}
 		if *demo {
-			runTUI(tuiConfig(cfg, true), nil)
+			runTUI(tuiConfig(cfg, true, logBuf), nil)
 		}
-		runTUI(tuiConfig(cfg, false), func(p *tea.Program) { liveFeed(p, cfg, scanFor, reconnect, addrList) })
+		runTUI(tuiConfig(cfg, false, logBuf), func(p *tea.Program) { liveFeed(p, cfg, scanFor, reconnect, addrList) })
 	}
 
 	// -plain: Bluetooth must be on. Enable fails (or panics, absorbed by Guarded) while

@@ -31,13 +31,19 @@ func PodStates(connected func(zwift.Pod) bool, seen func(zwift.Pod, time.Duratio
 	return PodMsg{Left: state(zwift.PodLeft), Right: state(zwift.PodRight)}
 }
 
-// Poll sends a PodMsg immediately and then whenever the derived state changes,
-// until ctx is done.
-func Poll(ctx context.Context, send func(tea.Msg), every time.Duration, connected func(zwift.Pod) bool, seen func(zwift.Pod, time.Duration) bool) {
+// Poll sends the Bluetooth state and the pod states immediately and then
+// whenever either changes, until ctx is done. btOK is ble.ScanHealthy: a failing
+// scan burst is how a switched-off radio shows up after start-up.
+func Poll(ctx context.Context, send func(tea.Msg), every time.Duration, btOK func() bool, connected func(zwift.Pod) bool, seen func(zwift.Pod, time.Duration) bool) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	var last *PodMsg
+	var lastBT *bool
 	for {
+		if bt := btOK(); lastBT == nil || *lastBT != bt {
+			lastBT = &bt
+			send(BTMsg(bt))
+		}
 		cur := PodStates(connected, seen)
 		if last == nil || *last != cur {
 			c := cur

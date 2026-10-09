@@ -88,14 +88,14 @@ func TestDemoCyclePods(t *testing.T) {
 	var n tea.Model = demoModel()
 	want := []PodState{PodDetected, PodConnected, PodOff}
 	for i, w := range want {
-		n, _ = n.Update(key("r"))
+		n, _ = n.Update(key("]"))
 		if got := n.(Model).right; got != w {
 			t.Fatalf("step %d: right=%v want %v", i, got, w)
 		}
 	}
-	n, _ = n.Update(key("l"))
+	n, _ = n.Update(key("["))
 	if n.(Model).left != PodDetected {
-		t.Fatal("l should advance left")
+		t.Fatal("[ should advance left")
 	}
 }
 
@@ -114,5 +114,36 @@ func TestLiveIgnoresDemoKeys(t *testing.T) {
 	n, cmd := New(testCfg()).Update(key("b"))
 	if n.(Model).bt || cmd != nil {
 		t.Fatal("demo keys must be inert in live mode")
+	}
+}
+
+func TestLogToggleWorksLiveAndDemo(t *testing.T) {
+	for _, m := range []Model{New(testCfg()), demoModel()} {
+		n, _ := m.Update(key("l"))
+		if !n.(Model).showLogs {
+			t.Fatal("l should show logs")
+		}
+		n, _ = n.Update(key("l"))
+		if n.(Model).showLogs {
+			t.Fatal("l again should hide logs")
+		}
+	}
+}
+
+func TestDemoDoesNotCycleLeftOnL(t *testing.T) {
+	n, _ := demoModel().Update(key("l"))
+	if n.(Model).left != PodOff {
+		t.Fatal("l is the log toggle now; left pod must not change")
+	}
+}
+
+func TestLogBufferKeepsLastLines(t *testing.T) {
+	b := NewLogBuffer(3)
+	b.Write([]byte("one\ntwo\nthr"))
+	b.Write([]byte("ee\nfour\n"))
+	got := b.Lines()
+	want := []string{"two", "three", "four"}
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("Lines() = %q, want %q", got, want)
 	}
 }

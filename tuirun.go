@@ -18,7 +18,7 @@ import (
 var rightButtons = []string{"Y", "Z", "A", "B", "PLUS"}
 
 // tuiConfig turns the loaded config into what the status screen displays.
-func tuiConfig(cfg config.Config, demo bool) tui.Config {
+func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer) tui.Config {
 	b := map[string]string{}
 	for name, bnd := range cfg.Bindings {
 		b[name] = bnd.Token
@@ -30,6 +30,7 @@ func tuiConfig(cfg config.Config, demo bool) tui.Config {
 		Focus:     cfg.FocusProgramNameOnClick,
 		NoMapping: cfg.Missing,
 		Demo:      demo,
+		Logs:      logs,
 	}
 }
 
@@ -74,5 +75,5 @@ func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Durati
 	ble.OnTap = func(button string) { go p.Send(tui.ClickMsg(button)) }
 
 	startListening(cfg, scanFor, reconnect, addrList)
-	tui.Poll(context.Background(), p.Send, 2*time.Second, ble.Connected, ble.SideSeenRecently)
+	tui.Poll(context.Background(), p.Send, 250*time.Millisecond, ble.ScanHealthy, ble.Connected, ble.SideSeenRecently)
 }

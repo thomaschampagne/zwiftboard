@@ -29,6 +29,7 @@ type Config struct {
 	Focus     string            // focusProgramNameOnClick; "" = off
 	NoMapping bool              // config file missing
 	Demo      bool              // enable mock toggle keys
+	Logs      *LogBuffer        // log panel source; nil = none
 }
 
 // Messages sent by main (live) or the demo handler.
@@ -52,6 +53,7 @@ type Model struct {
 	flash       map[string]int
 	seq         int
 	width       int
+	showLogs    bool
 }
 
 // New returns a model with Bluetooth off and both pods not detected.
@@ -65,12 +67,22 @@ func (m Model) Flashing(button string) bool {
 	return ok
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+// refreshEvery re-renders the screen so new log lines appear in the log panel
+// even when no other message arrives.
+const refreshEvery = 500 * time.Millisecond
+
+type tickMsg struct{}
+
+func tick() tea.Cmd { return tea.Tick(refreshEvery, func(time.Time) tea.Msg { return tickMsg{} }) }
+
+func (m Model) Init() tea.Cmd { return tick() }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+	case tickMsg:
+		return m, tick()
 	case BTMsg:
 		m.bt = bool(msg)
 	case PodMsg:
@@ -85,6 +97,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		}
+		if msg.String() == "l" {
+			m.showLogs = !m.showLogs
+			return m, nil
 		}
 		if m.cfg.Demo {
 			return m.demoKey(msg.String())
