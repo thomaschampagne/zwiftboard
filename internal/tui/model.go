@@ -37,6 +37,8 @@ type (
 	BTMsg    bool
 	PodMsg   struct{ Left, Right PodState }
 	ClickMsg string
+	// FocusMsg reports whether the configured focus window currently exists.
+	FocusMsg bool
 	// expireMsg ends a flash; id guards against a stale expiry clearing a
 	// newer click of the same button.
 	expireMsg struct {
@@ -47,13 +49,14 @@ type (
 
 // Model is the Bubble Tea model.
 type Model struct {
-	cfg         Config
-	bt          bool
-	left, right PodState
-	flash       map[string]int
-	seq         int
-	width       int
-	showLogs    bool
+	cfg          Config
+	bt           bool
+	left, right  PodState
+	flash        map[string]int
+	seq          int
+	width        int
+	showLogs     bool
+	focusMissing bool // default false: no alert until a FocusMsg says so
 }
 
 // New returns a model with Bluetooth off and both pods not detected.
@@ -85,6 +88,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick()
 	case BTMsg:
 		m.bt = bool(msg)
+	case FocusMsg:
+		m.focusMissing = !bool(msg)
 	case PodMsg:
 		m.left, m.right = msg.Left, msg.Right
 	case ClickMsg:

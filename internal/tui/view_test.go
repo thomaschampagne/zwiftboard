@@ -59,11 +59,11 @@ func TestViewInlinePrompts(t *testing.T) {
 
 func TestViewIntroLine(t *testing.T) {
 	v := on(testCfg(), PodOff, PodConnected).View()
-	has(t, v, "Both controllers must be ON")
-	lacks(t, v, "virtual keyboard")
+	has(t, v, "WAITING", "Both controllers must be ON")
+	lacks(t, v, "virtual keyboard", "READY")
 	v = on(testCfg(), PodConnected, PodConnected).View()
-	has(t, v, "Only the Right controller is supported as a virtual keyboard")
-	lacks(t, v, "Both controllers must be ON")
+	has(t, v, "READY", "Both controllers connected", "Only the Right controller is supported as a virtual keyboard")
+	lacks(t, v, "Both controllers must be ON", "WAITING")
 }
 
 func TestViewTable(t *testing.T) {
@@ -114,4 +114,37 @@ func TestViewNarrowWidthDoesNotPanic(t *testing.T) {
 		m.showLogs = true
 		_ = m.View()
 	}
+}
+
+func focusCfg() Config {
+	cfg := testCfg()
+	cfg.Focus = "MyWhoosh"
+	return cfg
+}
+
+func TestViewFocusMissingAlert(t *testing.T) {
+	m := on(focusCfg(), PodConnected, PodConnected)
+	lacks(t, m.View(), "not found") // nothing reported yet: no false alarm
+	m.focusMissing = true
+	has(t, m.View(), "ALERT", `"MyWhoosh" not found`, "clicks are dropped")
+	cfg := testCfg() // no focus configured: never alert
+	m = on(cfg, PodConnected, PodConnected)
+	m.focusMissing = true
+	lacks(t, m.View(), "ALERT", "not found")
+}
+
+func TestViewLogPanelWiderThanCards(t *testing.T) {
+	logs := NewLogBuffer(5)
+	line := strings.Repeat("x", 130)
+	logs.Write([]byte(line + "\n"))
+	cfg := testCfg()
+	cfg.Logs = logs
+	m := on(cfg, PodConnected, PodConnected)
+	m.showLogs = true
+	m.width = 170
+	has(t, m.View(), line)
+	m.width = 80
+	v := m.View()
+	lacks(t, v, line)
+	has(t, v, "…")
 }

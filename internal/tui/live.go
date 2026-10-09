@@ -31,23 +31,38 @@ func PodStates(connected func(zwift.Pod) bool, seen func(zwift.Pod, time.Duratio
 	return PodMsg{Left: state(zwift.PodLeft), Right: state(zwift.PodRight)}
 }
 
-// Poll sends the Bluetooth state and the pod states immediately and then
-// whenever either changes, until ctx is done. btOK is ble.ScanHealthy: a failing
-// scan burst is how a switched-off radio shows up after start-up.
-func Poll(ctx context.Context, send func(tea.Msg), every time.Duration, btOK func() bool, connected func(zwift.Pod) bool, seen func(zwift.Pod, time.Duration) bool) {
+// Sources are the read-only lookups Poll samples. Focus may be nil (no window
+// target configured).
+type Sources struct {
+	BT        func() bool // ble.ScanHealthy: a failing scan burst = radio switched off
+	Connected func(zwift.Pod) bool
+	Seen      func(zwift.Pod, time.Duration) bool
+	Focus     func() bool // configured focus window exists
+}
+
+// Poll sends Bluetooth, pod and focus-window state immediately and then
+// whenever any of them changes, until ctx is done.
+func Poll(ctx context.Context, send func(tea.Msg), every time.Duration, src Sources) {
 	t := time.NewTicker(every)
 	defer t.Stop()
-	var last *PodMsg
-	var lastBT *bool
+	var (
+		last   *PodMsg
+		lastBT *bool
+		lastF  *bool
+	)
 	for {
-		if bt := btOK(); lastBT == nil || *lastBT != bt {
+		if bt := src.BT(); lastBT == nil || *lastBT != bt {
 			lastBT = &bt
 			send(BTMsg(bt))
 		}
-		cur := PodStates(connected, seen)
-		if last == nil || *last != cur {
-			c := cur
-			last = &c
+		if src.Focus != nil {
+			if f := src.Focus(); lastF == nil || *lastF != f {
+				lastF = &f
+				send(FocusMsg(f))
+			}
+		}
+		if cur := PodStates(src.Connected, src.Seen); last == nil || *last != cur {
+			last = &cur
 			send(cur)
 		}
 		select {

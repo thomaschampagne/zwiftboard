@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Palette. ANSI-256 numbers so it degrades on 256-colour terminals.
@@ -29,19 +30,25 @@ var (
 
 const (
 	minWidth     = 40
-	maxWidth     = 100
-	defaultWidth = 80 // before the first WindowSizeMsg
+	maxWidth     = 100 // cards
+	maxLogWidth  = 160 // the log panel uses more of a wide terminal
+	defaultWidth = 80  // before the first WindowSizeMsg
 	logLines     = 10
 )
 
 // innerWidth is the usable width inside a card, following the terminal.
-func (m Model) innerWidth() int {
+func (m Model) innerWidth() int { return m.innerWidthMax(maxWidth) }
+
+func (m Model) innerWidthMax(limit int) int {
 	w := defaultWidth
 	if m.width > 0 {
 		w = m.width
 	}
-	if w > maxWidth {
-		w = maxWidth
+	if limit == maxLogWidth && m.width == 0 {
+		w = maxWidth // no size yet: keep the logs card as wide as the others
+	}
+	if w > limit {
+		w = limit
 	}
 	if w < minWidth {
 		w = minWidth
@@ -51,11 +58,18 @@ func (m Model) innerWidth() int {
 
 // card draws a rounded box with a title line.
 func (m Model) card(color lipgloss.Color, title, body string) string {
+	return m.cardW(m.innerWidth(), color, title, body)
+}
+
+func (m Model) cardW(inner int, color lipgloss.Color, title, body string) string {
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(color).
 		Padding(0, 1).
-		Width(m.innerWidth() + 2)
+		Width(inner + 2)
+	if title == "" {
+		return box.Render(body)
+	}
 	head := lipgloss.NewStyle().Bold(true).Foreground(color).Render(title)
 	return box.Render(head + "\n" + body)
 }
@@ -89,10 +103,9 @@ func (m Model) View() string {
 		return b.String()
 	}
 
-	if m.left == PodConnected && m.right == PodConnected {
-		b.WriteString(sOK.Render("✔ Both controllers connected. Only the Right controller is supported as a virtual keyboard") + "\n")
-	} else {
-		b.WriteString(sWarn.Render("Both controllers must be ON") + sMuted.Render(" (only the Right one types keys)") + "\n")
+	b.WriteString(m.banner() + "\n")
+	if a := m.focusAlert(); a != "" {
+		b.WriteString(a + "\n")
 	}
 
 	pods := sOK.Render("● Bluetooth: ON") + "\n" + podLine("Left", m.left) + "\n" + podLine("Right", m.right)
@@ -132,8 +145,11 @@ func (m Model) table() string {
 	focus := sMuted.Render("off")
 	if m.cfg.Focus != "" {
 		focus = sBold.Render(m.cfg.Focus)
+		if m.focusMissing {
+			focus += sBad.Render("  ✗ not found")
+		}
 	}
-	return strings.TrimRight(b.String(), "\n") + "\n\n" + sMuted.Render("Focus window on click: ") + focus
+	return strings.TrimRight(b.String(), "\n") + "\n\n" + sMuted.Render("Auto-focus window on click: ") + focus
 }
 
 func (m Model) logsPanel() string {
@@ -154,13 +170,13 @@ func (m Model) logsPanel() string {
 		if len(lines) > logLines {
 			lines = lines[len(lines)-logLines:]
 		}
-		line := lipgloss.NewStyle().Foreground(cMuted).MaxWidth(m.innerWidth())
+		w := m.innerWidthMax(maxLogWidth)
 		for i, l := range lines {
-			lines[i] = line.Render(l)
+			lines[i] = sMuted.Render(ansi.Truncate(l, w, "…"))
 		}
 		body = strings.Join(lines, "\n")
 	}
-	return m.card(cMuted, "Logs", body) + "\n"
+	return m.cardW(m.innerWidthMax(maxLogWidth), cMuted, "Logs", body) + "\n"
 }
 
 func (m Model) footer() string {
@@ -172,7 +188,7 @@ func (m Model) footer() string {
 	f := logs + sMuted.Render("  ·  ") + hint("q", "quit")
 	if m.cfg.Demo {
 		f += sMuted.Render("  ·  demo: ") + hint("b", "bluetooth") + sMuted.Render(" ") +
-			hint("[ ]", "left/right pod") + sMuted.Render(" ") + hint("1-5", "click")
+			hint("[ ]", "left/right pod") + sMuted.Render(" ") + hint("1-5", "click") + sMuted.Render(" ") + hint("f", "focus alert")
 	}
 	return f
 }
@@ -182,4 +198,36 @@ func padRight(s string, n int) string {
 		s += " "
 	}
 	return s
+}
+
+var (
+	sChipOK   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
+	sChipWarn = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
+	sChipBad  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cBad).Padding(0, 1)
+)
+
+// banner is the one-glance state: a coloured chip plus a headline, with the
+// supporting rule in a muted second line. Colour is never the only signal —
+// the chip carries the word (READY / WAITING).
+func (m Model) banner() string {
+	if m.left == PodConnected && m.right == PodConnected {
+		return m.cardW(m.innerWidth(), cOK, "",
+			sChipOK.Render("READY")+" "+sBold.Render("Both controllers connected")+"\n"+
+				sMuted.Render("Only the Right controller is supported as a virtual keyboard"))
+	}
+	return m.cardW(m.innerWidth(), cWarn, "",
+		sChipWarn.Render("WAITING")+" "+sBold.Render("Both controllers must be ON")+"\n"+
+			sMuted.Render("Only the Right one sends clicks; the Left one just has to stay on."))
+}
+
+// focusAlert is shown when a focus window is configured but not running:
+// keys.Tap drops every click in that case, so the user must know why nothing
+// happens.
+func (m Model) focusAlert() string {
+	if m.cfg.Focus == "" || !m.focusMissing {
+		return ""
+	}
+	return m.cardW(m.innerWidth(), cBad, "",
+		sChipBad.Render("ALERT")+" "+sBold.Render(`Focus window "`+m.cfg.Focus+`" not found`)+"\n"+
+			sMuted.Render("Key clicks are dropped until it is open (check focusProgramNameOnClick)."))
 }

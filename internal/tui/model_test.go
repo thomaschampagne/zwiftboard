@@ -147,3 +147,25 @@ func TestLogBufferKeepsLastLines(t *testing.T) {
 		t.Fatalf("Lines() = %q, want %q", got, want)
 	}
 }
+
+func TestFocusMsgUpdatesModel(t *testing.T) {
+	n, _ := New(testCfg()).Update(FocusMsg(false))
+	if !n.(Model).focusMissing {
+		t.Fatal("FocusMsg(false) should mark the window missing")
+	}
+	n, _ = n.Update(FocusMsg(true))
+	if n.(Model).focusMissing {
+		t.Fatal("FocusMsg(true) should clear it")
+	}
+}
+
+func TestDemoToggleFocus(t *testing.T) {
+	n, _ := demoModel().Update(key("f"))
+	if !n.(Model).focusMissing {
+		t.Fatal("f should simulate a missing focus window")
+	}
+	n, _ = New(testCfg()).Update(key("f"))
+	if n.(Model).focusMissing {
+		t.Fatal("f must be inert in live mode")
+	}
+}

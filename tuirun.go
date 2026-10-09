@@ -10,6 +10,7 @@ import (
 
 	"zwiftboard/internal/ble"
 	"zwiftboard/internal/config"
+	"zwiftboard/internal/keys"
 	"zwiftboard/internal/tui"
 )
 
@@ -75,5 +76,18 @@ func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Durati
 	ble.OnTap = func(button string) { go p.Send(tui.ClickMsg(button)) }
 
 	startListening(cfg, scanFor, reconnect, addrList)
-	tui.Poll(context.Background(), p.Send, 250*time.Millisecond, ble.ScanHealthy, ble.Connected, ble.SideSeenRecently)
+	src := tui.Sources{BT: ble.ScanHealthy, Connected: ble.Connected, Seen: ble.SideSeenRecently}
+	if cfg.FocusProgramNameOnClick != "" {
+		// EnumWindows + process lookups are heavier than the other reads: cache
+		// for a second instead of running them on every 250ms poll.
+		var at time.Time
+		var last bool
+		src.Focus = func() bool {
+			if time.Since(at) > time.Second {
+				last, at = keys.TargetWindowPresent(), time.Now()
+			}
+			return last
+		}
+	}
+	tui.Poll(context.Background(), p.Send, 250*time.Millisecond, src)
 }

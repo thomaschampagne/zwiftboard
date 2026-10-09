@@ -3,12 +3,14 @@ package tui
 import tea "github.com/charmbracelet/bubbletea"
 
 // demoKey handles the mock toggles available only with Config.Demo:
-// b = Bluetooth, [ and ] = cycle Left/Right pod (l is the log panel), 1..N = click Buttons[N-1].
+// b = Bluetooth, [ and ] = cycle Left/Right pod (l is the log panel), f = toggle "focus window missing", 1..N = click Buttons[N-1].
 func (m Model) demoKey(k string) (tea.Model, tea.Cmd) {
 	next := func(s PodState) PodState { return (s + 1) % 3 }
 	switch k {
 	case "b":
 		m.bt = !m.bt
+	case "f":
+		m.focusMissing = !m.focusMissing
 	case "[":
 		m.left = next(m.left)
 	case "]":

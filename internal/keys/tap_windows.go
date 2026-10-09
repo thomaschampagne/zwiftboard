@@ -134,3 +134,14 @@ func windowProcessName(pid uint32) string {
 	}
 	return strings.TrimSuffix(name, ".exe")
 }
+
+// TargetWindowPresent reports whether the configured focus window exists
+// (true when no target is set). The TUI uses it to warn that clicks are being
+// dropped; it is the same lookup Tap performs, read-only.
+func TargetWindowPresent() bool {
+	if windowTarget == "" {
+		return true
+	}
+	_, _, ok := findTargetWindow(windowTarget)
+	return ok
+}
