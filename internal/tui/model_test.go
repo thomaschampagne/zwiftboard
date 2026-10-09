@@ -64,3 +64,55 @@ func TestQuitKey(t *testing.T) {
 		t.Fatal("q cmd should produce QuitMsg")
 	}
 }
+
+func key(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+
+func demoModel() Model {
+	cfg := testCfg()
+	cfg.Demo = true
+	return New(cfg)
+}
+
+func TestDemoToggleBT(t *testing.T) {
+	n, _ := demoModel().Update(key("b"))
+	if !n.(Model).bt {
+		t.Fatal("b should turn bt on")
+	}
+	n, _ = n.Update(key("b"))
+	if n.(Model).bt {
+		t.Fatal("b again should turn bt off")
+	}
+}
+
+func TestDemoCyclePods(t *testing.T) {
+	var n tea.Model = demoModel()
+	want := []PodState{PodDetected, PodConnected, PodOff}
+	for i, w := range want {
+		n, _ = n.Update(key("r"))
+		if got := n.(Model).right; got != w {
+			t.Fatalf("step %d: right=%v want %v", i, got, w)
+		}
+	}
+	n, _ = n.Update(key("l"))
+	if n.(Model).left != PodDetected {
+		t.Fatal("l should advance left")
+	}
+}
+
+func TestDemoDigitClicks(t *testing.T) {
+	n, cmd := demoModel().Update(key("3")) // Buttons[2] = "A"
+	if cmd == nil {
+		t.Fatal("digit should emit a click cmd")
+	}
+	n, _ = n.Update(cmd())
+	if !n.(Model).Flashing("A") {
+		t.Fatal("3 should flash A")
+	}
+}
+
+func TestLiveIgnoresDemoKeys(t *testing.T) {
+	n, cmd := New(testCfg()).Update(key("b"))
+	if n.(Model).bt || cmd != nil {
+		t.Fatal("demo keys must be inert in live mode")
+	}
+}
