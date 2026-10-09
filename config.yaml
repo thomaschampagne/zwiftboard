@@ -33,44 +33,15 @@ loglevel: info
 # down was MIN on the left pod, so profiles that shifted gears (mywhoosh,
 # rouvy) keep only gear UP on PLUS.
 profiles:
-  # Start notepad
-  test-notepad:
-    PLUS: p
-    A: a
-    B: b
-    Y: y
-    Z: z
-    focusProgramNameOnClick: "Notepad"
-
-  # Zwift, riding-focused: space = power-up, esc = menu, pageup = FTP bias up,
-  # F-keys = emotes. (Arrows and FTP bias down were on the left pod.)
-  zwift:
-    PLUS: pageup
-    A: space      # use power-up
-    B: esc        # menu / go back
-    Y: f3         # Ride On!
-    Z: f1         # elbow flick
-    focusProgramNameOnClick: null   # not set: keys go to the focused window
-
-  # MyWhoosh HD: I = gear up, space = power-up, esc = pause menu, tab = camera,
+  # MyWhoosh: I = gear up, space = power-up, esc = pause menu, tab = camera,
   # u = U-turn / minimal UI. (Gear down (K) was MIN on the left pod — unmapped.)
   mywhoosh:
     PLUS: i         # shift up (harder gear)
-    A: space        # use power-up
-    B: esc          # pause / menu
-    Y: u            # U-turn / minimal UI toggle
-    Z: tab          # change camera view
+    A: right
+    B: k            # shift down (easier gear)
+    Y: tab          # change camera view
+    Z: left
     focusProgramNameOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
-
-  # Rouvy desktop: keyboard is the default remote; '.' shifts gears up.
-  # (Gear down (',') was MIN on the left pod — unmapped.)
-  rouvy:
-    PLUS: "."       # shift up
-    A: space        # pause / resume
-    B: esc          # back
-    Y: k            # kudos
-    Z: e            # toggle ERG mode
-    focusProgramNameOnClick: null
 
   # TrainerRoad workout player: (intensity/resistance arrows were on the left pod.)
   trainerroad:
@@ -89,3 +60,12 @@ profiles:
     Y: m            # mute
     Z: esc          # close settings menu
     focusProgramNameOnClick: null
+
+  # Start notepad
+  test-notepad:
+    PLUS: p
+    A: a
+    B: b
+    Y: y
+    Z: z
+    focusProgramNameOnClick: "Notepad"
