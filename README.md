@@ -70,19 +70,17 @@ active profile, the focus-window target (`focusProgramNameOnClick`, or `off`)
 and the Right Click V2 key table; a button row lights up briefly when clicked.
 Both controllers must be on, but only the Right one's clicks are mapped. With
 Bluetooth off only the "turn Bluetooth ON" prompt is shown until it is on.
-`q` / Ctrl+C quits.
+`l` toggles a log panel; `q` / Ctrl+C quits. Bluetooth OFF after start-up is detected from the scan loop failing (it needs a scan burst to fail, so it can take a few seconds); a pod shows disconnected once a keepalive write fails (up to ~3s).
 
 ```sh
 go build -o zwiftboard.exe .
 zwiftboard.exe -p mywhoosh     # TUI (logs go to zwiftboard.log)
 zwiftboard.exe -plain          # classic log output on stderr
-go run . -demo                 # b bluetooth, l/r cycle pods, 1-5 click, q quit
+go run . -demo                 # b bluetooth, [ ] cycle left/right pod, 1-5 click, l logs, q quit
 ```
 
 Notes: the screen only observes (it never gates or touches a session). With
 `-addr` pod sides are unknown, so a pod shows "not detected" until connected.
-Bluetooth being switched off after start-up is not detected live; the pods
-just show as disconnected.
 
 Log level otherwise comes from `loglevel:` in `config.yaml`
 (`debug` | `info` | `warn` | `error`, default `info`).
