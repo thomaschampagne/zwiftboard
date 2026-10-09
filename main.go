@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"zwiftboard/internal/ble"
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
@@ -50,6 +52,8 @@ func main() {
 	flag.DurationVar(&ble.TapDebounce, "debounce", 200*time.Millisecond, "minimum gap between two taps of the same button")
 	flag.DurationVar(&ble.IdleReset, "idle-reset", 55*time.Second, "after this much button silence, reboot the pod (write 0x18, OpenBikeControl's periodic reset) before its ~65s idle sleep; 0 disables")
 	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")
+	plain := flag.Bool("plain", false, "plain log output on stderr instead of the TUI status screen")
+	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b l r 1-5), no Bluetooth — try the screen without hardware")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath, profile)
@@ -61,6 +65,14 @@ func main() {
 	// records on both writers. Handler-internal locking keeps concurrent
 	// session goroutines from interleaving lines; writes are unbuffered, so
 	// no flush/close handling is needed.
+	//
+	// TUI mode (default) draws on the terminal, so the logger goes to the file
+	// only (default zwiftboard.log). Fatal startup errors are the exception: they
+	// use errLog (stderr) so they stay visible without the screen.
+	tuiMode := !*plain || *demo
+	if tuiMode && *logPath == "" {
+		*logPath = "zwiftboard.log"
+	}
 	var w io.Writer = os.Stderr
 	if *logPath != "" {
 		f, ferr := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
@@ -68,11 +80,19 @@ func main() {
 			slog.Error("open log file", "path", *logPath, "error", ferr)
 			os.Exit(1)
 		}
-		w = io.MultiWriter(os.Stderr, f)
+		if tuiMode {
+			w = f
+		} else {
+			w = io.MultiWriter(os.Stderr, f)
+		}
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
+	errLog := slog.Default() // -plain: already on stderr and in the file
+	if tuiMode {
+		errLog = slog.New(slog.NewTextHandler(os.Stderr, nil))
+	}
 	if err != nil {
-		slog.Error("bad config", "error", err)
+		errLog.Error("bad config", "error", err)
 		os.Exit(1)
 	}
 	if cfg.Missing {
@@ -92,7 +112,24 @@ func main() {
 	}
 	keys.SetWindowTarget(cfg.FocusProgramNameOnClick)
 
-	// Bluetooth must be on. Enable fails (or panics, absorbed by Guarded) while
+	if tuiMode {
+		// Validate -addr now so a typo is reported on stderr, not lost in the
+		// log file behind the full-screen UI.
+		if *addrList != "" {
+			for _, s := range strings.Split(*addrList, ",") {
+				if _, err := ble.NewAddress(strings.TrimSpace(s)); err != nil {
+					errLog.Error("bad -addr", "value", s, "error", err)
+					os.Exit(1)
+				}
+			}
+		}
+		if *demo {
+			runTUI(tuiConfig(cfg, true), nil)
+		}
+		runTUI(tuiConfig(cfg, false), func(p *tea.Program) { liveFeed(p, cfg, scanFor, reconnect, addrList) })
+	}
+
+	// -plain: Bluetooth must be on. Enable fails (or panics, absorbed by Guarded) while
 	// the PC's radio is off; instead of exiting, say what to do and keep
 	// retrying so the app proceeds the moment the radio is switched on.
 	for enabled := false; !enabled; {
