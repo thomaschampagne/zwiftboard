@@ -23,6 +23,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -38,6 +39,9 @@ import (
 	"zwiftboard/internal/tui"
 	"zwiftboard/internal/zwift"
 )
+
+// version is stamped at release time via -ldflags "-X main.version=...".
+var version = "dev"
 
 func main() {
 	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
@@ -55,7 +59,12 @@ func main() {
 	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")
 	plain := flag.Bool("plain", false, "plain log output on stderr instead of the TUI status screen")
 	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b l r 1-5), no Bluetooth — try the screen without hardware")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	ensureConfig(*configPath)
 	cfg, err := config.Load(*configPath, profile)

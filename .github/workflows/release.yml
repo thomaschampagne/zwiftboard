@@ -1,45 +1,57 @@
 name: Release
 
-# Semantic versioning via release-please: conventional commits on main drive
-# an automated release PR (feat -> minor, fix -> patch, BREAKING CHANGE ->
-# major). Merging it creates the vX.Y.Z tag + GitHub Release, and this same
-# workflow then builds and uploads the binaries — one workflow on purpose,
-# because a release created with GITHUB_TOKEN does not trigger other workflows.
+# semantic-release: conventional commits on main decide the next semver
+# (feat -> minor, fix/perf -> patch, BREAKING CHANGE -> major), tag X.Y.Z,
+# create the GitHub Release, and attach the Windows build.
+# Runs only after the CI checks pass on the same commit.
 on:
   push:
     branches: [main]
 
 concurrency:
   group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  release-please:
-    runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-    steps:
-      - id: release
-        uses: googleapis/release-please-action@v4
-        with:
-          release-type: go
+  checks:
+    uses: ./.github/workflows/ci.yml
 
-  build-windows:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+  release:
+    needs: checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # tag + release
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # semantic-release needs full history + tags
+          persist-credentials: true
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: build (windows/amd64)
-        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/zwiftboard-windows-amd64.exe .
-      - name: upload to release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # First release must be 0.1.0. semantic-release defaults to 1.0.0 when no
+      # semver tag exists, so seed 0.0.0 on the root commit once: the first
+      # `feat` then yields 0.1.0 (and a `fix` 0.0.1). Pre-existing non-semver
+      # tags (STABLE*) are ignored by semantic-release.
+      - name: seed 0.0.0 baseline tag
+        run: |
+          if ! git tag --list '[0-9]*.[0-9]*.[0-9]*' | grep -q .; then
+            git tag 0.0.0 "$(git rev-list --max-parents=0 HEAD | tail -n1)"
+            git push origin 0.0.0
+          fi
+      - name: semantic-release
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/zwiftboard-windows-amd64.exe config.yaml --clobber
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          npx --yes
+          -p semantic-release@24
+          -p @semantic-release/exec@7
+          semantic-release

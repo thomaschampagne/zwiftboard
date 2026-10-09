@@ -1,0 +1,24 @@
+{
+  "branches": ["main"],
+  "tagFormat": "${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "VERSION=${nextRelease.version} bash scripts/build-release.sh"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          { "path": "dist/zwiftboard-windows-amd64.exe", "label": "zwiftboard-windows-amd64.exe" },
+          { "path": "dist/zwiftboard-windows-amd64.zip", "label": "zwiftboard-windows-amd64.zip (exe + config.yaml)" },
+          { "path": "dist/checksums.txt", "label": "checksums.txt (sha256)" }
+        ]
+      }
+    ]
+  ]
+}

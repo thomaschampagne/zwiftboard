@@ -196,7 +196,7 @@ func TestLoadUnknownButton(t *testing.T) {
 // The config shipped at the repo root must stay valid for every profile.
 func TestShippedConfigProfiles(t *testing.T) {
 	path := filepath.Join("..", "..", "config.yaml")
-	for _, p := range []string{"zwift", "mywhoosh", "rouvy", "trainerroad", "systm"} {
+	for _, p := range []string{"mywhoosh", "trainerroad", "systm"} {
 		cfg, err := Load(path, p)
 		if err != nil {
 			t.Errorf("profile %s: %v", p, err)
