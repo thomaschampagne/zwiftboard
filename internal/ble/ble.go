@@ -23,12 +23,6 @@ var (
 
 	// SendAck sends ff 04 00 to devices that echo RideOn (keeps unlock) (-ack).
 	SendAck = true
-	// TapDebounce is the minimum gap between two taps of the same button.
-	// Shared across controllers: the pair mirrors button state (-debounce).
-	TapDebounce = 200 * time.Millisecond
-
-	tapMu         sync.Mutex
-	lastTapByName = map[string]time.Time{}
 
 	// lastSeenAt records the last scan sighting of every Zwift controller
 	// (registered or not). A fresh sighting is the only honest signal that a
@@ -382,6 +376,9 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 			return err
 		}, func() { _ = dev.Disconnect() })
 	}()
+	// A session ends when a keepalive write fails (a real disconnect) — release
+	// any keys still held so a dropped controller can't leave them stuck down.
+	defer ReleaseAll()
 
 	// Activation sequence from ZwiftBridge (verified on Click V2 hardware).
 	activation := [][]byte{
@@ -402,7 +399,8 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		}
 	}
 
-	handler := ButtonHandler(t.Label, keyMap, keys.Tap)
+	down, up := holdKeys(keys.Down, keys.Up)
+	handler := ButtonHandler(t.Label, keyMap, down, up)
 	// lastActivity tracks the pod's last own transmission (any received frame).
 	// It gates the proactive pod reset so an active session is never rebooted.
 	lastActivity := time.Now()

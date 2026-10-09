@@ -23,7 +23,7 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 - `main.go` (root) — flags, logger setup, target registry, wiring only; a
   single-binary app, so the entry point lives at the repo root (not `cmd/`)
 - `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, global tap dedup
-- `internal/keys/` — config token → Windows VK code; `Tap` (keybd_event on windows, no-op elsewhere)
+- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseAll` (keybd_event on windows, no-op elsewhere)
 - `internal/config/` — config.yaml: `loglevel:` + `profiles:` map; returns errors (never exits)
 - `internal/zwift/` — protocol facts: GATT UUIDs, button bits, frame decode, label helpers
 - `internal/tui/` — Bubble Tea status screen (default UI; `-plain` = logs). OBSERVATIONAL
@@ -47,7 +47,9 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 - WinRT returns a partial GATT service list right after connect: enumerate
   ALL services with retry and match characteristics by UUID (`connect`).
 - The Click pair MIRRORS button state: one press arrives as the same frame
-  from both units → `claimTap` dedup is global per button name, not per device.
+  from both units → dedup is edge-triggered per handler: only bits that
+  changed since the previous frame act, so an identical mirrored bitmap
+  changes nothing.
 - The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
   the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
   link. Both pods are connected (see BOTH PODS ARE CONNECTED); only the

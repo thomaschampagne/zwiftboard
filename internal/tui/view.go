@@ -237,7 +237,7 @@ func (m Model) banner() string {
 }
 
 // focusAlert is shown when a focus window is configured but not running:
-// keys.Tap drops every click in that case, so the user must know why nothing
+// keys.Down drops every click in that case, so the user must know why nothing
 // happens.
 func (m Model) focusAlert() string {
 	if m.cfg.Focus == "" || !m.focusMissing {

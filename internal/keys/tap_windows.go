@@ -38,23 +38,47 @@ func SetWindowTarget(program string) {
 	windowTarget = strings.TrimSpace(program)
 }
 
-// Tap presses and releases a virtual key via keybd_event. With a focus target
-// configured, the matching window is brought to the foreground first so the
-// key lands there; when nothing matches, the tap is dropped and a warning is
-// logged instead of typing into an unrelated focused app.
+// focusTarget brings the configured window to the foreground so the key lands
+// there; false when no matching window exists (caller drops the press).
+func focusTarget() bool {
+	if windowTarget == "" {
+		return true
+	}
+	hwnd, focused, ok := findTargetWindow(windowTarget)
+	if !ok {
+		slog.Warn("focus program not found — tap dropped", "program", windowTarget)
+		return false
+	}
+	if !focused {
+		focusWindow(hwnd)
+	}
+	return true
+}
+
+// Tap presses and releases a virtual key via keybd_event.
 func Tap(b Binding) {
-	if windowTarget != "" {
-		hwnd, focused, ok := findTargetWindow(windowTarget)
-		if !ok {
-			slog.Warn("focus program not found — tap dropped", "program", windowTarget)
-			return
-		}
-		if !focused {
-			focusWindow(hwnd)
-		}
+	Down(b)
+	Up(b)
+}
+
+// Down presses a virtual key and leaves it held (a button is being held).
+func Down(b Binding) {
+	if !focusTarget() {
+		return
 	}
 	procKeybdEvent.Call(uintptr(b.VK), 0, 0, 0)
+}
+
+// Up releases a virtual key previously pressed with Down (button released).
+func Up(b Binding) {
 	procKeybdEvent.Call(uintptr(b.VK), 0, keyEventKeyUp, 0)
+}
+
+// ReleaseVK force-releases a virtual key. ble.ReleaseAll uses it to free
+// every key still held when a session dies or the process exits, so a dropped
+// controller can never leave a key stuck down.
+func ReleaseVK(vk uint16) {
+	procKeybdEvent.Call(uintptr(vk), 0, keyEventKeyUp, 0)
 }
 
 // findTargetWindow returns the handle of a visible top-level window whose

@@ -55,7 +55,6 @@ zwiftboard [flags]
 | `-config`         | `config.yaml` | Config file path (relative to cwd)                                   |
 | `-scan`           | `10s`         | Length of one scan burst; bursts repeat until all controllers are up |
 | `-addr`           | _(scanning)_  | Comma-separated BLE MACs — skip scanning, connect straight to these  |
-| `-debounce`       | `200ms`       | Minimum gap between two taps of the same button (mirrored pair)      |
 | `-ack`            | `true`        | Answer a `0xFF 03` challenge with `ff 04 00` (keeps an unlocked pod streaming) |
 | `-v`              | `false`       | Force `debug` log level (raw frames, service list)                   |
 | `-log`            | _(none)_      | Also write log lines to this file (truncated at startup; TUI mode defaults to `zwiftboard.log`) |
@@ -166,10 +165,10 @@ the game stays in front for the whole ride.
 │   [arrows -]  [Y Z A B +]  │◄──────►│   1. scan bursts (Zwift vendor filter)    │
 │                            │  GATT  │   2. connect + handshake, keepalive 3s    │
 │   frame 0x23:              │ notify │   3. decode protobuf bitmap (0=pressed)   │
-│   protobuf bitmap,         │ write  │   4. global debounce (pair MIRRORS        │
-│   0 = pressed              │ indic. │      every press on both units)           │
-│                            │        │   5. keys.Tap → focus target window, │
-│                            │        │      then user32 keybd_event         │
+│   protobuf bitmap,         │ write  │   4. edge-triggered diff (pair MIRRORS   │
+│   0 = pressed              │ indic. │      every press on both units)          │
+│                            │        │   5. keys.Down/Up → focus target window, │
+│                            │        │      then user32 keybd_event        │
 └────────────────────────────┘        └───────────────────┬───────────────────────┘
                                                           │ simulated keystroke
                                         ┌─────────────────▼───────────────────────┐
@@ -191,11 +190,14 @@ the game stays in front for the whole ride.
 4. **Decode** — button frames start with `0x23`; protobuf field 1 is a bitmap
    where **0 = pressed**. Bits: `LEFT 0x1 UP 0x2 RIGHT 0x4 DOWN 0x8 A 0x10
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
-5. **Tap** — the pair mirrors every press (both units send the same frame), so
-   dedup is global per button name: a second claim within `-debounce`
-   (200ms) is dropped as `duplicate=true`. If `focusProgramNamePrefixOnClick` is
-   set, the configured window is brought to the foreground, then the key goes
-   out via Windows `keybd_event`.
+5. **Hold** — a mapped key goes **down** on the pressed transition and
+   **up** on the released one, so holding a button holds the key (steering
+   in MyWhoosh needs the left/right hold). The pair mirrors every press
+   (both units send the same frame), so dedup is edge-triggered: a handler
+   only acts on bits that changed since the previous frame, and an identical
+   mirrored bitmap changes nothing. If `focusProgramNamePrefixOnClick` is
+   set, the configured window is brought to the foreground before the key
+   goes out via Windows `keybd_event`.
 
 **Right pod only.** The Click V2 ships as two pods that work as a *pair*: the
 LEFT pod is the pair's BLE anchor and the RIGHT pod mirrors its state to the
@@ -214,7 +216,7 @@ connects are serialized so they never overlap an active scan.
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Right pod drops, logs `session ended`        | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again. |
 | Right pod's LED blinks while connected        | Normal: this build uses the RIGHT pod only and the pair's anchor (LEFT) is missing, so the LED stays in advertising mode. Cosmetic — button delivery is unaffected. |
-| One press types the key twice                 | Raise `-debounce` (frames should mirror within tens of ms).                                                               |
+| One press holds the key down                  | Normal: keys follow the button — held while pressed, released on release (steering needs the hold).                      |
 | `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
 | Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |
 | Keys land in the wrong window                 | Set `focusProgramNamePrefixOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it. |
