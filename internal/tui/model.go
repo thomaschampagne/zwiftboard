@@ -64,6 +64,7 @@ type Model struct {
 	showLogs     bool
 	status       string // transient feedback line (empty = none)
 	statusID     int
+	logOffset    int  // lines scrolled up from the newest; 0 = following the bottom
 	focusMissing bool // default false: no alert until a FocusMsg says so
 }
 
@@ -115,6 +116,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.flash[msg.button] == msg.id {
 			delete(m.flash, msg.button)
 		}
+	case tea.MouseMsg:
+		// Wheel over the log panel scrolls it; only while the panel is shown.
+		if m.showLogs && m.cfg.Logs != nil {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				m.logOffset++
+			case tea.MouseButtonWheelDown:
+				if m.logOffset > 0 {
+					m.logOffset--
+				}
+			}
+			m.clampLogScroll()
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -123,6 +137,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "l" {
 			m.showLogs = !m.showLogs
 			return m, nil
+		}
+		if m.showLogs && m.cfg.Logs != nil {
+			switch msg.String() {
+			case "k":
+				m.logOffset++
+				m.clampLogScroll()
+				return m, nil
+			case "j":
+				if m.logOffset > 0 {
+					m.logOffset--
+				}
+				return m, nil
+			}
 		}
 		if msg.String() == "e" && m.cfg.OpenConfig != nil {
 			open := m.cfg.OpenConfig
@@ -133,6 +160,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// clampLogScroll keeps logOffset between 0 (newest lines) and the oldest
+// reachable position; a log shorter than the panel never scrolls.
+func (m *Model) clampLogScroll() {
+	max := 0
+	if m.cfg.Logs != nil {
+		max = m.cfg.Logs.Len() - logLines
+	}
+	if max < 0 {
+		max = 0
+	}
+	if m.logOffset > max {
+		m.logOffset = max
+	}
+	if m.logOffset < 0 {
+		m.logOffset = 0
+	}
 }
 
 func (m Model) click(button string) (tea.Model, tea.Cmd) {

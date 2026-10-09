@@ -44,7 +44,7 @@ func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath str
 // sessions are process-scoped; there is no separate teardown path). start, if
 // non-nil, runs in its own goroutine with the program for sending messages.
 func runTUI(tcfg tui.Config, start func(p *tea.Program)) {
-	p := tea.NewProgram(tui.New(tcfg), tea.WithAltScreen())
+	p := tea.NewProgram(tui.New(tcfg), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if start != nil {
 		go start(p)
 	}

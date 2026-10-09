@@ -44,3 +44,34 @@ func (b *LogBuffer) Lines() []string {
 	defer b.mu.Unlock()
 	return append([]string(nil), b.lines...)
 }
+
+// Window returns up to n lines ending offset lines before the newest
+// line (offset 0 = the newest n lines). Used by the log panel scroll.
+func (b *LogBuffer) Window(n, offset int) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	total := len(b.lines)
+	if offset > total {
+		// Scrolled past the top: clamp to the oldest window.
+		if n > total {
+			n = total
+		}
+		return append([]string(nil), b.lines[:n]...)
+	}
+	end := total - offset
+	if end < 0 {
+		end = 0
+	}
+	start := end - n
+	if start < 0 {
+		start = 0
+	}
+	return append([]string(nil), b.lines[start:end]...)
+}
+
+// Len returns the number of buffered lines.
+func (b *LogBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.lines)
+}

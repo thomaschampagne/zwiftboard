@@ -70,7 +70,7 @@ active profile, the focus-window target (`focusProgramNameOnClick`, or `off`)
 and the Right Click V2 key table; a button row lights up briefly when clicked.
 Both controllers must be on, but only the Right one's clicks are mapped. With
 Bluetooth off only the "turn Bluetooth ON" prompt is shown until it is on.
-`e` opens the config file in an editor (Notepad on Windows; restart to apply edits); `l` toggles a log panel (wider than the cards); an ALERT shows when `focusProgramNameOnClick` names a window that is not running (clicks are dropped then; demo: `f`); `q` / Ctrl+C quits. Bluetooth OFF after start-up is detected from the scan loop failing (it needs a scan burst to fail, so it can take a few seconds); a pod shows disconnected once a keepalive write fails (up to ~3s).
+`e` opens the config file in an editor (Notepad on Windows; restart to apply edits); `l` toggles a log panel (scroll with j/k or the mouse wheel; wider than the cards); an ALERT shows when `focusProgramNameOnClick` names a window that is not running (clicks are dropped then; demo: `f`); `q` / Ctrl+C quits. Bluetooth OFF after start-up is detected from the scan loop failing (it needs a scan burst to fail, so it can take a few seconds); a pod shows disconnected once a keepalive write fails (up to ~3s).
 
 ```sh
 go build -o zwiftboard.exe .

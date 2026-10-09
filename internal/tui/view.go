@@ -158,7 +158,8 @@ func (m Model) logsPanel() string {
 	}
 	var lines []string
 	if m.cfg.Logs != nil {
-		lines = m.cfg.Logs.Lines()
+		m.clampLogScroll()
+		lines = m.cfg.Logs.Window(logLines, m.logOffset)
 	}
 	var body string
 	if len(lines) == 0 {
@@ -176,7 +177,14 @@ func (m Model) logsPanel() string {
 		}
 		body = strings.Join(lines, "\n")
 	}
-	return m.cardW(m.innerWidthMax(maxLogWidth), cMuted, "Logs", body) + "\n"
+	title := "Logs"
+	if m.cfg.Logs != nil && m.cfg.Logs.Len() > logLines {
+		title += sMuted.Render(" — k/j or mouse wheel to scroll")
+	}
+	if m.logOffset > 0 {
+		title += sWarn.Render("  ▲ scrolled up")
+	}
+	return m.cardW(m.innerWidthMax(maxLogWidth), cMuted, title, body) + "\n"
 }
 
 func (m Model) footer() string {

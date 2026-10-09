@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -224,4 +225,80 @@ func TestStatusExpires(t *testing.T) {
 	if n.(Model).status == "" {
 		t.Fatal("a stale expiry must not clear a newer status")
 	}
+}
+
+func scrollModel() Model {
+	cfg := testCfg()
+	cfg.Logs = NewLogBuffer(50)
+	for i := 0; i < 20; i++ {
+		cfg.Logs.Write([]byte(fmt.Sprintf("line%02d\n", i)))
+	}
+	m := New(cfg)
+	m.showLogs = true
+	return m
+}
+
+func TestScrollJK(t *testing.T) {
+	m := scrollModel()
+	n, _ := m.Update(key("k"))
+	if n.(Model).logOffset != 1 {
+		t.Fatalf("k should scroll up one line, got %d", n.(Model).logOffset)
+	}
+	n, _ = n.Update(key("k"))
+	n, _ = n.Update(key("j"))
+	if n.(Model).logOffset != 1 {
+		t.Fatalf("j should scroll back down, got %d", n.(Model).logOffset)
+	}
+	n, _ = n.Update(key("j"))
+	if n.(Model).logOffset != 0 {
+		t.Fatalf("j must clamp at the bottom, got %d", n.(Model).logOffset)
+	}
+}
+
+func TestScrollClampsAtTop(t *testing.T) {
+	m := scrollModel()
+	for i := 0; i < 30; i++ {
+		n, _ := m.Update(key("k"))
+		m = n.(Model)
+	}
+	if m.logOffset != 10 { // 20 lines - 10 visible
+		t.Fatalf("logOffset = %d, want 10 (20 lines - 10 visible)", m.logOffset)
+	}
+}
+
+func TestMouseWheelScrolls(t *testing.T) {
+	m := scrollModel()
+	wheel := func(b tea.MouseButton) tea.MouseMsg { return tea.MouseMsg{Button: b} }
+	n, _ := m.Update(wheel(tea.MouseButtonWheelUp))
+	if n.(Model).logOffset != 1 {
+		t.Fatalf("wheel up should scroll, got %d", n.(Model).logOffset)
+	}
+	n, _ = n.Update(wheel(tea.MouseButtonWheelDown))
+	if n.(Model).logOffset != 0 {
+		t.Fatalf("wheel down should return to bottom, got %d", n.(Model).logOffset)
+	}
+	n, _ = n.Update(wheel(tea.MouseButtonWheelDown))
+	if n.(Model).logOffset != 0 {
+		t.Fatalf("wheel down at the bottom must clamp, got %d", n.(Model).logOffset)
+	}
+}
+
+func TestScrollInertWhenLogsHidden(t *testing.T) {
+	m := New(testCfg())
+	n, _ := m.Update(key("k"))
+	if n.(Model).logOffset != 0 {
+		t.Fatal("k must not scroll while the log panel is hidden")
+	}
+}
+
+func TestLogViewShowsScrolledWindow(t *testing.T) {
+	m := scrollModel()
+	v := m.View()
+	has(t, v, "line19") // following the bottom
+	lacks(t, v, "line00")
+	n, _ := m.Update(key("k"))
+	m = n.(Model)
+	v = m.View()
+	has(t, v, "line18")
+	lacks(t, v, "line19")
 }
