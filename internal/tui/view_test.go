@@ -148,3 +148,16 @@ func TestViewLogPanelWiderThanCards(t *testing.T) {
 	lacks(t, v, line)
 	has(t, v, "…")
 }
+
+func TestViewFooterOpenConfigHint(t *testing.T) {
+	has(t, on(openCfg(func() error { return nil }), PodConnected, PodConnected).View(), "o edit config")
+	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "edit config")
+}
+
+func TestViewShowsStatus(t *testing.T) {
+	m := on(testCfg(), PodConnected, PodConnected)
+	m.status = "Opened config.yaml"
+	has(t, m.View(), "Opened config.yaml")
+	m.bt = false // also visible while Bluetooth is off
+	has(t, m.View(), "Opened config.yaml")
+}

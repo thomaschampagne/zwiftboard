@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -167,5 +169,59 @@ func TestDemoToggleFocus(t *testing.T) {
 	n, _ = New(testCfg()).Update(key("f"))
 	if n.(Model).focusMissing {
 		t.Fatal("f must be inert in live mode")
+	}
+}
+
+func openCfg(open func() error) Config {
+	cfg := testCfg()
+	cfg.ConfigPath = "config.yaml"
+	cfg.OpenConfig = open
+	return cfg
+}
+
+func TestOpenConfigKeyRunsOpener(t *testing.T) {
+	calls := 0
+	m := New(openCfg(func() error { calls++; return nil }))
+	n, cmd := m.Update(key("o"))
+	if cmd == nil {
+		t.Fatal("o should return a cmd that opens the editor")
+	}
+	n, _ = n.Update(cmd())
+	if calls != 1 {
+		t.Fatalf("opener called %d times, want 1", calls)
+	}
+	if got := n.(Model).status; !strings.Contains(got, "config.yaml") {
+		t.Fatalf("status = %q, want it to name config.yaml", got)
+	}
+}
+
+func TestOpenConfigErrorShown(t *testing.T) {
+	m := New(openCfg(func() error { return errors.New("no editor") }))
+	_, cmd := m.Update(key("o"))
+	n, _ := m.Update(cmd())
+	if got := n.(Model).status; !strings.Contains(got, "no editor") {
+		t.Fatalf("status = %q, want the error", got)
+	}
+}
+
+func TestOpenConfigUnavailableIsInert(t *testing.T) {
+	_, cmd := New(testCfg()).Update(key("o"))
+	if cmd != nil {
+		t.Fatal("o without an opener must do nothing")
+	}
+}
+
+func TestStatusExpires(t *testing.T) {
+	m := New(openCfg(func() error { return nil }))
+	_, cmd := m.Update(key("o"))
+	n, _ := m.Update(cmd())
+	m = n.(Model)
+	n, _ = m.Update(statusExpireMsg{id: m.statusID})
+	if n.(Model).status != "" {
+		t.Fatal("status should clear on its expiry")
+	}
+	n, _ = m.Update(statusExpireMsg{id: m.statusID - 1}) // stale
+	if n.(Model).status == "" {
+		t.Fatal("a stale expiry must not clear a newer status")
 	}
 }

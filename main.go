@@ -127,9 +127,9 @@ func main() {
 			}
 		}
 		if *demo {
-			runTUI(tuiConfig(cfg, true, logBuf), nil)
+			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
 		}
-		runTUI(tuiConfig(cfg, false, logBuf), func(p *tea.Program) { liveFeed(p, cfg, scanFor, reconnect, addrList) })
+		runTUI(tuiConfig(cfg, false, logBuf, *configPath), func(p *tea.Program) { liveFeed(p, cfg, scanFor, reconnect, addrList) })
 	}
 
 	// -plain: Bluetooth must be on. Enable fails (or panics, absorbed by Guarded) while

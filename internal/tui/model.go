@@ -23,13 +23,15 @@ const (
 
 // Config is everything the screen shows that does not change at runtime.
 type Config struct {
-	Profile   string
-	Bindings  map[string]string // button -> key token
-	Buttons   []string          // ordered table rows (right pod)
-	Focus     string            // focusProgramNameOnClick; "" = off
-	NoMapping bool              // config file missing
-	Demo      bool              // enable mock toggle keys
-	Logs      *LogBuffer        // log panel source; nil = none
+	Profile    string
+	Bindings   map[string]string // button -> key token
+	Buttons    []string          // ordered table rows (right pod)
+	Focus      string            // focusProgramNameOnClick; "" = off
+	NoMapping  bool              // config file missing
+	Demo       bool              // enable mock toggle keys
+	Logs       *LogBuffer        // log panel source; nil = none
+	ConfigPath string            // shown in status messages
+	OpenConfig func() error      // opens the config file in an editor; nil = shortcut off
 }
 
 // Messages sent by main (live) or the demo handler.
@@ -45,6 +47,10 @@ type (
 		button string
 		id     int
 	}
+	// openedMsg is the result of the editor launch.
+	openedMsg struct{ err error }
+	// statusExpireMsg clears the status line; id guards against a stale expiry.
+	statusExpireMsg struct{ id int }
 )
 
 // Model is the Bubble Tea model.
@@ -56,6 +62,8 @@ type Model struct {
 	seq          int
 	width        int
 	showLogs     bool
+	status       string // transient feedback line (empty = none)
+	statusID     int
 	focusMissing bool // default false: no alert until a FocusMsg says so
 }
 
@@ -84,6 +92,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+	case openedMsg:
+		if msg.err != nil {
+			return m.setStatus("Could not open " + m.cfg.ConfigPath + ": " + msg.err.Error())
+		}
+		return m.setStatus("Opened " + m.cfg.ConfigPath + " in your editor. Restart zwiftboard to apply changes.")
+	case statusExpireMsg:
+		if msg.id == m.statusID {
+			m.status = ""
+		}
 	case tickMsg:
 		return m, tick()
 	case BTMsg:
@@ -107,6 +124,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showLogs = !m.showLogs
 			return m, nil
 		}
+		if msg.String() == "o" && m.cfg.OpenConfig != nil {
+			open := m.cfg.OpenConfig
+			return m, func() tea.Msg { return openedMsg{err: open()} }
+		}
 		if m.cfg.Demo {
 			return m.demoKey(msg.String())
 		}
@@ -128,4 +149,14 @@ func (m Model) click(button string) (tea.Model, tea.Cmd) {
 	m.flash = f
 	id := m.seq
 	return m, tea.Tick(FlashFor, func(time.Time) tea.Msg { return expireMsg{button, id} })
+}
+
+// statusFor is how long a status message stays on screen.
+const statusFor = 5 * time.Second
+
+func (m Model) setStatus(s string) (tea.Model, tea.Cmd) {
+	m.statusID++
+	m.status = s
+	id := m.statusID
+	return m, tea.Tick(statusFor, func(time.Time) tea.Msg { return statusExpireMsg{id} })
 }

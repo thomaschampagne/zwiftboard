@@ -180,17 +180,25 @@ func (m Model) logsPanel() string {
 }
 
 func (m Model) footer() string {
+	status := ""
+	if m.status != "" {
+		status = sWarn.Render(m.status) + "\n"
+	}
 	hint := func(k, label string) string { return sKeyHint.Render(k) + sMuted.Render(" "+label) }
 	logs := hint("l", "logs")
 	if m.showLogs {
 		logs = hint("l", "hide logs")
 	}
-	f := logs + sMuted.Render("  ·  ") + hint("q", "quit")
+	f := logs
+	if m.cfg.OpenConfig != nil {
+		f += sMuted.Render("  ·  ") + hint("o", "edit config")
+	}
+	f += sMuted.Render("  ·  ") + hint("q", "quit")
 	if m.cfg.Demo {
 		f += sMuted.Render("  ·  demo: ") + hint("b", "bluetooth") + sMuted.Render(" ") +
 			hint("[ ]", "left/right pod") + sMuted.Render(" ") + hint("1-5", "click") + sMuted.Render(" ") + hint("f", "focus alert")
 	}
-	return f
+	return status + f
 }
 
 func padRight(s string, n int) string {
@@ -229,5 +237,5 @@ func (m Model) focusAlert() string {
 	}
 	return m.cardW(m.innerWidth(), cBad, "",
 		sChipBad.Render("ALERT")+" "+sBold.Render(`Focus window "`+m.cfg.Focus+`" not found`)+"\n"+
-			sMuted.Render("Key clicks are dropped until it is open (check focusProgramNameOnClick)."))
+			sMuted.Render("Key clicks are dropped until it is open."))
 }

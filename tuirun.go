@@ -4,6 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,19 +22,21 @@ import (
 var rightButtons = []string{"Y", "Z", "A", "B", "PLUS"}
 
 // tuiConfig turns the loaded config into what the status screen displays.
-func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer) tui.Config {
+func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath string) tui.Config {
 	b := map[string]string{}
 	for name, bnd := range cfg.Bindings {
 		b[name] = bnd.Token
 	}
 	return tui.Config{
-		Profile:   cfg.Profile,
-		Bindings:  b,
-		Buttons:   rightButtons,
-		Focus:     cfg.FocusProgramNameOnClick,
-		NoMapping: cfg.Missing,
-		Demo:      demo,
-		Logs:      logs,
+		Profile:    cfg.Profile,
+		Bindings:   b,
+		Buttons:    rightButtons,
+		Focus:      cfg.FocusProgramNameOnClick,
+		NoMapping:  cfg.Missing,
+		Demo:       demo,
+		Logs:       logs,
+		ConfigPath: filepath.Base(configPath),
+		OpenConfig: openConfigFile(configPath),
 	}
 }
 
@@ -90,4 +95,40 @@ func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Durati
 		}
 	}
 	tui.Poll(context.Background(), p.Send, 250*time.Millisecond, src)
+}
+
+// editorCommand picks a text editor launcher per OS. Windows gets notepad:
+// .yaml usually has no file association, so "start" would pop an "open with"
+// dialog instead of an editor.
+func editorCommand(goos, path string) *exec.Cmd {
+	switch goos {
+	case "windows":
+		return exec.Command("notepad.exe", path)
+	case "darwin":
+		return exec.Command("open", "-t", path)
+	default:
+		return exec.Command("xdg-open", path)
+	}
+}
+
+// startEditor launches the editor without waiting for it (it is a separate
+// window); injectable for tests.
+var startEditor = func(path string) error {
+	cmd := editorCommand(runtime.GOOS, path)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }() // reap the child, ignore its exit status
+	return nil
+}
+
+// openConfigFile returns the TUI's "o" action for the config file at path.
+func openConfigFile(path string) func() error {
+	return func() error {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return err
+		}
+		return startEditor(abs)
+	}
 }
