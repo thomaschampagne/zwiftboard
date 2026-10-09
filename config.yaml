@@ -20,9 +20,7 @@ loglevel: info
 #   and punctuation: - = , . / ; ' [ ] ` \
 #
 # Shortcuts verified against each vendor's docs (2026-10-07):
-#   zwift       support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B
 #   mywhoosh    mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts
-#   rouvy       support.rouvy.com "Remote controllers and control mapping"
 #   trainerroad support.trainerroad.com "TrainerRoad Keyboard Shortcuts"
 #   systm       support.wahoofitness.com "Keyboard shortcuts" (SYSTM)
 # Apps checked and excluded: FulGaz (no shortcuts), BKOOL (undocumented).

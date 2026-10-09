@@ -43,7 +43,7 @@ func main() {
 	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
 	reconnect := flag.Duration("reconnect", 30*time.Second, "connect only to a controller seen advertising within this window (a sleeping right pod is never hammered by address)")
 	addrList := flag.String("addr", "", "comma-separated BLE addresses (e.g. D4:06:0F:A9:86:04) — manages exactly these; each must visibly advertise before it is connected (a pod's radio wakes ~30-60s after sleeping)")
-	configPath := flag.String("config", "config.yaml", "YAML file (cwd) with key mapping profiles")
+	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: next to the program; created from the built-in default if missing)")
 	var profile string
 	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
 	flag.StringVar(&profile, "profile", config.DefaultProfile, "config profile to use (same as -p)")
@@ -57,6 +57,7 @@ func main() {
 	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b l r 1-5), no Bluetooth — try the screen without hardware")
 	flag.Parse()
 
+	ensureConfig(*configPath)
 	cfg, err := config.Load(*configPath, profile)
 	level := cfg.Level
 	if verbose {
@@ -187,7 +188,7 @@ func startListening(cfg config.Config, scanFor, reconnect *time.Duration, addrLi
 		} else if n >= 2 {
 			// Extra controllers may still be discovered, but only the right
 			// pod's buttons are mapped (the LEFT pod is unsupported).
-			slog.Info("more than one controller connected — only the right pod's buttons are mapped (left pod unsupported)", "controllers", n)
+			slog.Info("more than one controller connected — only the right pod's buttons are mapped (left pod has just to stay on)", "controllers", n)
 		}
 		go func() {
 			key := t.Addr.String()
