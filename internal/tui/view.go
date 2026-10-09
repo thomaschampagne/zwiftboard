@@ -31,7 +31,7 @@ var (
 const (
 	minWidth     = 40
 	maxWidth     = 100 // cards
-	maxLogWidth  = 160 // the log panel uses more of a wide terminal
+	maxLogWidth  = 320 // the log panel may use the whole terminal (double the old 160 cap)
 	defaultWidth = 80  // before the first WindowSizeMsg
 	logLines     = 10
 )
@@ -191,7 +191,7 @@ func (m Model) footer() string {
 	}
 	f := logs
 	if m.cfg.OpenConfig != nil {
-		f += sMuted.Render("  ·  ") + hint("o", "edit config")
+		f += sMuted.Render("  ·  ") + hint("e", "edit config")
 	}
 	f += sMuted.Render("  ·  ") + hint("q", "quit")
 	if m.cfg.Demo {

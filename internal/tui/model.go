@@ -124,7 +124,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showLogs = !m.showLogs
 			return m, nil
 		}
-		if msg.String() == "o" && m.cfg.OpenConfig != nil {
+		if msg.String() == "e" && m.cfg.OpenConfig != nil {
 			open := m.cfg.OpenConfig
 			return m, func() tea.Msg { return openedMsg{err: open()} }
 		}

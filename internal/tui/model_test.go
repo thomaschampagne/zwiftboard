@@ -182,9 +182,9 @@ func openCfg(open func() error) Config {
 func TestOpenConfigKeyRunsOpener(t *testing.T) {
 	calls := 0
 	m := New(openCfg(func() error { calls++; return nil }))
-	n, cmd := m.Update(key("o"))
+	n, cmd := m.Update(key("e"))
 	if cmd == nil {
-		t.Fatal("o should return a cmd that opens the editor")
+		t.Fatal("e should return a cmd that opens the editor")
 	}
 	n, _ = n.Update(cmd())
 	if calls != 1 {
@@ -197,7 +197,7 @@ func TestOpenConfigKeyRunsOpener(t *testing.T) {
 
 func TestOpenConfigErrorShown(t *testing.T) {
 	m := New(openCfg(func() error { return errors.New("no editor") }))
-	_, cmd := m.Update(key("o"))
+	_, cmd := m.Update(key("e"))
 	n, _ := m.Update(cmd())
 	if got := n.(Model).status; !strings.Contains(got, "no editor") {
 		t.Fatalf("status = %q, want the error", got)
@@ -205,15 +205,15 @@ func TestOpenConfigErrorShown(t *testing.T) {
 }
 
 func TestOpenConfigUnavailableIsInert(t *testing.T) {
-	_, cmd := New(testCfg()).Update(key("o"))
+	_, cmd := New(testCfg()).Update(key("e"))
 	if cmd != nil {
-		t.Fatal("o without an opener must do nothing")
+		t.Fatal("e without an opener must do nothing")
 	}
 }
 
 func TestStatusExpires(t *testing.T) {
 	m := New(openCfg(func() error { return nil }))
-	_, cmd := m.Update(key("o"))
+	_, cmd := m.Update(key("e"))
 	n, _ := m.Update(cmd())
 	m = n.(Model)
 	n, _ = m.Update(statusExpireMsg{id: m.statusID})

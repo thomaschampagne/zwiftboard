@@ -122,7 +122,7 @@ var startEditor = func(path string) error {
 	return nil
 }
 
-// openConfigFile returns the TUI's "o" action for the config file at path.
+// openConfigFile returns the TUI's "e" action for the config file at path.
 func openConfigFile(path string) func() error {
 	return func() error {
 		abs, err := filepath.Abs(path)
