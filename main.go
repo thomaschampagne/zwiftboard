@@ -86,7 +86,7 @@ func main() {
 			w = io.MultiWriter(os.Stderr, f)
 		}
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
 	errLog := slog.Default() // -plain: already on stderr and in the file
 	if tuiMode {
 		errLog = slog.New(slog.NewTextHandler(os.Stderr, nil))
