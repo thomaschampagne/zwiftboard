@@ -39,7 +39,7 @@ profiles:
     PLUS: i         # shift up (harder gear)
     A: right
     B: k            # shift down (easier gear)
-    Y: tab          # change camera view
+    Y: u            # U-turn / minimal UI toggle
     Z: left
     focusProgramNamePrefixOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
 
