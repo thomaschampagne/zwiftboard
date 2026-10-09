@@ -109,6 +109,18 @@ func main() {
 	}
 	slog.Info("Bluetooth is on — switch on BOTH Click controllers (LEFT and RIGHT); both are connected and kept alive together")
 
+	startListening(cfg, scanFor, reconnect, addrList)
+	if *addrList == "" {
+		go pairStatus()
+	}
+	slog.Info("running — Ctrl+C to quit")
+	select {}
+}
+
+// startListening starts the scanner and one reconnecting session goroutine per
+// controller. Moved out of main verbatim so the TUI and -plain paths share the
+// exact same BLE behavior.
+func startListening(cfg config.Config, scanFor, reconnect *time.Duration, addrList *string) {
 	// Registry of controllers we already have a session goroutine for.
 	var regMu sync.Mutex
 	registry := map[string]bool{}
@@ -202,11 +214,6 @@ func main() {
 	} else {
 		go ble.Watch(*scanFor, registered, add)
 	}
-	if *addrList == "" {
-		go pairStatus()
-	}
-	slog.Info("running — Ctrl+C to quit")
-	select {}
 }
 
 // pairStatus logs the pair state whenever it changes: per side, "not detected",
