@@ -136,7 +136,7 @@ func (m Model) table() string {
 			if ok {
 				cap = sKeycap.Render(key)
 				if m.Flashing(name) {
-					cap = sFlash.Render(key) + sOK.Render(" ◀ click")
+					cap = sFlash.Render(key) + sOK.Render(" ◀ triggered")
 				}
 			}
 			b.WriteString(sBold.Render(padRight(name, 6)) + sMuted.Render("→ ") + cap + "\n")

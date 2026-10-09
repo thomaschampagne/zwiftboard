@@ -173,3 +173,10 @@ func TestViewLogPanelDoubleWidth(t *testing.T) {
 	m.width = 320
 	has(t, m.View(), line)
 }
+
+func TestViewFlashShowsTriggered(t *testing.T) {
+	m := on(testCfg(), PodConnected, PodConnected)
+	m.flash["A"] = 1
+	has(t, m.View(), "◀ triggered")
+	lacks(t, m.View(), "◀ click")
+}
