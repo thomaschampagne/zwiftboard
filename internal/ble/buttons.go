@@ -25,6 +25,11 @@ func claimTap(name string) bool {
 	return true
 }
 
+// OnTap, when set, is told the button name after every non-duplicate tap of a
+// mapped button (the UI's click highlight). Observational only: it runs after
+// tap and must not block, since it is called on the BLE notification goroutine.
+var OnTap func(button string)
+
 // ButtonHandler decodes 0x23 button frames for one controller and taps keys
 // for mapped presses. tap is injectable for tests.
 func ButtonHandler(label string, keyMap map[string]keys.Binding, tap func(keys.Binding)) func([]byte) {
@@ -71,6 +76,9 @@ func ButtonHandler(label string, keyMap map[string]keys.Binding, tap func(keys.B
 					args = append(args, "key", bnd.Token)
 					if claimTap(name) {
 						tap(bnd)
+						if h := OnTap; h != nil {
+							h(name)
+						}
 					} else {
 						args = append(args, "duplicate", true)
 					}

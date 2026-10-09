@@ -124,3 +124,35 @@ func TestButtonHandlerUnmappedButtonNoTap(t *testing.T) {
 		t.Fatalf("taps = %d, want 0 with empty key map", taps)
 	}
 }
+
+func TestOnTapCalledOncePerPress(t *testing.T) {
+	resetTapState(t)
+	var got []string
+	OnTap = func(b string) { got = append(got, b) }
+	t.Cleanup(func() { OnTap = nil })
+
+	keyMap := map[string]keys.Binding{"B": {VK: 0x42, Token: "b"}}
+	tap := func(keys.Binding) {}
+	right := ButtonHandler("right", keyMap, tap)
+	left := ButtonHandler("left", keyMap, tap)
+
+	press := []byte{0x23, 0x08, 0xDF, 0xFF, 0xFF, 0xFF, 0x0F}
+	right(press)
+	left(press) // mirrored duplicate
+	if len(got) != 1 || got[0] != "B" {
+		t.Fatalf("OnTap calls = %v, want [B]", got)
+	}
+}
+
+func TestOnTapNotCalledUnmapped(t *testing.T) {
+	resetTapState(t)
+	called := false
+	OnTap = func(string) { called = true }
+	t.Cleanup(func() { OnTap = nil })
+
+	h := ButtonHandler("t", map[string]keys.Binding{}, func(keys.Binding) {})
+	h([]byte{0x23, 0x08, 0xDF, 0xFF, 0xFF, 0xFF, 0x0F})
+	if called {
+		t.Fatal("OnTap must not fire for an unmapped button")
+	}
+}
