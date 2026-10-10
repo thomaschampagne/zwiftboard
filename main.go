@@ -1,6 +1,6 @@
 // Zwift Click V2 BLE listener for Windows (WinRT via tinygo.org/x/bluetooth).
 //
-//	go run . [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config path] [-p mywhoosh] [-ack=true] [-log zwiftboard.log]
+//	go run . [-v] [-config path] [-p mywhoosh] [-log zwiftboard.log]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
 // keyboard keys (Windows keybd_event). Log level comes from config.yaml
@@ -15,7 +15,7 @@
 // asks for both controllers and reports the pair state as it changes.
 // Scanning runs in bursts until controllers appear and keeps listening for
 // new ones (a second controller may be turned on much later); it never gives
-// up after the -scan window. Each found controller gets a reconnecting
+// up after the window. Each found controller gets a reconnecting
 // session goroutine.
 //
 // Close Zwift / Companion first: each controller accepts a single BLE connection.
@@ -27,7 +27,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -43,18 +42,18 @@ import (
 // version is stamped at release time via -ldflags "-X main.version=...".
 var version = "dev"
 
+// Defaults after CLI flags were removed; kept for internal use.
+var (
+	scanFor   = 10 * time.Second
+	reconnect = 30 * time.Second
+)
+
 func main() {
-	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
-	reconnect := flag.Duration("reconnect", 30*time.Second, "connect only to a controller seen advertising within this window (a sleeping right pod is never hammered by address)")
-	addrList := flag.String("addr", "", "comma-separated BLE addresses (e.g. D4:06:0F:A9:86:04) — manages exactly these; each must visibly advertise before it is connected (a pod's radio wakes ~30-60s after sleeping)")
-	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing)")
+configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing)")
 	var profile string
 	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
-	flag.StringVar(&profile, "profile", config.DefaultProfile, "config profile to use (same as -p)")
 	var verbose bool
 	flag.BoolVar(&verbose, "v", false, "log raw frames and button events (forces log level debug)")
-	flag.BoolVar(&ble.SendAck, "ack", true, "send ff 04 00 to devices that echo RideOn (keeps unlock)")
-	flag.DurationVar(&ble.IdleReset, "idle-reset", 55*time.Second, "after this much button silence, reboot the pod (write 0x18, OpenBikeControl's periodic reset) before its ~65s idle sleep; 0 disables")
 	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")
 	plain := flag.Bool("plain", false, "plain log output on stderr instead of the TUI status screen")
 	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b l r 1-5), no Bluetooth — try the screen without hardware")
@@ -125,20 +124,10 @@ func main() {
 	keys.SetWindowTarget(cfg.FocusProgramNamePrefixOnClick)
 
 	if tuiMode {
-		// Validate -addr now so a typo is reported on stderr, not lost in the
-		// log file behind the full-screen UI.
-		if *addrList != "" {
-			for _, s := range strings.Split(*addrList, ",") {
-				if _, err := ble.NewAddress(strings.TrimSpace(s)); err != nil {
-					errLog.Error("bad -addr", "value", s, "error", err)
-					os.Exit(1)
-				}
-			}
-		}
 		if *demo {
 			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
 		}
-		runTUI(tuiConfig(cfg, false, logBuf, *configPath), func(p *tea.Program) { liveFeed(p, cfg, scanFor, reconnect, addrList) })
+		runTUI(tuiConfig(cfg, false, logBuf, *configPath), func(p *tea.Program) { liveFeed(p, cfg) })
 	}
 
 	// -plain: Bluetooth must be on. Enable fails (or panics, absorbed by Guarded) while
@@ -158,10 +147,7 @@ func main() {
 	}
 	slog.Info("Bluetooth is on — switch on BOTH Click controllers (LEFT and RIGHT); both are connected and kept alive together")
 
-	startListening(cfg, scanFor, reconnect, addrList)
-	if *addrList == "" {
-		go pairStatus()
-	}
+	startListening(cfg, &scanFor, &reconnect)
 	slog.Info("running — Ctrl+C to quit")
 	select {}
 }
@@ -169,7 +155,7 @@ func main() {
 // startListening starts the scanner and one reconnecting session goroutine per
 // controller. Moved out of main verbatim so the TUI and -plain paths share the
 // exact same BLE behavior.
-func startListening(cfg config.Config, scanFor, reconnect *time.Duration, addrList *string) {
+func startListening(cfg config.Config, scanFor, reconnect *time.Duration) {
 	// Registry of controllers we already have a session goroutine for.
 	var regMu sync.Mutex
 	registry := map[string]bool{}
@@ -246,23 +232,10 @@ func startListening(cfg config.Config, scanFor, reconnect *time.Duration, addrLi
 	// goroutine is spawned — the app still manages exactly the listed addresses,
 	// and each one still needs to be seen advertising (the pod's radio wakes
 	// within ~30-60s of a sleep) before its connect happens.
-	if *addrList != "" {
-		for _, s := range strings.Split(*addrList, ",") {
-			s = strings.TrimSpace(s)
-			addr, err := ble.NewAddress(s)
-			if err != nil {
-				slog.Error("bad -addr", "value", s, "error", err)
-				os.Exit(1)
-			}
-			add(ble.Target{Addr: addr, Label: "zwift/" + zwift.Tail(s)})
-		}
-		// Watch guards each iteration itself (recoverLog "watch iteration"
-		// inside the loop): the old recover here was dead code — a nested
-		// `go ble.Watch` made the outer defer unreachable.
-		go ble.Watch(*scanFor, func(string) bool { return true }, func(ble.Target) {})
-	} else {
-		go ble.Watch(*scanFor, registered, add)
-	}
+	// Always scanning mode: a controller must be seen advertising before it can
+	// be connected; a fresh sighting means the pod is awake, the connect succeeds,
+	// and nothing leaks.
+	go ble.Watch(*scanFor, registered, add)
 }
 
 // pairStatus logs the pair state whenever it changes: per side, "not detected",

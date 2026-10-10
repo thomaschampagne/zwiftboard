@@ -87,12 +87,12 @@ TUI key-state model and the config-path tests.
   physically connect); hundreds of leaked sessions over a long outage wedged the
   Windows BLE stack and stalled recovery ~54 minutes. The scanner records every
   sighting (`markSeen`), and a controller's session goroutine only calls
-  `Session` when it was seen advertising within `-reconnect` (default 30s); a
+  `Session` when it was seen advertising within the reconnect window (default 30s); a
   fresh sighting means the pod is awake, the connect succeeds, and nothing
   leaks. A session END also clears the sighting (`ClearSighting`): the pod may
   advertise all session long (keeping the gate open), so without the clear a
   drop would be followed by retries of the now-sleeping pod by address.
-- PERIODIC POD RESET defeats the ~65s idle sleep (`-idle-reset`, default 55s):
+- PERIODIC POD RESET defeats the ~65s idle sleep (default 55s):
   after that much button silence the keepalive tick writes a lone `0x18` to
   sync-rx instead of the RideOn ping — OpenBikeControl's "periodic RESET
   recovery" (Opcode.RESET=24, per their protocol enum; the dbg Reset pill in
@@ -106,7 +106,7 @@ TUI key-state model and the config-path tests.
 - Button frame `0x23` + protobuf field 1 = bitmap, **0 = pressed**; bits are
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
-  locked; `ff 04 00` keeps an unlocked device unlocked, disable with `-ack=false`).
+  locked; `ff 04 00` keeps an unlocked device unlocked).
 - Right-only liveness: the keepalive write is the ONLY signal. The old
   LEFT-anchor silence watchdog (`podWatcher`) was removed with LEFT support — an
   idle pod legitimately stops streaming `0x23` frames, and idle silence must

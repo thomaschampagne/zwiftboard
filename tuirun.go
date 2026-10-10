@@ -59,7 +59,7 @@ func runTUI(tcfg tui.Config, start func(p *tea.Program)) {
 // retry (every 5s while Bluetooth is off), then the same startListening. It
 // only OBSERVES: the screen reads ble.Connected / ble.SideSeenRecently and the
 // OnKey hook, and nothing in a session waits on it.
-func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Duration, addrList *string) {
+func liveFeed(p *tea.Program, cfg config.Config) {
 	for enabled := false; !enabled; {
 		ble.Guarded("enable BLE adapter", func() {
 			if err := ble.Enable(); err != nil {
@@ -90,7 +90,7 @@ func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Durati
 		}
 	}
 
-	startListening(cfg, scanFor, reconnect, addrList)
+	startListening(cfg, &scanFor, &reconnect)
 	src := tui.Sources{BT: ble.ScanHealthy, Connected: ble.Connected, Seen: ble.SideSeenRecently}
 	if cfg.FocusProgramNamePrefixOnClick != "" {
 		// EnumWindows + process lookups are heavier than the other reads: cache

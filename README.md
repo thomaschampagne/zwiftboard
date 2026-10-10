@@ -51,15 +51,13 @@ zwiftboard [flags]
 
 | Flag              | Default       | Meaning                                                              |
 | ----------------- | ------------- | -------------------------------------------------------------------- |
-| `-p`, `--profile` | `mywhoosh`    | Profile from the config file at `%LocalAppData%\zwiftboard\config.yml` (unknown name errors with the list) |
+| `-p` | `mywhoosh`    | Profile from the config file at `%LocalAppData%\zwiftboard\config.yml` (unknown name errors with the list) |
 | `-config` | `%LocalAppData%\zwiftboard\config.yml` | Config file path (default: per-user AppData folder) |
-| `-scan`           | `10s`         | Length of one scan burst; bursts repeat until all controllers are up |
-| `-addr`           | _(scanning)_  | Comma-separated BLE MACs — skip scanning, connect straight to these  |
-| `-ack`            | `true`        | Answer a `0xFF 03` challenge with `ff 04 00` (keeps an unlocked pod streaming) |
-| `-v`              | `false`       | Force `debug` log level (raw frames, service list)                   |
-| `-log`            | _(none)_      | Also write log lines to this file (truncated at startup; TUI mode defaults to `zwiftboard.log`) |
-| `-plain`          | `false`       | Plain log output on stderr instead of the TUI status screen          |
-| `-demo`           | `false`       | TUI with mock toggle keys, no Bluetooth (try the screen anywhere)    |
+| `-v` | `false`       | Force `debug` log level (raw frames, service list)                   |
+| `-log` | _(none)_      | Also write log lines to this file (truncated at startup; TUI mode defaults to `zwiftboard.log`) |
+| `-plain` | `false`      | Plain log output on stderr instead of the TUI status screen          |
+| `-demo` | `false`       | TUI with mock toggle keys, no Bluetooth (try the screen anywhere)    |
+| `-version` | `false`     | Print version and exit                                               |
 
 ### Status screen (TUI)
 
@@ -78,9 +76,7 @@ zwiftboard.exe -plain          # classic log output on stderr
 go run . -demo                 # b bluetooth, [ ] cycle left/right pod, 1-5 click, l logs, q quit
 ```
 
-Notes: the screen only observes (it never gates or touches a session). With
-`-addr` pod sides are unknown, so a pod shows "not detected" until connected.
-
+Notes: the screen only observes (it never gates or touches a session).
 Log level otherwise comes from `loglevel:` in the config file
 (`%LocalAppData%\zwiftboard\config.yml`; `debug` | `info` | `warn` | `error`, default `info`).
 
@@ -179,7 +175,7 @@ the game stays in front for the whole ride.
 ```
 
 1. **Scan** — endless 10s bursts (3s gap), filtered by Zwift's manufacturer ID
-   `0x094A` or a `zwift*` name. `-addr` bypasses scanning entirely.
+   `0x094A` or a `zwift*` name.
 2. **Connect** — WinRT GATT, with a retry loop because Windows returns a
    partial service list right after connect. Characteristics are matched by
    UUID across _all_ services: Async `…0002` (notify), SyncRX `…0003` (write),
