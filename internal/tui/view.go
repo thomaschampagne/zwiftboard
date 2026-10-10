@@ -28,6 +28,9 @@ var (
 	sHold    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
 	sChip    = lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(cAccent).Padding(0, 1)
 	sKeyHint = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	// sReleased gets the same Padding(0,1) as sDown/sHold so "○ released"
+	// fills the same 12-column status cell as the other two states.
+	sReleased = lipgloss.NewStyle().Foreground(cMuted).Padding(0, 1)
 )
 
 const (
@@ -36,6 +39,10 @@ const (
 	maxLogWidth  = 320 // the log panel may use the whole terminal (double the old 160 cap)
 	defaultWidth = 80  // before the first WindowSizeMsg
 	logLines     = 10
+	// keycapW is the fixed keycap cell width, so the status column starts at
+	// the same offset on every row whatever the token length ("a" vs the
+	// longest valid token, "backspace").
+	keycapW = 9
 )
 
 // innerWidth is the usable width inside a card, following the terminal.
@@ -134,20 +141,23 @@ func (m Model) table() string {
 	} else {
 		for _, name := range m.cfg.Buttons {
 			key, ok := m.cfg.Bindings[name]
-			cap := sMuted.Render("—")
+			// Fixed-width keycap cell (keycapW): the status column starts at
+			// the same offset whatever the token, in every phase.
+			cap := sMuted.Render("—" + strings.Repeat(" ", keycapW-1))
 			label := ""
 			var style lipgloss.Style
 			if ok {
-				cap = sKeycap.Render(key)
+				tok := padRight(key, keycapW)
+				cap = sKeycap.Render(tok)
 				switch m.keyPhase(name) {
 				case PhasePressed:
-					cap = sDown.Render(key)
+					cap = sDown.Render(tok)
 					label, style = "▶ pressed", sDown
 				case PhaseHold:
-					cap = sHold.Render(key)
+					cap = sHold.Render(tok)
 					label, style = pulse(m.now())+" hold", sHold
 				case PhaseReleased:
-					label, style = "○ released", sMuted
+					label, style = "○ released", sReleased
 				}
 			}
 			out := padRight(label, 12)
@@ -235,8 +245,16 @@ func padRight(s string, n int) string {
 // "key is repeating" motion cue while a key is held.
 var pulseFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
+// pulse picks the current spinner frame. The division and the modulo stay in
+// int64 and the result is made non-negative before indexing: converting the
+// raw quotient to int first can wrap negative on 32-bit, and a negative frame
+// index would panic.
 func pulse(now time.Time) string {
-	return pulseFrames[int(now.UnixNano()/int64(holdTick))%len(pulseFrames)]
+	i := now.UnixNano() / int64(holdTick) % int64(len(pulseFrames))
+	if i < 0 {
+		i += int64(len(pulseFrames))
+	}
+	return pulseFrames[i]
 }
 
 var (

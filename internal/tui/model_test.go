@@ -96,6 +96,36 @@ func TestKeyStateIgnoresUnmapped(t *testing.T) {
 	}
 }
 
+// A press must never hand the loop a tick-producing cmd: tickMsg re-arms the
+// timer chain, so one chain per press would grow without bound (the chain is
+// Init-driven only).
+func TestKeyDownDoesNotStartTickChain(t *testing.T) {
+	m := New(testCfg())
+	var cmds []tea.Cmd
+	for _, btn := range []string{"A", "B", "PLUS"} { // every mapped button
+		next, cmd := m.Update(KeyStateMsg{Button: btn, Down: true})
+		m = next.(Model)
+		if cmd == nil {
+			t.Fatalf("%s down returned no cmd", btn)
+		}
+		cmds = append(cmds, cmd)
+	}
+	for i, cmd := range cmds {
+		if _, isTick := cmd().(tickMsg); isTick {
+			t.Fatalf("press %d returned tickMsg: the press would start a permanent tick chain", i)
+		}
+	}
+}
+
+// An up for a key that was never down (stale or foreign frame) must change
+// nothing and schedule nothing.
+func TestKeyUpWithoutPriorDownIsNoOp(t *testing.T) {
+	next, cmd := New(testCfg()).Update(KeyStateMsg{Button: "A", Down: false})
+	if cmd != nil || len(next.(Model).keys) != 0 {
+		t.Fatal("up for a key never seen down must be a no-op")
+	}
+}
+
 func TestStaleExpiryDoesNotClearHeldKey(t *testing.T) {
 	m, _ := keyModel()
 	next, _ := m.Update(KeyStateMsg{Button: "A", Down: true})
@@ -112,14 +142,23 @@ func TestDemoPressRunsFullCycle(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("digit should emit a cmd")
 	}
-	// Batch: fast-tick + scheduled release.
+	if n.(Model).keyPhase("A") != PhasePressed {
+		t.Fatal("3 should press A")
+	}
+	// Batch: the one-shot repaint (pressed → hold flips on time) + the
+	// scheduled release. The repaint must not be a tickMsg: that would be a
+	// recurring chain handed to every demo press.
 	batch, ok := cmd().(tea.BatchMsg)
 	if !ok || len(batch) != 2 {
 		t.Fatalf("demo press cmds = %v, want a 2-command batch", cmd())
 	}
-	n, _ = n.Update(batch[0]())
-	if n.(Model).keyPhase("A") != PhasePressed {
-		t.Fatal("3 should press A")
+	repaint := batch[0]() // blocks until holdAfter, like the program does
+	if _, isRepaint := repaint.(repaintMsg); !isRepaint {
+		t.Fatalf("first batch cmd = %T, want repaintMsg", repaint)
+	}
+	n, _ = n.Update(repaint)
+	if n.(Model).keyPhase("A") != PhaseHold {
+		t.Fatal("repaint should land on the pressed → hold flip")
 	}
 	up := batch[1]() // fires demoHoldFor later
 	n, _ = n.Update(up)

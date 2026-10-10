@@ -148,10 +148,16 @@ func (m Model) anyKeyDown() bool {
 // even when no other message arrives.
 const refreshEvery = 500 * time.Millisecond
 
+// repaintMsg is the ONE-SHOT redraw a press schedules: bubbletea rebuilds
+// the View on any message, so a press needs no chain — a recurring tick per
+// press would add one permanent timer chain to the loop with every click.
+type repaintMsg struct{}
+
 type tickMsg struct{}
 
 // tickCmd schedules the next redraw: fast while a key is down (the hold
-// pulse), slow otherwise (log lines).
+// pulse), slow otherwise (log lines). This is the only recurring chain: it is
+// armed by Init and re-armed by tickMsg alone.
 func (m Model) tickCmd() tea.Cmd {
 	d := refreshEvery
 	if m.anyKeyDown() {
@@ -177,6 +183,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tickMsg:
 		return m, m.tickCmd()
+	case repaintMsg:
+		// One-shot redraw, nothing to re-arm: the View rebuilds because a
+		// message arrived. tickMsg (Init-driven) owns the timer chain.
+		return m, nil
 	case BTMsg:
 		m.bt = bool(msg)
 	case FocusMsg:
@@ -273,7 +283,9 @@ func (m *Model) clampLogScroll() {
 }
 
 // keyDown records a press (copy-on-write, like the old flash map) and asks
-// for an early redraw so pressed → hold flips on time. A duplicate down — the
+// for ONE repaint at holdAfter so pressed → hold flips on time. It must stay
+// one-shot: returning a recurring tick here would arm a new permanent timer
+// chain with every press (unbounded View rebuilds). A duplicate down — the
 // pair's mirrored frame — is ignored, keeping the first press's stamp.
 func (m Model) keyDown(button string) (tea.Model, tea.Cmd) {
 	if s, ok := m.keys[button]; ok && s.down {
@@ -285,7 +297,7 @@ func (m Model) keyDown(button string) (tea.Model, tea.Cmd) {
 	}
 	k[button] = keyState{down: true, at: m.now()}
 	m.keys = k
-	return m, tea.Tick(holdTick, func(time.Time) tea.Msg { return tickMsg{} })
+	return m, tea.Tick(holdAfter, func(time.Time) tea.Msg { return repaintMsg{} })
 }
 
 // keyUp records a release and schedules the fade-out expiry. A duplicate up
