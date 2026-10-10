@@ -16,7 +16,8 @@ go run .                           # on real Windows + Bluetooth hardware
 ```
 
 No hardware here: `Watch`/`Session` correctness is reviewed, not tested.
-Tests cover config parsing, key resolution and the button-handler dedup logic.
+Tests cover config parsing, key resolution, the button-handler dedup logic, the
+TUI key-state model and the config-path tests.
 
 ## Layout
 

@@ -25,9 +25,9 @@ const focusProgramKey = "focusProgramNamePrefixOnClick"
 
 // doc is the config.yaml structure.
 type doc struct {
-	LogLevel                string                       `yaml:"loglevel"`
+	LogLevel                      string                       `yaml:"loglevel"`
 	FocusProgramNamePrefixOnClick *string                      `yaml:"focusProgramNamePrefixOnClick"` // set at top level = error (moved into profiles)
-	Profiles                map[string]map[string]string `yaml:"profiles"`
+	Profiles                      map[string]map[string]string `yaml:"profiles"`
 }
 
 // Config is the parsed config file for the selected profile.
@@ -72,7 +72,7 @@ func Load(path, profile string) (Config, error) {
 		return cfg, fmt.Errorf("%s: %s moved — it is now a per-profile key, put it inside the profile block (e.g. under `%s:`)", path, focusProgramKey, DefaultProfile)
 	}
 	if len(d.Profiles) == 0 {
-		return cfg, fmt.Errorf("%s: no profiles found — expected a top-level `profiles:` map, each profile mapping buttons to keys (see config.yaml)", path)
+		return cfg, fmt.Errorf("%s: no profiles found — expected a top-level `profiles:` map, each profile mapping buttons to keys", path)
 	}
 	raw, ok := d.Profiles[profile]
 	if !ok {

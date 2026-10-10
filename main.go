@@ -1,6 +1,6 @@
 // Zwift Click V2 BLE listener for Windows (WinRT via tinygo.org/x/bluetooth).
 //
-//	go run . [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config config.yaml] [-p mywhoosh] [-ack=true] [-log zwiftboard.log]
+//	go run . [-v] [-scan 10s] [-addr D4:06:0F:A9:86:04,...] [-config path] [-p mywhoosh] [-ack=true] [-log zwiftboard.log]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
 // keyboard keys (Windows keybd_event). Log level comes from config.yaml

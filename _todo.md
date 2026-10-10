@@ -1,6 +1,6 @@
 - [x] Focus window as startWith to match MyWhooshHD for example when settings only MyWhoosh
 - [x] Emulate long key pressed until clicks are released (to support steering in mywhoosh like long press left/right keys)
-  - [ ] Update UI state pressed, hold, released
+  - [x] Update UI state pressed, hold, released
 - [x] Store config under ~\AppData\Local\zwiftboard\config.yml + remove release of config.yml zipped w/ .exe
 - [ ] Are go files (except main.go) at root in good location ? Move them if required according golang best pratices.
 - [ ] Cleanup cli options: only meaningfull for user. Drop deprecated according current codebase.

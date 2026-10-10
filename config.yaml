@@ -1,6 +1,7 @@
 # Button -> keyboard key profiles.
-# Loaded from the working directory at startup (-config overrides the path,
-# -p/--profile picks the profile, default: mywhoosh).
+# Created on first run at %LocalAppData%\zwiftboard\config.yml; edit and
+# restart to apply. -config overrides the path, -p/--profile picks the
+# profile, default: mywhoosh.
 #
 # loglevel: debug | info | warn | error — -v on the CLI forces debug.
 loglevel: info
@@ -30,11 +31,11 @@ loglevel: info
 # RIGHT POD ONLY: this build uses the RIGHT Click V2 pod (Z Y A B PLUS). The
 # LEFT pod (LEFT UP RIGHT DOWN MIN — the arrows and minus) is unreliable to
 # keep connected and is not used; do not add those button names below. Gear
-# down was MIN on the left pod, so profiles that shifted gears (mywhoosh,
-# rouvy) keep only gear UP on PLUS.
+# down was MIN on the left pod; mywhoosh now shifts both ways on the right
+# pod — gear down on PLUS (k), gear up on B (i).
 profiles:
-  # MyWhoosh: I = gear up, space = power-up, esc = pause menu, tab = camera,
-  # u = U-turn / minimal UI. (Gear down (K) was MIN on the left pod — unmapped.)
+  # MyWhoosh: K = gear down (PLUS), I = gear up (B), u = U-turn / minimal UI
+  # (Y), right / left steering (A / Z).
   mywhoosh:
     PLUS: k            # shift down (easier gear)
     A: right

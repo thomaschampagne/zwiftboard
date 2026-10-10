@@ -36,8 +36,8 @@ Wahoo SYSTM, and whatever comes next.
    ```
    time=... level=INFO msg="profile loaded" profile=mywhoosh bindings=10
    time=... level=INFO msg=scanning controller=...
-   time=... level=INFO msg="key mapping" button=PLUS key=i
-   time=... level=INFO msg="state=pressed" button=PLUS key=i
+   time=... level=INFO msg="key mapping" button=PLUS key=k
+   time=... level=INFO msg="state=pressed" button=PLUS key=k
    ```
 
 Press a button during a scan burst to wake a controller. Scanning never gives
@@ -51,7 +51,7 @@ zwiftboard [flags]
 
 | Flag              | Default       | Meaning                                                              |
 | ----------------- | ------------- | -------------------------------------------------------------------- |
-| `-p`, `--profile` | `mywhoosh`    | Profile from `config.yaml` (unknown name errors with the list)       |
+| `-p`, `--profile` | `mywhoosh`    | Profile from the config file at `%LocalAppData%\zwiftboard\config.yml` (unknown name errors with the list) |
 | `-config` | `%LocalAppData%\zwiftboard\config.yml` | Config file path (default: per-user AppData folder) |
 | `-scan`           | `10s`         | Length of one scan burst; bursts repeat until all controllers are up |
 | `-addr`           | _(scanning)_  | Comma-separated BLE MACs — skip scanning, connect straight to these  |
@@ -81,14 +81,14 @@ go run . -demo                 # b bluetooth, [ ] cycle left/right pod, 1-5 clic
 Notes: the screen only observes (it never gates or touches a session). With
 `-addr` pod sides are unknown, so a pod shows "not detected" until connected.
 
-Log level otherwise comes from `loglevel:` in `config.yaml`
-(`debug` | `info` | `warn` | `error`, default `info`).
+Log level otherwise comes from `loglevel:` in the config file
+(`%LocalAppData%\zwiftboard\config.yml`; `debug` | `info` | `warn` | `error`, default `info`).
 
 ### Included profiles
 
 | Profile       | Click becomes…                                             | Source                                                                                                              |
 | ------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `mywhoosh`    | `+` gear up, space power-up, esc pause, tab camera, u U-turn | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                     |
+| `mywhoosh`    | `+` gear down, `i` gear up, space power-up, esc pause, tab camera, u U-turn | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                     |
 | `zwift`       | space power-up, esc menu, pgup FTP bias, f3 Ride On, f1 elbow | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                     |
 | `rouvy`       | `.` gear up, space pause, k kudos, e ERG                   | [Rouvy mapping](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)  |
 | `trainerroad` | space pause, t mode, h heart-rate, w workout               | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts) |
@@ -96,8 +96,9 @@ Log level otherwise comes from `loglevel:` in `config.yaml`
 
 **Right pod only.** This build uses the RIGHT Click V2 pod: buttons `A` `B` `Y`
 `Z` `PLUS`. The LEFT pod (`A`-column arrows + minus) is unreliable to keep
-connected and is not used. Gear down was `MIN` on the left pod, so the profiles
-that shifted gears (`mywhoosh`, `rouvy`) keep only gear **up** on `PLUS`.
+connected and is not used. Gear down used to be `MIN` on the left pod; the
+default `mywhoosh` profile now shifts on the Right pod — `PLUS` = gear **down**
+(`k`), `B` = gear **up** (`i`).
 
 ## Configuration
 
