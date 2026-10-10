@@ -10,23 +10,12 @@ concurrency:
 
 jobs:
   checks:
-    name: fmt, vet, test, windows build
+    name: quality guards
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: gofmt
-        run: |
-          out=$(gofmt -l .)
-          if [ -n "$out" ]; then
-            echo "gofmt needed on:" && echo "$out"
-            exit 1
-          fi
-      - name: go vet
-        run: go vet ./...
-      - name: go test
-        run: go test ./...
-      - name: build (windows/amd64)
-        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...
+      - name: quality guards
+        run: sh scripts/ci.sh

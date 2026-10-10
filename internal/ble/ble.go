@@ -246,7 +246,7 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 // button silence it returns a pod reset INSTEAD, exactly once: writing 0x18
 // reboots the pod on our schedule, before its ~65s idle watchdog can strand
 // it asleep for 30-40s — the pod re-advertises within seconds and the
-	// scan-gated caller reconnects. Observed on Windows: with the LEFT pod detected nearby the
+// scan-gated caller reconnects. Observed on Windows: with the LEFT pod detected nearby the
 // right pod STILL dropped ~67-72s after its last button, so the reset is sent
 // regardless of the left pod.
 func keepaliveTick(resetSent bool, lastActivity, now time.Time) (reset, ping bool) {

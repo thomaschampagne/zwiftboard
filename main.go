@@ -49,7 +49,7 @@ var (
 )
 
 func main() {
-configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing)")
+	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing)")
 	var profile string
 	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
 	var verbose bool
