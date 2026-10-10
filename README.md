@@ -1,20 +1,15 @@
 # zwiftboard
 
-**Your Zwift Click V2 controllers, as a keyboard remote for ANY PC cycling app.**
+**Your Zwift Click V2 controller as a Bluetooth keyboard.**
 
-[![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](#quick-start)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-green)](.github/workflows)
+Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it to their app. `zwiftboard` unlocks it: connect over Bluetooth, press a button, and it **types real keyboard keys**.
 
-Zwift Click V2 is an inexpensive pair of wireless BLE controllers — but they only
-pair with the Zwift app. `zwiftboard` listens to them directly over Bluetooth,
-decodes the button frames, and **types real keyboard keys on Windows**. Any app
-that understands the keyboard works: MyWhoosh, Zwift, Rouvy, TrainerRoad,
-Wahoo SYSTM, and whatever comes next.
-
-- No Zwift account, no Zwift app, no 24h controller unlock — just the controllers and your PC's Bluetooth.
-- Buttons map to keys through named profiles in a YAML file (5 platforms pre-configured).
-- Runs as a small tray-less console app: start it, press controllers buttons, ride.
+- **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), TrainerRoad, Wahoo SYSTM, or any executable you can map.
+- **No tricks** - no Zwift account, no 24h controller unlock. Works out of the box.
+- **Free** - no paid features, no subscriptions like some others implementations.
+- **Profiles** - configurable with pre-built profiles per platform.
+- **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
+- **Scope** - Zwift Click V2 only, Windows only.
 
 ---
 
@@ -49,15 +44,15 @@ up: a controller switched on 10 minutes later still gets picked up.
 zwiftboard [flags]
 ```
 
-| Flag              | Default       | Meaning                                                              |
-| ----------------- | ------------- | -------------------------------------------------------------------- |
-| `-p` | `mywhoosh`    | Profile from the config file at `%LocalAppData%\zwiftboard\config.yml` (unknown name errors with the list) |
-| `-config` | `%LocalAppData%\zwiftboard\config.yml` | Config file path (default: per-user AppData folder) |
-| `-v` | `false`       | Force `debug` log level (raw frames, service list)                   |
-| `-log` | _(none)_      | Also write log lines to this file (truncated at startup; TUI mode defaults to `zwiftboard.log`) |
-| `-plain` | `false`      | Plain log output on stderr instead of the TUI status screen          |
-| `-demo` | `false`       | TUI with mock toggle keys, no Bluetooth (try the screen anywhere)    |
-| `-version` | `false`     | Print version and exit                                               |
+| Flag       | Default                                | Meaning                                                                                                    |
+| ---------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `-p`       | `mywhoosh`                             | Profile from the config file at `%LocalAppData%\zwiftboard\config.yml` (unknown name errors with the list) |
+| `-config`  | `%LocalAppData%\zwiftboard\config.yml` | Config file path (default: per-user AppData folder)                                                        |
+| `-v`       | `false`                                | Force `debug` log level (raw frames, service list)                                                         |
+| `-log`     | _(none)_                               | Also write log lines to this file (truncated at startup; TUI mode defaults to `zwiftboard.log`)            |
+| `-plain`   | `false`                                | Plain log output on stderr instead of the TUI status screen                                                |
+| `-demo`    | `false`                                | TUI with mock toggle keys, no Bluetooth (try the screen anywhere)                                          |
+| `-version` | `false`                                | Print version and exit                                                                                     |
 
 ### Status screen (TUI)
 
@@ -82,13 +77,13 @@ Log level otherwise comes from `loglevel:` in the config file
 
 ### Included profiles
 
-| Profile       | Click becomes…                                             | Source                                                                                                              |
-| ------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Profile       | Click becomes…                                                              | Source                                                                                                              |
+| ------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `mywhoosh`    | `+` gear down, `i` gear up, space power-up, esc pause, tab camera, u U-turn | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                     |
-| `zwift`       | space power-up, esc menu, pgup FTP bias, f3 Ride On, f1 elbow | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                     |
-| `rouvy`       | `.` gear up, space pause, k kudos, e ERG                   | [Rouvy mapping](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)  |
-| `trainerroad` | space pause, t mode, h heart-rate, w workout               | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts) |
-| `systm`       | space pause, `` ` `` ERG, m mute                           | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)              |
+| `zwift`       | space power-up, esc menu, pgup FTP bias, f3 Ride On, f1 elbow               | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                     |
+| `rouvy`       | `.` gear up, space pause, k kudos, e ERG                                    | [Rouvy mapping](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)  |
+| `trainerroad` | space pause, t mode, h heart-rate, w workout                                | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts) |
+| `systm`       | space pause, `` ` `` ERG, m mute                                            | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)              |
 
 **Right pod only.** This build uses the RIGHT Click V2 pod: buttons `A` `B` `Y`
 `Z` `PLUS`. The LEFT pod (`A`-column arrows + minus) is unreliable to keep
@@ -138,10 +133,10 @@ window is different:
 ```yaml
 profiles:
   mywhoosh:
-    focusProgramNamePrefixOnClick: null        # disabled (default): keys → focused window
-    focusProgramNamePrefixOnClick: MyWhoosh    # window title contains "MyWhoosh"
+    focusProgramNamePrefixOnClick: null # disabled (default): keys → focused window
+    focusProgramNamePrefixOnClick: MyWhoosh # window title contains "MyWhoosh"
   zwift:
-    focusProgramNamePrefixOnClick: ZwiftApp    # or .exe name starts with it (ZwiftApp.exe)
+    focusProgramNamePrefixOnClick: ZwiftApp # or .exe name starts with it (ZwiftApp.exe)
 ```
 
 The value matches the window title (case-insensitive contains) or the start of
@@ -186,7 +181,7 @@ the game stays in front for the whole ride.
 4. **Decode** — button frames start with `0x23`; protobuf field 1 is a bitmap
    where **0 = pressed**. Bits: `LEFT 0x1 UP 0x2 RIGHT 0x4 DOWN 0x8 A 0x10
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
- 5. **Hold** — a mapped key goes **down** on the pressed transition and
+5. **Hold** — a mapped key goes **down** on the pressed transition and
    **up** on the released one, so holding a button holds the key (steering
    in MyWhoosh needs the left/right hold). While held, the key auto-repeats
    like a real keyboard (250ms delay, ~33ms interval — a synthetic press is
@@ -197,7 +192,7 @@ the game stays in front for the whole ride.
    `focusProgramNamePrefixOnClick` is set, the configured window is brought
    to the foreground before the key goes out via Windows `keybd_event`.
 
-**Right pod only.** The Click V2 ships as two pods that work as a *pair*: the
+**Right pod only.** The Click V2 ships as two pods that work as a _pair_: the
 LEFT pod is the pair's BLE anchor and the RIGHT pod mirrors its state to the
 LEFT over a private RF link. This build uses the RIGHT pod only (the LEFT pod is
 unreliable to keep connected); with only the RIGHT pod connected its LED stays
@@ -210,16 +205,16 @@ connects are serialized so they never overlap an active scan.
 
 ## Troubleshooting
 
-| Symptom                                       | Fix                                                                                                                       |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Right pod drops, logs `session ended`        | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again. |
-| Right pod's LED blinks while connected        | Normal: this build uses the RIGHT pod only and the pair's anchor (LEFT) is missing, so the LED stays in advertising mode. Cosmetic — button delivery is unaffected. |
-| One press holds the key down                  | Normal: keys follow the button — held while pressed, released on release (steering needs the hold).                      |
-| `found "" addr=D4:06:0F:…`                    | Normal — the advertisement carries no name; address is what matters.                                                      |
-| Controller not found                          | Press any button to wake it during the scan burst; keep it awake.                                                         |
-| Keys land in the wrong window                 | Set `focusProgramNamePrefixOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it. |
-| App quits / stops responding after a while    | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. Switching Windows Bluetooth off mid-run also survives: sessions end, scanning retries every 3s, and it reconnects when Bluetooth comes back. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
-| Nothing works with Zwift open                 | Close Zwift / Companion first: one BLE connection per controller.                                                         |
+| Symptom                                    | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Right pod drops, logs `session ended`      | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again.                                                                                                                                                                                         |
+| Right pod's LED blinks while connected     | Normal: this build uses the RIGHT pod only and the pair's anchor (LEFT) is missing, so the LED stays in advertising mode. Cosmetic — button delivery is unaffected.                                                                                                                                                                                                                                                                         |
+| One press holds the key down               | Normal: keys follow the button — held while pressed, released on release (steering needs the hold).                                                                                                                                                                                                                                                                                                                                         |
+| `found "" addr=D4:06:0F:…`                 | Normal — the advertisement carries no name; address is what matters.                                                                                                                                                                                                                                                                                                                                                                        |
+| Controller not found                       | Press any button to wake it during the scan burst; keep it awake.                                                                                                                                                                                                                                                                                                                                                                           |
+| Keys land in the wrong window              | Set `focusProgramNamePrefixOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it.                                                                                                                                                                                                                                                                                                        |
+| App quits / stops responding after a while | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. Switching Windows Bluetooth off mid-run also survives: sessions end, scanning retries every 3s, and it reconnects when Bluetooth comes back. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
+| Nothing works with Zwift open              | Close Zwift / Companion first: one BLE connection per controller.                                                                                                                                                                                                                                                                                                                                                                           |
 
 Not a HID keyboard: Zwift itself won't see the Click as a Bluetooth keyboard
 here — only the Windows foreground app receives the simulated keys.

@@ -4,8 +4,8 @@
 - [x] Store config under ~\AppData\Local\zwiftboard\config.yml + remove release of config.yml zipped w/ .exe
 - [x] Are go files (except main.go) at root in good location ? Move them if required according golang best pratices.
 - [x] Cleanup cli options: only meaningfull for user. Drop deprecated according current codebase.
-- [ ] Clean reference to any externals projects you were inspired of
-- [ ] As a marketing expert: Define simple project tagline : "Your Zwift Click V2 controller as a bluetooth keyboard" with first read pitch for README.md
+- [x] Clean reference to any externals projects you were inspired of
+- [x] As a marketing expert: Define simple project tagline : "Your Zwift Click V2 controller as a bluetooth keyboard" with first read pitch for README.md
   - Support any virtual cycling platorm (virtual shifting, steering, cameras, ...) with the right controller. Support any program
   - No 24h controller unlock or similar tridk, works out of the box, just need Windows with bluetooth connection
   - Can focus the program first to ensure mapped keyboard keys
