@@ -36,9 +36,9 @@ profiles:
   # MyWhoosh: I = gear up, space = power-up, esc = pause menu, tab = camera,
   # u = U-turn / minimal UI. (Gear down (K) was MIN on the left pod — unmapped.)
   mywhoosh:
-    PLUS: i         # shift up (harder gear)
+    PLUS: k            # shift down (easier gear)
     A: right
-    B: k            # shift down (easier gear)
+    B: i         # shift up (harder gear)
     Y: u            # U-turn / minimal UI toggle
     Z: left
     focusProgramNamePrefixOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
