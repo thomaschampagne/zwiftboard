@@ -6,7 +6,7 @@
 - [ ] Cleanup cli options: only meaningfull for user. Drop deprecated according current codebase.
 - [ ] Clean reference to any externals projects
 - [ ] Review README.md + AGENTS.md according code base and git history changes (HANDOFF.md and docs/ might help)
-- [ ] Define simple projet tagline: "Your Zwift Click V2 controller as a bluetooth keyboard" 
+- [ ] As a marketing expert: Define simple project tagline : "Your Zwift Click V2 controller as a bluetooth keyboard" with first read pitch for README.md
   - Support any virtual cycling platorm (virtual shifting, steering, cameras, ...) with the right controller. Support any program
   - No 24h controller unlock or similar tricdk, works out of the box, just need Windows with bluetooth connection
   - Can focus the program first to ensure mapped keyboard keys
