@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // defaultConfig is the shipped config.yaml, compiled into the binary so a
@@ -35,14 +36,23 @@ func defaultConfigPath() string {
 	return filepath.Join(configDir(), "config.yml")
 }
 
-// defaultLegacyConfigPaths are the pre-AppData locations (config.yaml next to
-// the executable; cwd for `go run` builds in temp). Overridable in tests.
+// defaultLegacyConfigPaths are the pre-AppData locations: config.yaml next to
+// the executable, plus the cwd-relative one only for `go run` builds (whose
+// executable lives in the temp dir, where a config beside it would be lost).
+// A release exe must never adopt a config.yaml from whatever folder it was
+// started in: an unrelated file copied into %LocalAppData% that fails to load
+// would exit(1) on every start. Overridable in tests.
 var defaultLegacyConfigPaths = func() []string {
-	var out []string
-	if exe, err := os.Executable(); err == nil {
-		out = append(out, filepath.Join(filepath.Dir(exe), "config.yaml"))
+	exe, err := os.Executable()
+	if err != nil {
+		return nil
 	}
-	return append(out, "config.yaml")
+	dir := filepath.Dir(exe)
+	out := []string{filepath.Join(dir, "config.yaml")}
+	if strings.HasPrefix(dir, filepath.Clean(os.TempDir())) {
+		out = append(out, "config.yaml")
+	}
+	return out
 }
 var legacyConfigPaths = defaultLegacyConfigPaths
 
