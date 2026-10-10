@@ -5,34 +5,74 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // defaultConfig is the shipped config.yaml, compiled into the binary so a
-// lone zwiftboard.exe is self-sufficient: on first run it is written next to
-// the program for the user to edit.
+// lone zwiftboard.exe is self-sufficient: on first run it is written to
+// %LocalAppData%\zwiftboard\config.yml for the user to edit.
 //
 //go:embed config.yaml
 var defaultConfig []byte
 
-// defaultConfigPath is config.yaml next to the executable (a double-clicked
-// exe has an unrelated cwd). `go run` builds into the temp dir, where a config
-// would be lost, so fall back to the cwd there.
-func defaultConfigPath() string {
-	exe, err := os.Executable()
+// configDir is the per-user config directory: %LOCALAPPDATA%\zwiftboard on
+// Windows (the exe folder is often read-only for a normal user — Program
+// Files, Downloads), os.UserConfigDir()/zwiftboard elsewhere so dev machines
+// and CI get a stable location regardless of where the binary runs. Overridable
+// in tests.
+var configDir = func() string {
+	if d := os.Getenv("LOCALAPPDATA"); d != "" {
+		return filepath.Join(d, "zwiftboard")
+	}
+	base, err := os.UserConfigDir()
 	if err != nil {
-		return "config.yaml"
+		return "zwiftboard" // last resort: relative to cwd
 	}
-	dir := filepath.Dir(exe)
-	if strings.HasPrefix(dir, filepath.Clean(os.TempDir())) {
-		return "config.yaml"
-	}
-	return filepath.Join(dir, "config.yaml")
+	return filepath.Join(base, "zwiftboard")
 }
 
-// ensureConfig writes the embedded default to path when the file is missing.
-// Never overwrites; failure is recoverable (the app runs in log-only mode).
+// defaultConfigPath is where the config lives by default; -config overrides it.
+func defaultConfigPath() string {
+	return filepath.Join(configDir(), "config.yml")
+}
+
+// defaultLegacyConfigPaths are the pre-AppData locations (config.yaml next to
+// the executable; cwd for `go run` builds in temp). Overridable in tests.
+var defaultLegacyConfigPaths = func() []string {
+	var out []string
+	if exe, err := os.Executable(); err == nil {
+		out = append(out, filepath.Join(filepath.Dir(exe), "config.yaml"))
+	}
+	return append(out, "config.yaml")
+}
+var legacyConfigPaths = defaultLegacyConfigPaths
+
+// ensureConfig migrates a legacy config once, then writes the embedded default
+// to path when the file is missing. Never overwrites; failure is recoverable
+// (the app runs in log-only mode).
 func ensureConfig(path string) {
+	if dir := filepath.Dir(path); dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			slog.Warn("cannot create config directory", "dir", dir, "err", err)
+			return
+		}
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		for _, legacy := range legacyConfigPaths() {
+			if legacy == path {
+				continue
+			}
+			b, rerr := os.ReadFile(legacy)
+			if rerr != nil {
+				continue
+			}
+			if werr := os.WriteFile(path, b, 0o644); werr != nil {
+				slog.Warn("cannot migrate legacy config", "from", legacy, "to", path, "err", werr)
+				return
+			}
+			slog.Info("migrated config to the new location", "from", legacy, "to", path)
+			return
+		}
+	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if !os.IsExist(err) {

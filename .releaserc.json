@@ -15,7 +15,7 @@
       {
         "assets": [
           { "path": "dist/zwiftboard-windows-amd64.exe", "label": "zwiftboard-windows-amd64.exe" },
-          { "path": "dist/zwiftboard-windows-amd64.zip", "label": "zwiftboard-windows-amd64.zip (exe + config.yaml)" },
+          { "path": "dist/zwiftboard-windows-amd64.zip", "label": "zwiftboard-windows-amd64.zip (exe)" },
           { "path": "dist/checksums.txt", "label": "checksums.txt (sha256)" }
         ]
       }

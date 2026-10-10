@@ -47,7 +47,7 @@ func main() {
 	scanFor := flag.Duration("scan", 10*time.Second, "length of one scan burst; scanning repeats until controllers are found and keeps listening for new ones")
 	reconnect := flag.Duration("reconnect", 30*time.Second, "connect only to a controller seen advertising within this window (a sleeping right pod is never hammered by address)")
 	addrList := flag.String("addr", "", "comma-separated BLE addresses (e.g. D4:06:0F:A9:86:04) — manages exactly these; each must visibly advertise before it is connected (a pod's radio wakes ~30-60s after sleeping)")
-	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: next to the program; created from the built-in default if missing)")
+	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing)")
 	var profile string
 	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
 	flag.StringVar(&profile, "profile", config.DefaultProfile, "config profile to use (same as -p)")

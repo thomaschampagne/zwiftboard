@@ -7,6 +7,5 @@ rm -rf dist && mkdir dist
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
   -ldflags="-s -w -X main.version=${VERSION}" \
   -o dist/zwiftboard-windows-amd64.exe .
-cp config.yaml dist/config.yaml
-(cd dist && zip -q zwiftboard-windows-amd64.zip zwiftboard-windows-amd64.exe config.yaml && rm config.yaml)
+(cd dist && zip -q zwiftboard-windows-amd64.zip zwiftboard-windows-amd64.exe)
 (cd dist && sha256sum zwiftboard-windows-amd64.exe zwiftboard-windows-amd64.zip > checksums.txt)

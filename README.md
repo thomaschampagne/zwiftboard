@@ -20,9 +20,9 @@ Wahoo SYSTM, and whatever comes next.
 
 ## Quick start
 
-1. **Download** the latest release: grab `zwiftboard-windows-amd64.exe` and
-   `config.yaml` from the [Releases](../../releases) page. Put both in the same
-   folder.
+1. **Download** the latest release: grab `zwiftboard-windows-amd64.exe`
+   from the [Releases](../../releases) page. The config file is created on
+   first run at `%LocalAppData%\zwiftboard\config.yml`.
 2. **Close Zwift / the Companion app** — each controller accepts only one BLE
    connection at a time.
 3. **Run it** and press any button on each controller while it scans:
@@ -52,7 +52,7 @@ zwiftboard [flags]
 | Flag              | Default       | Meaning                                                              |
 | ----------------- | ------------- | -------------------------------------------------------------------- |
 | `-p`, `--profile` | `mywhoosh`    | Profile from `config.yaml` (unknown name errors with the list)       |
-| `-config`         | `config.yaml` | Config file path (relative to cwd)                                   |
+| `-config` | `%LocalAppData%\zwiftboard\config.yml` | Config file path (default: per-user AppData folder) |
 | `-scan`           | `10s`         | Length of one scan burst; bursts repeat until all controllers are up |
 | `-addr`           | _(scanning)_  | Comma-separated BLE MACs — skip scanning, connect straight to these  |
 | `-ack`            | `true`        | Answer a `0xFF 03` challenge with `ff 04 00` (keeps an unlocked pod streaming) |
@@ -101,7 +101,7 @@ that shifted gears (`mywhoosh`, `rouvy`) keep only gear **up** on `PLUS`.
 
 ## Configuration
 
-`config.yaml` sits next to the executable (or pass `-config`). One file:
+The config lives at `%LocalAppData%\zwiftboard\config.yml` (or pass `-config`); a config from the old location next to the exe is migrated there on first run. One file:
 a global `loglevel:` plus a `profiles:` map.
 
 ```yaml
@@ -268,7 +268,6 @@ Versions follow [semver](https://semver.org) and are generated from
 PR creates the `vX.Y.Z` tag and a GitHub Release with:
 
 - `zwiftboard-windows-amd64.exe`
-- `config.yaml` (the reference profiles)
 
 ## Credits
 
