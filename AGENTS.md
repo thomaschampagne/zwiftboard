@@ -71,21 +71,18 @@ TUI key-state model and the config-path tests.
   LED keeps blinking (advertising mode) even though its frames decode fine —
   cosmetic, not a fault.
 - Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`), then a keepalive
-  every 3s re-sending the raw `RideOn` opcode frame — byte-for-byte the
-  qdomyos-zwift PR #4743 keepalive. PROVEN NOT TO HOLD A LONE RIGHT POD: on
-  Windows the link still dies ~65s after the pod's LAST OWN TRANSMISSION (a
-  button frame), deterministically (~64-68s), no matter the payload — plain
-  `RideOn`, `RideOn 02 03`, `00 08 10`, `00 08 00`, with and without ±5s keepalive
-  jitter all failed identically. The right pod's idle watchdog is reset only by
-  its own inbound frames; nothing we write to sync-rx resets it, and there is no
-  unlock/firmware hook for the lone right pod. The keepalive's real job is
-  LIVENESS: a successful write proves the session is up, a failed write is the
-  ONLY disconnect signal (idle 0x23 silence is normal), and a 3s write cadence
-  also keeps us inside WinRT's connection timer. The qdomyos keepalive that
-  actually holds a link belongs to the LEFT pod (24h-unlocked pair), which this
-  right-only build dropped.
-  (OpenBikeControl's real keep-awake is closed source in the private `prop`
-  package, so qdomyos is the open reference.)
+  every 3s re-sending the raw `RideOn` opcode frame. PROVEN NOT TO HOLD A LONE
+  RIGHT POD: on Windows the link still dies ~65s after the pod's LAST OWN
+  TRANSMISSION (a button frame), deterministically (~64-68s), no matter the
+  payload — plain `RideOn`, `RideOn 02 03`, `00 08 10`, `00 08 00`, with and
+  without ±5s keepalive jitter all failed identically. The right pod's idle
+  watchdog is reset only by its own inbound frames; nothing we write to sync-rx
+  resets it, and there is no unlock/firmware hook for the lone right pod. The
+  keepalive's real job is LIVENESS: a successful write proves the session is up,
+  a failed write is the ONLY disconnect signal (idle 0x23 silence is normal),
+  and a 3s write cadence also keeps us inside WinRT's connection timer. The
+  keepalive that actually holds a link belongs to the LEFT pod (24h-unlocked
+  pair), which this right-only build dropped.
 - RECONNECT IS SCAN-GATED, never address-hammered. `Connect(addr)` on a sleeping
   pod leaks one Windows `GattSession` with `SetMaintainConnection(true)` per
   attempt (tinygo gap_windows.go creates it unconditionally and only
@@ -99,16 +96,12 @@ TUI key-state model and the config-path tests.
   advertise all session long (keeping the gate open), so without the clear a
   drop would be followed by retries of the now-sleeping pod by address.
 - PERIODIC POD RESET defeats the ~65s idle sleep (default 55s):
-  after that much button silence the keepalive tick writes a lone `0x18` to
-  sync-rx instead of the RideOn ping — OpenBikeControl's "periodic RESET
-  recovery" (Opcode.RESET=24, per their protocol enum; the dbg Reset pill in
-  zwift_unlock.dart writes `[opcode.value]` to sync-rx withoutResponse, and
-  connection.dart notes "reconnections after an automatic reset happen every
-  minute"). The pod reboots ON OUR SCHEDULE, before its ~65s watchdog strands
-  it asleep for 30-40s; it re-advertises within seconds (`ClickLogic` is
-  otherwise closed source in the `prop` submodule) and the scan gate reconnects.
-  Activity (any received frame) restarts the idle clock and suppresses the
-  reset, so a session in use is never rebooted.
+  after that much button silence the keepalive tick writes a lone `0x18`
+  (Opcode.RESET=24) to sync-rx instead of the RideOn ping. The pod reboots ON
+  OUR SCHEDULE, before its ~65s watchdog strands it asleep for 30-40s; it
+  re-advertises within seconds and the scan gate reconnects. Activity (any
+  received frame) restarts the idle clock and suppresses the reset, so a
+  session in use is never rebooted.
 - Button frame `0x23` + protobuf field 1 = bitmap, **0 = pressed**; bits are
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =

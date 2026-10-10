@@ -180,10 +180,9 @@ the game stays in front for the whole ride.
    partial service list right after connect. Characteristics are matched by
    UUID across _all_ services: Async `…0002` (notify), SyncRX `…0003` (write),
    SyncTX `…0004` (indicate) of service `00000001-19ca-4651-86e5-fa29dcdd09d1`.
-3. **Handshake** — the ZwiftBridge activation trio (`RideOn 02 03`, `00 08 00`,
+3. **Handshake** — the activation trio (`RideOn 02 03`, `00 08 00`,
    `00 08 10`), then a keepalive every 3s re-sending the raw `RideOn` opcode
-   frame — the qdomyos-zwift PR #4743 payload that stops the RIGHT controller's
-   ~1 min deep-sleep.
+   frame that stops the RIGHT controller's ~1 min deep-sleep.
 4. **Decode** — button frames start with `0x23`; protobuf field 1 is a bitmap
    where **0 = pressed**. Bits: `LEFT 0x1 UP 0x2 RIGHT 0x4 DOWN 0x8 A 0x10
    B 0x20 Y 0x40 Z 0x80 MIN 0x100 PLUS 0x1000`.
@@ -268,12 +267,5 @@ PR creates the `vX.Y.Z` tag and a GitHub Release with:
 
 ## Credits
 
-Protocol reverse-engineering stands on the shoulders of
-[ZwiftBridge](https://github.com/jimhoefnagels/ZwiftBridge) (handshake,
-keepalive, button frames),
-[qdomyos-zwift](https://github.com/cagnulein/qdomyos-zwift/pull/4743),
-[Makinolo's Zwift Ride protocol notes](https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/),
-[RideToWoosh](https://github.com/p3dda/RideToWoosh) and
-[zwiftplay](https://github.com/ajchellew/zwiftplay).
 Keyboard shortcuts per game are taken from each vendor's official docs
 (linked in [config.yaml](config.yaml)).

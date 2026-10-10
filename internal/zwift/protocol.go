@@ -1,12 +1,12 @@
 // Package zwift holds the Click V2 protocol facts shared by the BLE and
 // config layers: GATT UUIDs, button bits, frame decoding and small helpers.
 //
-// Protocol notes (Click V2, verified against jimhoefnagels/ZwiftBridge which works):
+// Protocol notes (Click V2):
 //   - activation: write "RideOn"+02 03, then 00 08 00, then 00 08 10 (100ms apart);
 //     unlocked device echoes "RideOn" on SyncTX, a locked one sends a 0xFF challenge
-//   - keepalive: re-send the raw "RideOn" opcode frame every 3s (qdomyos-zwift
-//     PR #4743 payload); this stops the pod's ~1 min deep-sleep. "RideOn"+02 03
-//     and 00 08 10 (alone or combined) did not hold the link on Windows
+//   - keepalive: re-send the raw "RideOn" opcode frame every 3s; this stops the
+//     pod's ~1 min deep-sleep. "RideOn"+02 03 and 00 08 10 (alone or combined)
+//     did not hold the link on Windows
 //   - button frames: 0x23 + protobuf; field 1 = uint32 bitmap, bit==0 means pressed
 //   - LEFT needs a ~24h hardware unlock done by the Zwift app; "ff 04 00" keeps an
 //     already-unlocked device unlocked
@@ -33,8 +33,7 @@ const (
 
 	// Pod device-type bytes (manufacturer data first byte, company 0x094A).
 	// The Click V2 is a PAIR and the side is encoded in the advertisement:
-	// 0x0B = LEFT pod (the pair's BLE anchor), 0x0A = RIGHT pod. Verified
-	// against OpenBikeControl's ZwiftConstants CLICK_V2_LEFT/RIGHT_SIDE.
+	// 0x0B = LEFT pod (the pair's BLE anchor), 0x0A = RIGHT pod.
 	PodRightDeviceID = 0x0A
 	PodLeftDeviceID  = 0x0B
 )
@@ -74,8 +73,7 @@ func PodSide(id byte) Pod {
 }
 
 // Buttons maps Click V2 button bits to names. Bit == 0 in the frame means
-// pressed. Decoded from ZwiftBridge's known-good frame table (the full Zwift
-// Ride layout does not apply).
+// pressed (the full Zwift Ride layout does not apply).
 var Buttons = map[uint32]string{
 	0x00001: "LEFT",  // left module, arrow left
 	0x00002: "UP",    // left module, arrow up

@@ -45,10 +45,10 @@ func TestAsyncNotifySkipsEmpty(t *testing.T) {
 }
 
 func TestKeepalivePayloads(t *testing.T) {
-	// The keepalive re-sends the raw "RideOn" opcode frame to sync-rx — the
-	// qdomyos-zwift PR #4743 payload. The activation trio still uses "RideOn"
-	// 02 03 / 00 08 00 / 00 08 10, 00 08 10 doubles as the teardown probe, and
-	// the idle pod-reset is a lone 0x18 (OpenBikeControl's Opcode.RESET=24).
+	// The keepalive re-sends the raw "RideOn" opcode frame to sync-rx. The
+	// activation trio still uses "RideOn" 02 03 / 00 08 00 / 00 08 10,
+	// 00 08 10 doubles as the teardown probe, and the idle pod-reset is a
+	// lone 0x18 (Opcode.RESET=24).
 	if got := string(rideOn); got != "RideOn" {
 		t.Fatalf("rideOn=% X (%q), want 52 69 64 65 4F 6E", rideOn, got)
 	}

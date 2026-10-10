@@ -41,29 +41,27 @@ var (
 	ackSeq = []byte{0xFF, 0x04, 0x00}
 	keep   = []byte{0x00, 0x08, 0x10} // teardown / connect-failure probe (any write works)
 
-	// resetPod is OpenBikeControl's pod-reset byte: a lone 0x18 written to
-	// sync-rx makes a Click V2 pod reboot and re-advertise instead of falling
-	// into its ~65s idle sleep. See keepaliveTick / IdleReset.
+	// resetPod is the pod-reset byte: a lone 0x18 written to sync-rx makes a
+	// Click V2 pod reboot and re-advertise instead of falling into its ~65s
+	// idle sleep. See keepaliveTick / IdleReset.
 	resetPod = []byte{0x18}
 
-	// IdleReset arms a proactive pod reset after this much button silence.
-	// OpenBikeControl does the same on a ~1 min cadence (their closed ClickLogic
-	// "periodic RESET recovery", per connection.dart "reconnections after an
-	// automatic reset happen every minute") so the pod reboots ON OUR SCHEDULE,
-	// before its ~65s idle watchdog strands it asleep for 30-40s; the scan-gated
-	// caller then reconnects within seconds. 0 disables the reset (-idle-reset).
+	// IdleReset arms a proactive pod reset after this much button silence, so
+	// the pod reboots ON OUR SCHEDULE, before its ~65s idle watchdog strands it
+	// asleep for 30-40s; the scan-gated caller then reconnects within seconds.
+	// 0 disables the reset (-idle-reset).
 	IdleReset = 55 * time.Second
 
 	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
 	// once after connect. The periodic keepalive re-sends plain rideOn ("RideOn").
 	// Nothing we write to sync-rx holds a LONE RIGHT pod: the pod drops the link
 	// ~65s after its last OWN transmission (a button frame) no matter what —
-	// qdomyos's "RideOn"+02 03, 00 08 10, 00 08 00 and plain "RideOn" were each
-	// observed failing identically on Windows. The keepalive's real job is
-	// liveness: a successful write proves the session is up, a failed one
-	// detects the disconnect, and reconnect is scan-gated (main.go waits for the
-	// pod to advertise again). The qdomyos keepalive that holds the link belongs
-	// to the LEFT pod path (unlocked pair), which this right-only build dropped.
+	// every payload variant was observed failing identically on Windows. The
+	// keepalive's real job is liveness: a successful write proves the session is
+	// up, a failed one detects the disconnect, and reconnect is scan-gated
+	// (main.go waits for the pod to advertise again). The keepalive that holds
+	// the link belongs to the LEFT pod path (unlocked pair), which this
+	// right-only build dropped.
 	handshakeStart = append(append([]byte(nil), rideOn...), 0x02, 0x03)
 )
 
@@ -248,8 +246,7 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 // button silence it returns a pod reset INSTEAD, exactly once: writing 0x18
 // reboots the pod on our schedule, before its ~65s idle watchdog can strand
 // it asleep for 30-40s — the pod re-advertises within seconds and the
-// scan-gated caller reconnects. This is OpenBikeControl's periodic RESET
-// recovery. Observed on Windows: with the LEFT pod detected nearby the
+	// scan-gated caller reconnects. Observed on Windows: with the LEFT pod detected nearby the
 // right pod STILL dropped ~67-72s after its last button, so the reset is sent
 // regardless of the left pod.
 func keepaliveTick(resetSent bool, lastActivity, now time.Time) (reset, ping bool) {
@@ -383,7 +380,7 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 	hk := holdKeys(keys.Down, keys.Up)
 	defer hk.ReleaseAll()
 
-	// Activation sequence from ZwiftBridge (verified on Click V2 hardware).
+	// Activation sequence (verified on Click V2 hardware).
 	activation := [][]byte{
 		handshakeStart, // "RideOn" 02 03
 		{0x00, 0x08, 0x00},
@@ -450,21 +447,19 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 	defer markConnected(t.Side, false)
 
 	// Keepalive every 3s: re-send the raw "RideOn" opcode frame to sync-rx.
-	// This is qdomyos-zwift PR #4743's keepalive byte-for-byte. On a LONE RIGHT
-	// pod it does NOT hold the link — the pod still drops ~65s after its last
-	// own transmission; every payload (RideOn alone, "RideOn"+02 03, 00 08 10,
-	// 00 08 00, with and without jitter) fails identically on Windows. The write
-	// is kept as the LIVENESS probe: Idle button silence is normal (0x23 frames
-	// only stream on presses), so the only trustworthy disconnect signal is a
-	// failed keepalive write, and that is why the session is not ended on frame
-	// silence.
+	// On a LONE RIGHT pod it does NOT hold the link — the pod still drops ~65s
+	// after its last own transmission; every payload (RideOn alone,
+	// "RideOn"+02 03, 00 08 10, 00 08 00, with and without jitter) fails
+	// identically on Windows. The write is kept as the LIVENESS probe: Idle
+	// button silence is normal (0x23 frames only stream on presses), so the
+	// only trustworthy disconnect signal is a failed keepalive write, and that
+	// is why the session is not ended on frame silence.
 	//
 	// After IdleReset of silence the tick sends a single pod RESET (0x18)
-	// instead — OpenBikeControl's periodic reset recovery for a right-only pod:
-	// the pod reboots on our schedule before its ~65s idle watchdog can strand
-	// it asleep for 30-40s, re-advertises within seconds, and the scan-gated
-	// caller reconnects. Button activity restarts the idle clock, so a session
-	// in use is never rebooted.
+	// instead: the pod reboots on our schedule before its ~65s idle watchdog
+	// can strand it asleep for 30-40s, re-advertises within seconds, and the
+	// scan-gated caller reconnects. Button activity restarts the idle clock, so
+	// a session in use is never rebooted.
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
 	resetSent := false
