@@ -22,12 +22,12 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 
 - `main.go` (root) — flags, logger setup, target registry, wiring only; a
   single-binary app, so the entry point lives at the repo root (not `cmd/`)
-- `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, global tap dedup
-- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseAll` (keybd_event on windows, no-op elsewhere)
+- `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup
+- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, no-op elsewhere)
 - `internal/config/` — config.yaml: `loglevel:` + `profiles:` map; returns errors (never exits)
 - `internal/zwift/` — protocol facts: GATT UUIDs, button bits, frame decode, label helpers
 - `internal/tui/` — Bubble Tea status screen (default UI; `-plain` = logs). OBSERVATIONAL
-  only: fed by `ble.Connected`/`SideSeenRecently`/`ble.OnTap`; never gate a session on it.
+  only: fed by `ble.Connected`/`SideSeenRecently`/`ble.OnKey`; never gate a session on it.
   `tuirun.go` (root) wires it; in TUI mode slog goes to the log file, not stderr
 
 ## Conventions
@@ -40,7 +40,8 @@ Tests cover config parsing, key resolution and the button-handler dedup logic.
 - Comments explain protocol facts and *why* (there are many device quirks);
   keep them when moving code.
 - Tests live next to their package; keep `buttonHandler`-style dependency
-  injection (tap func as parameter) so logic stays testable without hardware.
+  injection (down/up funcs as parameters) so logic stays testable without
+  hardware.
 
 ## Hard-won facts (do not regress)
 

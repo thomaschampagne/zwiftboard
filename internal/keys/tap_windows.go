@@ -80,19 +80,25 @@ func Tap(b Binding) {
 // Down presses a virtual key and leaves it held (a button is being held).
 // It also starts keyboard auto-repeat: without it a synthetic press is a
 // single event and repeated presses in a text app (Notepad, chat) never
-// happen while the button is held.
-func Down(b Binding) {
+// happen while the button is held. It reports whether the key actually went
+// out — false when the configured focus window is missing — so the caller
+// (ble.Holds) does not record a hold that never reached a window.
+func Down(b Binding) bool {
 	if !focusTarget() {
-		return
+		return false
 	}
 	startRepeat(b.VK)
 	procKeybdEvent.Call(uintptr(b.VK), 0, 0, 0)
+	return true
 }
 
 // Up releases a virtual key previously pressed with Down (button released).
-func Up(b Binding) {
+// Always true (a keyup for a key that is not down is a harmless no-op); the
+// bool keeps Down/Up symmetric for the hold tracker.
+func Up(b Binding) bool {
 	stopRepeat(b.VK)
 	procKeybdEvent.Call(uintptr(b.VK), 0, keyEventKeyUp, 0)
+	return true
 }
 
 // ReleaseVK force-releases a virtual key. ble.ReleaseAll uses it to free

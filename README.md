@@ -248,8 +248,8 @@ Layout — a single binary, entry point at the repo root:
 ```
 main.go               flags, logger setup, target registry, wiring
 internal/zwift/       protocol facts: GATT UUIDs, button bits, frame decode
-internal/ble/         scan (Watch), connect (Session), decode, tap dedup
-internal/keys/        config token → VK code; Tap (keybd_event on Windows)
+internal/ble/         scan (Watch), connect (Session), decode, hold + cross-session dedup
+internal/keys/        config token → VK code; Down/Up/ReleaseVK (keybd_event on Windows)
 internal/config/      config.yaml: loglevel + profiles (returns errors)
 ```
 

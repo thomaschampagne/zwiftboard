@@ -52,7 +52,7 @@ func main() {
 	flag.StringVar(&profile, "p", config.DefaultProfile, "config profile to use")
 	flag.StringVar(&profile, "profile", config.DefaultProfile, "config profile to use (same as -p)")
 	var verbose bool
-	flag.BoolVar(&verbose, "v", false, "log raw frames and taps (forces log level debug)")
+	flag.BoolVar(&verbose, "v", false, "log raw frames and button events (forces log level debug)")
 	flag.BoolVar(&ble.SendAck, "ack", true, "send ff 04 00 to devices that echo RideOn (keeps unlock)")
 	flag.DurationVar(&ble.IdleReset, "idle-reset", 55*time.Second, "after this much button silence, reboot the pod (write 0x18, OpenBikeControl's periodic reset) before its ~65s idle sleep; 0 disables")
 	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")

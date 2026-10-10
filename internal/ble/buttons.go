@@ -10,63 +10,117 @@ import (
 )
 
 // OnTap, when set, is told the button name on every pressed transition of a
-// mapped button (the UI's click highlight). Observational only: it runs after
-// the key goes down and must not block, since it is called on the BLE
-// notification goroutine.
+// mapped button (the UI's live key state note). Observational only: it runs on
+// the BLE notification goroutine and must not block, since nothing in a
+// session waits on it. A mirrored press fires it once per pod (twice total);
+// the UI is idempotent.
 var OnTap func(button string)
 
 var (
-	heldMu sync.Mutex
-	heldVK = map[uint16]bool{} // VKs logically held, shared across handlers
+	keyMu sync.Mutex
+	// heldCount is how many LIVE handlers currently see each VK pressed.
+	// The Click pair mirrors every press — one physical press arrives as the
+	// same frame from both units (two handlers) — so a healthy pair holds 2
+	// for a pressed key. The count is the whole dedup: the first handler to
+	// see the press sends Down, the last to see the release sends Up, and a
+	// session dying releases only a key no handler sees pressed anymore.
+	heldCount = map[uint16]int{}
 )
 
-// holdKeys wraps raw down/up key funcs with per-VK idempotency shared across
-// ALL handlers: the Click pair mirrors every press, so one physical press
-// arrives as the same frame from both units (two handlers) and the second
-// call finds the key already held. Session wires keys.Down/keys.Up through
-// this. down/up stay injectable for tests.
-func holdKeys(down, up func(keys.Binding)) (func(keys.Binding), func(keys.Binding)) {
-	return func(b keys.Binding) {
-			heldMu.Lock()
-			already := heldVK[b.VK]
-			heldVK[b.VK] = true
-			heldMu.Unlock()
-			if !already {
-				down(b)
-			}
-		}, func(b keys.Binding) {
-			heldMu.Lock()
-			wasDown := heldVK[b.VK]
-			delete(heldVK, b.VK)
-			heldMu.Unlock()
-			if wasDown {
-				up(b)
-			}
-		}
+// Holds is one session's handle on the shared held-key state. Session wires
+// keys.Down/keys.Up through it for its ButtonHandler (Press/Release) and
+// defers ReleaseAll, so a dropped controller can never leave a key stuck
+// down — while a key the sibling session still sees pressed stays down (that
+// sibling's own release lifts it).
+type Holds struct {
+	down func(keys.Binding) bool
+	up   func(keys.Binding) bool
+	own  map[uint16]bool // VKs THIS handler currently sees pressed
 }
 
-// ReleaseAll releases every key still held. Called when a session dies (a
-// failed keepalive = real disconnect) so a dropped controller can never leave
-// a key stuck down.
-func ReleaseAll() {
-	heldMu.Lock()
-	vks := make([]uint16, 0, len(heldVK))
-	for vk := range heldVK {
-		vks = append(vks, vk)
+// holdKeys wraps raw down/up key funcs with the per-VK refcount shared
+// across ALL handlers. down/up stay injectable for tests; return whether the
+// key was actually pressed/released.
+func holdKeys(down, up func(keys.Binding) bool) *Holds {
+	return &Holds{down: down, up: up, own: map[uint16]bool{}}
+}
+
+// Press is called on a pressed transition of a mapped button. It reserves the
+// VK in the shared count (deduping the mirrored duplicate from the pair's
+// other unit), sends Down on the first reservation only, and undoes the
+// reservation when the press was dropped (e.g. no focus window) so a later
+// press can still land.
+func (h *Holds) Press(b keys.Binding) {
+	keyMu.Lock()
+	h.own[b.VK] = true
+	heldCount[b.VK]++
+	first := heldCount[b.VK] == 1
+	keyMu.Unlock()
+	if !first {
+		return
 	}
-	clear(heldVK)
-	heldMu.Unlock()
-	for _, vk := range vks {
+	if !h.down(b) {
+		keyMu.Lock()
+		delete(h.own, b.VK)
+		heldCount[b.VK]--
+		if heldCount[b.VK] == 0 {
+			delete(heldCount, b.VK)
+		}
+		keyMu.Unlock()
+	}
+}
+
+// Release is called on a released transition. It removes this handler's
+// reservation and sends Up when no live handler sees the key pressed anymore.
+func (h *Holds) Release(b keys.Binding) {
+	keyMu.Lock()
+	if !h.own[b.VK] {
+		keyMu.Unlock() // never saw it pressed (e.g. subscribed mid-hold): nothing to lift
+		return
+	}
+	delete(h.own, b.VK)
+	if heldCount[b.VK] > 0 {
+		heldCount[b.VK]--
+	}
+	last := heldCount[b.VK] == 0
+	keyMu.Unlock()
+	if last {
+		h.up(b)
+	}
+}
+
+// ReleaseAll frees every key this session held and no other live handler
+// still sees pressed. Session defers it, so a keepalive failure (real
+// disconnect) can never leave a key stuck down. A key the sibling session
+// still sees pressed is left down: the same mirrored release is on its way to
+// that sibling and will lift it.
+func (h *Holds) ReleaseAll() {
+	keyMu.Lock()
+	for vk := range h.own {
+		delete(h.own, vk)
+		if heldCount[vk] > 0 {
+			heldCount[vk]--
+		}
+	}
+	lift := make([]uint16, 0, len(heldCount))
+	for vk, n := range heldCount {
+		if n <= 0 {
+			delete(heldCount, vk)
+			lift = append(lift, vk)
+		}
+	}
+	keyMu.Unlock()
+	for _, vk := range lift {
 		keys.ReleaseVK(vk)
 	}
 }
 
 // ButtonHandler decodes 0x23 button frames for one controller and holds mapped
-// keys down while their button is pressed: down on the pressed transition, up
+// keys down while their button is pressed: Press on the pressed transition, Up
 // on the released transition. Two layers dedup the mirrored pair: the
 // edge-triggered diff ignores identical retransmits within one handler, and
-// holdKeys' per-VK idempotency absorbs the same frame arriving from the pair's
-// other unit. down/up injectable for tests.
+// the shared heldCount absorbs the same frame arriving from the pair's other
+// unit. down/up injectable for tests.
 func ButtonHandler(label string, keyMap map[string]keys.Binding, down, up func(keys.Binding)) func([]byte) {
 	prev := uint32(0xFFFFFFFF) // all released
 	return func(b []byte) {

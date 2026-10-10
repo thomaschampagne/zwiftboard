@@ -377,8 +377,11 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		}, func() { _ = dev.Disconnect() })
 	}()
 	// A session ends when a keepalive write fails (a real disconnect) — release
-	// any keys still held so a dropped controller can't leave them stuck down.
-	defer ReleaseAll()
+	// the keys still held so a dropped controller can't leave them stuck down.
+	// The held count is shared with the other pod's session, so a key that
+	// sibling still sees pressed stays down until that sibling's own release.
+	hk := holdKeys(keys.Down, keys.Up)
+	defer hk.ReleaseAll()
 
 	// Activation sequence from ZwiftBridge (verified on Click V2 hardware).
 	activation := [][]byte{
@@ -399,8 +402,7 @@ func Session(t Target, keyMap map[string]keys.Binding) error {
 		}
 	}
 
-	down, up := holdKeys(keys.Down, keys.Up)
-	handler := ButtonHandler(t.Label, keyMap, down, up)
+	handler := ButtonHandler(t.Label, keyMap, hk.Press, hk.Release)
 	// lastActivity tracks the pod's last own transmission (any received frame).
 	// It gates the proactive pod reset so an active session is never rebooted.
 	lastActivity := time.Now()
