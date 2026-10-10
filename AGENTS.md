@@ -22,7 +22,13 @@ TUI key-state model and the config-path tests.
 ## Layout
 
 - `main.go` (root) — flags, logger setup, target registry, wiring only; a
-  single-binary app, so the entry point lives at the repo root (not `cmd/`)
+  single-binary app, so the entry point lives at the repo root (not `cmd/`).
+  Go's own docs and most single-binary tools keep `main.go` at the root; the
+  `cmd/` convention is for repos with multiple binaries or library+binaries
+  combos. Two hard constraints pin this layout: `defaultconfig.go` does
+  `//go:embed config.yaml` (embed cannot `..` above its package dir), and
+  `tuirun.go`/`defaultconfig.go` are `package main` wiring — package main
+  lives where the binary lives.
 - `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup
 - `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, no-op elsewhere)
 - `internal/config/` — config.yaml: `loglevel:` + `profiles:` map; returns errors (never exits)
