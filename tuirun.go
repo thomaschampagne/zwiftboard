@@ -58,7 +58,7 @@ func runTUI(tcfg tui.Config, start func(p *tea.Program)) {
 // liveFeed is the TUI counterpart of main's -plain startup: the same Enable
 // retry (every 5s while Bluetooth is off), then the same startListening. It
 // only OBSERVES: the screen reads ble.Connected / ble.SideSeenRecently and the
-// OnTap hook, and nothing in a session waits on it.
+// OnKey hook, and nothing in a session waits on it.
 func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Duration, addrList *string) {
 	for enabled := false; !enabled; {
 		ble.Guarded("enable BLE adapter", func() {
@@ -76,9 +76,19 @@ func liveFeed(p *tea.Program, cfg config.Config, scanFor, reconnect *time.Durati
 	p.Send(tui.BTMsg(true))
 
 	// Set before any session exists (no race). Send blocks until the program
-	// loop takes the message, and OnTap runs on the BLE notification goroutine,
-	// so hand it off: a busy screen must never stall button handling.
-	ble.OnTap = func(button string) { go p.Send(tui.ClickMsg(button)) }
+	// loop takes the message, and the hooks run on BLE notification /
+	// session-goroutines, so hand it off: a busy screen must never stall
+	// button handling.
+	ble.OnKey = func(button string, down bool) {
+		go p.Send(tui.KeyStateMsg{Button: button, Down: down})
+	}
+	idx := vkIndex(cfg.Bindings)
+	ble.OnLifted = func(vk uint16) {
+		for _, name := range idx[vk] {
+			n := name
+			go p.Send(tui.KeyStateMsg{Button: n, Down: false})
+		}
+	}
 
 	startListening(cfg, scanFor, reconnect, addrList)
 	src := tui.Sources{BT: ble.ScanHealthy, Connected: ble.Connected, Seen: ble.SideSeenRecently}
@@ -131,4 +141,14 @@ func openConfigFile(path string) func() error {
 		}
 		return startEditor(abs)
 	}
+}
+
+// vkIndex maps a VK back to every button mapped to it: ReleaseAll force-lifts
+// by VK (the button name is not in hand), so the UI needs the reverse lookup.
+func vkIndex(b map[string]keys.Binding) map[uint16][]string {
+	m := map[uint16][]string{}
+	for name, bnd := range b {
+		m[bnd.VK] = append(m[bnd.VK], name)
+	}
+	return m
 }

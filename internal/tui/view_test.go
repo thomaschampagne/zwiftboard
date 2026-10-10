@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -174,9 +175,28 @@ func TestViewLogPanelDoubleWidth(t *testing.T) {
 	has(t, m.View(), line)
 }
 
-func TestViewFlashShowsTriggered(t *testing.T) {
+func TestViewKeyStates(t *testing.T) {
 	m := on(testCfg(), PodConnected, PodConnected)
-	m.flash["A"] = 1
-	has(t, m.View(), "◀ triggered")
-	lacks(t, m.View(), "◀ click")
+	m.clock = func() time.Time { return time.Now() }
+	next, _ := m.Update(KeyStateMsg{Button: "A", Down: true})
+	has(t, next.(Model).View(), "▶ pressed")
+	lacks(t, next.(Model).View(), "released")
+
+	// Force the hold phase by backdating the press.
+	m2 := next.(Model)
+	s := m2.keys["A"]
+	s.at = time.Now().Add(-holdAfter - time.Millisecond)
+	k := make(map[string]keyState, 1)
+	k["A"] = s
+	m2.keys = k
+	has(t, m2.View(), "hold")
+
+	// Released: normal keycap, muted word.
+	m3 := m2
+	k2 := make(map[string]keyState, 1)
+	k2["A"] = keyState{down: false, at: time.Now()}
+	m3.keys = k2
+	v := m3.View()
+	has(t, v, "released")
+	lacks(t, v, "▶ pressed")
 }

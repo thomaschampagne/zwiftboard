@@ -18,8 +18,10 @@ func (m Model) demoKey(k string) (tea.Model, tea.Cmd) {
 	default:
 		if len(k) == 1 && k[0] >= '1' && k[0] <= '9' {
 			if i := int(k[0] - '1'); i < len(m.cfg.Buttons) {
-				name := m.cfg.Buttons[i]
-				return m, func() tea.Msg { return ClickMsg(name) }
+				// Press through Update now: the caller's cmd must already be
+				// the press batch (fast tick + scheduled release), not a
+				// demoPressMsg the program loop would have to re-feed.
+				return m.Update(demoPressMsg{button: m.cfg.Buttons[i]})
 			}
 		}
 	}

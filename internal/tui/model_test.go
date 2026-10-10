@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -25,36 +26,105 @@ func TestUpdateBTMsg(t *testing.T) {
 	}
 }
 
-func TestClickFlashesMappedButton(t *testing.T) {
+// clock returns a model with a fake clock and presses/releases helpers.
+func keyModel() (Model, *time.Time) {
+	now := time.Now()
 	m := New(testCfg())
-	next, cmd := m.Update(ClickMsg("A"))
+	m.clock = func() time.Time { return now }
+	return m, &now
+}
+
+func TestKeyDownShowsPressedThenHold(t *testing.T) {
+	m, now := keyModel()
+	next, _ := m.Update(KeyStateMsg{Button: "A", Down: true})
 	m = next.(Model)
-	if cmd == nil || !m.Flashing("A") {
-		t.Fatalf("A should flash with an expiry cmd (cmd nil=%v)", cmd == nil)
+	if p := m.keyPhase("A"); p != PhasePressed {
+		t.Fatalf("phase right after down = %v, want pressed", p)
 	}
-	next, _ = m.Update(expireMsg{button: "A", id: m.flash["A"]})
-	if next.(Model).Flashing("A") {
-		t.Fatal("flash should expire")
-	}
-}
-
-func TestRapidClickExtendsFlash(t *testing.T) {
-	m := New(testCfg())
-	n, _ := m.Update(ClickMsg("A"))
-	first := n.(Model).flash["A"]
-	n, _ = n.Update(ClickMsg("A"))
-	m = n.(Model)
-	n, _ = m.Update(expireMsg{button: "A", id: first}) // stale
-	if !n.(Model).Flashing("A") {
-		t.Fatal("stale expiry must not clear a newer flash")
+	*now = now.Add(300 * time.Millisecond) // past holdAfter
+	if p := m.keyPhase("A"); p != PhaseHold {
+		t.Fatalf("phase after 300ms = %v, want hold", p)
 	}
 }
 
-func TestClickUnmappedIgnored(t *testing.T) {
-	m := New(testCfg())
-	next, cmd := m.Update(ClickMsg("Z"))
-	if cmd != nil || next.(Model).Flashing("Z") {
-		t.Fatal("unmapped click must be ignored")
+func TestKeyUpShowsReleasedThenIdle(t *testing.T) {
+	m, now := keyModel()
+	next, _ := m.Update(KeyStateMsg{Button: "A", Down: true})
+	next, _ = next.Update(KeyStateMsg{Button: "A", Down: false})
+	m = next.(Model)
+	if p := m.keyPhase("A"); p != PhaseReleased {
+		t.Fatalf("phase after up = %v, want released", p)
+	}
+	*now = now.Add(releaseFor)
+	next, _ = m.Update(keyExpireMsg{button: "A"})
+	if p := next.(Model).keyPhase("A"); p != PhaseIdle {
+		t.Fatalf("phase after expiry = %v, want idle", p)
+	}
+	if _, ok := next.(Model).keys["A"]; ok {
+		t.Fatal("expired key must leave the map")
+	}
+}
+
+func TestKeyMirrorDedup(t *testing.T) {
+	m, now := keyModel()
+	next, _ := m.Update(KeyStateMsg{Button: "A", Down: true})
+	first := next.(Model).keys["A"].at
+	// Advance the clock: with the same frozen instant a missing dedup would
+	// still restamp to an equal time and the assertion could not fail.
+	*now = now.Add(100 * time.Millisecond)
+	next, _ = next.Update(KeyStateMsg{Button: "A", Down: true}) // mirrored pod
+	if got := next.(Model).keys["A"].at; !got.Equal(first) {
+		t.Fatal("duplicate down must not restamp the press")
+	}
+	next, _ = next.Update(KeyStateMsg{Button: "A", Down: false})
+	up := next.(Model).keys["A"].at
+	*now = now.Add(100 * time.Millisecond)
+	next, _ = next.Update(KeyStateMsg{Button: "A", Down: false}) // mirrored release
+	if got := next.(Model).keys["A"].at; !got.Equal(up) {
+		t.Fatal("duplicate up must not restamp the release")
+	}
+	if p := next.(Model).keyPhase("A"); p != PhaseReleased {
+		t.Fatalf("phase after duplicate up = %v, want released", p)
+	}
+}
+
+func TestKeyStateIgnoresUnmapped(t *testing.T) {
+	m, _ := keyModel()
+	next, cmd := m.Update(KeyStateMsg{Button: "X", Down: true})
+	if cmd != nil || len(next.(Model).keys) != 0 {
+		t.Fatal("unmapped button must not enter the key state")
+	}
+}
+
+func TestStaleExpiryDoesNotClearHeldKey(t *testing.T) {
+	m, _ := keyModel()
+	next, _ := m.Update(KeyStateMsg{Button: "A", Down: true})
+	next, _ = next.Update(KeyStateMsg{Button: "A", Down: false})
+	next, _ = next.Update(KeyStateMsg{Button: "A", Down: true}) // re-pressed
+	next, _ = next.Update(keyExpireMsg{button: "A"})            // stale fade timer
+	if p := next.(Model).keyPhase("A"); p == PhaseIdle {
+		t.Fatal("stale expiry must not clear a re-pressed key")
+	}
+}
+
+func TestDemoPressRunsFullCycle(t *testing.T) {
+	n, cmd := demoModel().Update(key("3")) // Buttons[2] = "A"
+	if cmd == nil {
+		t.Fatal("digit should emit a cmd")
+	}
+	// Batch: fast-tick + scheduled release.
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok || len(batch) != 2 {
+		t.Fatalf("demo press cmds = %v, want a 2-command batch", cmd())
+	}
+	n, _ = n.Update(batch[0]())
+	if n.(Model).keyPhase("A") != PhasePressed {
+		t.Fatal("3 should press A")
+	}
+	up := batch[1]() // fires demoHoldFor later
+	n, _ = n.Update(up)
+	if n.(Model).keyPhase("A") != PhaseReleased {
+		t.Fatal("scheduled up should release A")
 	}
 }
 
@@ -99,17 +169,6 @@ func TestDemoCyclePods(t *testing.T) {
 	n, _ = n.Update(key("["))
 	if n.(Model).left != PodDetected {
 		t.Fatal("[ should advance left")
-	}
-}
-
-func TestDemoDigitClicks(t *testing.T) {
-	n, cmd := demoModel().Update(key("3")) // Buttons[2] = "A"
-	if cmd == nil {
-		t.Fatal("digit should emit a click cmd")
-	}
-	n, _ = n.Update(cmd())
-	if !n.(Model).Flashing("A") {
-		t.Fatal("3 should flash A")
 	}
 }
 

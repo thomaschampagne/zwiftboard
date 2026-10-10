@@ -100,8 +100,8 @@ func TestDroppedSessionKeepsSiblingHold(t *testing.T) {
 	press := []byte{0x23, 0x08, 0xEF, 0xFF, 0xFF, 0xFF, 0x0F}
 	idle := []byte{0x23, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}
 	right(press)
-	left(press)         // mirrored press, both sessions hold it
-	rHK.ReleaseAll()    // right session drops mid-hold
+	left(press)      // mirrored press, both sessions hold it
+	rHK.ReleaseAll() // right session drops mid-hold
 	if down, up := rec.counts(); down != 1 || up != 0 {
 		t.Fatalf("after drop: down=%d up=%d, want 1/0 (key must stay down)", down, up)
 	}
@@ -220,14 +220,18 @@ func TestButtonHandlerUnmappedButtonNoDown(t *testing.T) {
 	}
 }
 
-// OnTap fires on every pressed transition of a mapped button. The mirrored
-// frame from the pair's other unit fires it again — observational only (the
-// UI highlight is idempotent), the key itself is pressed once.
-func TestOnTapFiresPerPressedTransition(t *testing.T) {
+// OnKey reports BOTH transitions of a mapped button. The mirrored frame from
+// the pair's other unit fires it again — observational only (the UI dedups),
+// the key itself is pressed once.
+func TestOnKeyReportsBothTransitions(t *testing.T) {
 	rec := &keyRecorder{}
-	var got []string
-	OnTap = func(b string) { got = append(got, b) }
-	t.Cleanup(func() { OnTap = nil })
+	type ev struct {
+		btn  string
+		down bool
+	}
+	var got []ev
+	OnKey = func(b string, down bool) { got = append(got, ev{b, down}) }
+	t.Cleanup(func() { OnKey = nil })
 
 	rHK := holdKeys(rec.downFn, rec.upFn)
 	lHK := holdKeys(rec.downFn, rec.upFn)
@@ -237,24 +241,50 @@ func TestOnTapFiresPerPressedTransition(t *testing.T) {
 	t.Cleanup(lHK.ReleaseAll)
 
 	press := []byte{0x23, 0x08, 0xDF, 0xFF, 0xFF, 0xFF, 0x0F}
+	idle := []byte{0x23, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}
 	right(press)
 	left(press) // mirrored duplicate
-	if len(got) != 2 || got[0] != "B" || got[1] != "B" {
-		t.Fatalf("OnTap calls = %v, want [B B]", got)
+	if len(got) != 2 || got[0] != (ev{"B", true}) || got[1] != (ev{"B", true}) {
+		t.Fatalf("OnKey after press = %v, want two downs", got)
 	}
 	if down, _ := rec.counts(); down != 1 {
 		t.Fatalf("mirrored press downs = %d, want 1", down)
 	}
+	right(idle)
+	left(idle) // mirrored release
+	if len(got) != 4 || got[2] != (ev{"B", false}) || got[3] != (ev{"B", false}) {
+		t.Fatalf("OnKey after release = %v, want two ups", got)
+	}
+	if _, up := rec.counts(); up != 1 {
+		t.Fatalf("mirrored release ups = %d, want 1", up)
+	}
 }
 
-func TestOnTapNotCalledUnmapped(t *testing.T) {
+func TestOnKeyNotCalledUnmapped(t *testing.T) {
 	called := false
-	OnTap = func(string) { called = true }
-	t.Cleanup(func() { OnTap = nil })
+	OnKey = func(string, bool) { called = true }
+	t.Cleanup(func() { OnKey = nil })
 
 	h := ButtonHandler("t", map[string]keys.Binding{}, func(keys.Binding) {}, func(keys.Binding) {})
 	h([]byte{0x23, 0x08, 0xDF, 0xFF, 0xFF, 0xFF, 0x0F})
 	if called {
-		t.Fatal("OnTap must not fire for an unmapped button")
+		t.Fatal("OnKey must not fire for an unmapped button")
+	}
+}
+
+// A session dropped mid-hold never sees the release edge: ReleaseAll must
+// report each force-lifted VK so the UI can clear the held row.
+func TestReleaseAllLiftNotifiesOnLifted(t *testing.T) {
+	rec := &keyRecorder{}
+	var lifted []uint16
+	OnLifted = func(vk uint16) { lifted = append(lifted, vk) }
+	t.Cleanup(func() { OnLifted = nil })
+
+	hk := holdKeys(rec.downFn, rec.upFn)
+	h := ButtonHandler("t", map[string]keys.Binding{"A": {VK: 0x41, Token: "a"}}, hk.Press, hk.Release)
+	h([]byte{0x23, 0x08, 0xEF, 0xFF, 0xFF, 0xFF, 0x0F})
+	hk.ReleaseAll()
+	if len(lifted) != 1 || lifted[0] != 0x41 {
+		t.Fatalf("OnLifted calls = %v, want [0x41]", lifted)
 	}
 }

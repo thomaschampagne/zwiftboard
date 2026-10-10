@@ -9,12 +9,17 @@ import (
 	"zwiftboard/internal/zwift"
 )
 
-// OnTap, when set, is told the button name on every pressed transition of a
-// mapped button (the UI's live key state note). Observational only: it runs on
-// the BLE notification goroutine and must not block, since nothing in a
-// session waits on it. A mirrored press fires it once per pod (twice total);
-// the UI is idempotent.
-var OnTap func(button string)
+// OnKey, when set, is told every transition of a mapped button: down=true on
+// press, down=false on release (the UI's live key state). Observational only:
+// it runs on the BLE notification goroutine and must not block, since nothing
+// in a session waits on it. The pair mirrors every frame, so one physical
+// transition fires it twice — the UI dedups.
+var OnKey func(button string, down bool)
+
+// OnLifted, when set, is told each VK force-released by ReleaseAll (a session
+// dropped mid-hold: the release edge never arrived). Normal releases are
+// reported through OnKey instead. Same observational rules.
+var OnLifted func(vk uint16)
 
 var (
 	keyMu sync.Mutex
@@ -112,6 +117,9 @@ func (h *Holds) ReleaseAll() {
 	keyMu.Unlock()
 	for _, vk := range lift {
 		keys.ReleaseVK(vk)
+		if h := OnLifted; h != nil {
+			h(vk)
+		}
 	}
 }
 
@@ -161,11 +169,14 @@ func ButtonHandler(label string, keyMap map[string]keys.Binding, down, up func(k
 				args = append(args, "key", bnd.Token)
 				if state == "pressed" {
 					down(bnd)
-					if h := OnTap; h != nil {
-						h(name)
+					if h := OnKey; h != nil {
+						h(name, true)
 					}
 				} else {
 					up(bnd)
+					if h := OnKey; h != nil {
+						h(name, false)
+					}
 				}
 			}
 			slog.Info("button", args...)

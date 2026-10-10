@@ -9,8 +9,41 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// FlashFor is how long a clicked button's row stays highlighted.
-const FlashFor = 300 * time.Millisecond
+// KeyStateMsg reports one emulated key's transition: Down true on press,
+// false on release. The mirrored pair fires it twice; Update dedups.
+type KeyStateMsg struct {
+	Button string
+	Down   bool
+}
+
+// demoPressMsg starts a demo press: down now, a scheduled KeyStateMsg up
+// after demoHoldFor, so the screen walks pressed → hold → released.
+type demoPressMsg struct{ button string }
+
+// keyExpireMsg clears a released key's fade-out row.
+type keyExpireMsg struct{ button string }
+
+// KeyPhase is what a key row shows. Derived from keyState + clock.
+type KeyPhase int
+
+const (
+	PhaseIdle KeyPhase = iota
+	PhasePressed
+	PhaseHold
+	PhaseReleased
+)
+
+const (
+	// holdAfter mirrors keys.keyRepeatDelay: pressed flips to hold when the
+	// emulated auto-repeat would have started.
+	holdAfter = 250 * time.Millisecond
+	// releaseFor is how long the released row lingers before vanishing.
+	releaseFor = 900 * time.Millisecond
+	// holdTick is the redraw cadence while a key is down (pulse animation).
+	holdTick = 100 * time.Millisecond
+	// demoHoldFor: the demo key stays down long enough to pass through hold.
+	demoHoldFor = 1200 * time.Millisecond
+)
 
 // PodState is the observed state of one Click pod.
 type PodState int
@@ -36,17 +69,10 @@ type Config struct {
 
 // Messages sent by main (live) or the demo handler.
 type (
-	BTMsg    bool
-	PodMsg   struct{ Left, Right PodState }
-	ClickMsg string
+	BTMsg  bool
+	PodMsg struct{ Left, Right PodState }
 	// FocusMsg reports whether the configured focus window currently exists.
 	FocusMsg bool
-	// expireMsg ends a flash; id guards against a stale expiry clearing a
-	// newer click of the same button.
-	expireMsg struct {
-		button string
-		id     int
-	}
 	// openedMsg is the result of the editor launch.
 	openedMsg struct{ err error }
 	// statusExpireMsg clears the status line; id guards against a stale expiry.
@@ -58,8 +84,8 @@ type Model struct {
 	cfg          Config
 	bt           bool
 	left, right  PodState
-	flash        map[string]int
-	seq          int
+	keys         map[string]keyState // live emulated-key state, copy-on-write
+	clock        func() time.Time    // test hook; nil = time.Now
 	width        int
 	showLogs     bool
 	status       string // transient feedback line (empty = none)
@@ -68,15 +94,54 @@ type Model struct {
 	focusMissing bool // default false: no alert until a FocusMsg says so
 }
 
-// New returns a model with Bluetooth off and both pods not detected.
+// New returns a model with Bluetooth off, both pods not detected and no key
+// state.
 func New(cfg Config) Model {
-	return Model{cfg: cfg, flash: map[string]int{}}
+	return Model{cfg: cfg, keys: map[string]keyState{}}
 }
 
-// Flashing reports whether button's row is currently highlighted.
-func (m Model) Flashing(button string) bool {
-	_, ok := m.flash[button]
-	return ok
+// keyState is one emulated key's state: at is the press time while down and
+// the release time while up.
+type keyState struct {
+	down bool
+	at   time.Time
+}
+
+func (m Model) now() time.Time {
+	if m.clock != nil {
+		return m.clock()
+	}
+	return time.Now()
+}
+
+// keyPhase derives the row's phase: pressed < holdAfter, hold until release,
+// released for releaseFor, then idle (the entry is removed by keyExpireMsg).
+func (m Model) keyPhase(button string) KeyPhase {
+	s, ok := m.keys[button]
+	if !ok {
+		return PhaseIdle
+	}
+	age := m.now().Sub(s.at)
+	switch {
+	case s.down && age < holdAfter:
+		return PhasePressed
+	case s.down:
+		return PhaseHold
+	case age < releaseFor:
+		return PhaseReleased
+	default:
+		return PhaseIdle
+	}
+}
+
+// anyKeyDown reports whether any emulated key is held (faster redraw tick).
+func (m Model) anyKeyDown() bool {
+	for _, s := range m.keys {
+		if s.down {
+			return true
+		}
+	}
+	return false
 }
 
 // refreshEvery re-renders the screen so new log lines appear in the log panel
@@ -85,9 +150,17 @@ const refreshEvery = 500 * time.Millisecond
 
 type tickMsg struct{}
 
-func tick() tea.Cmd { return tea.Tick(refreshEvery, func(time.Time) tea.Msg { return tickMsg{} }) }
+// tickCmd schedules the next redraw: fast while a key is down (the hold
+// pulse), slow otherwise (log lines).
+func (m Model) tickCmd() tea.Cmd {
+	d := refreshEvery
+	if m.anyKeyDown() {
+		d = holdTick
+	}
+	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{} })
+}
 
-func (m Model) Init() tea.Cmd { return tick() }
+func (m Model) Init() tea.Cmd { return m.tickCmd() }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -103,18 +176,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = ""
 		}
 	case tickMsg:
-		return m, tick()
+		return m, m.tickCmd()
 	case BTMsg:
 		m.bt = bool(msg)
 	case FocusMsg:
 		m.focusMissing = !bool(msg)
 	case PodMsg:
 		m.left, m.right = msg.Left, msg.Right
-	case ClickMsg:
-		return m.click(string(msg))
-	case expireMsg:
-		if m.flash[msg.button] == msg.id {
-			delete(m.flash, msg.button)
+	case KeyStateMsg:
+		if _, mapped := m.cfg.Bindings[msg.Button]; !mapped {
+			return m, nil
+		}
+		if msg.Down {
+			return m.keyDown(msg.Button)
+		}
+		return m.keyUp(msg.Button)
+	case demoPressMsg:
+		if _, mapped := m.cfg.Bindings[msg.button]; !mapped {
+			return m, nil
+		}
+		next, fast := m.keyDown(msg.button)
+		return next, tea.Batch(fast, tea.Tick(demoHoldFor, func(time.Time) tea.Msg {
+			return KeyStateMsg{Button: msg.button, Down: false}
+		}))
+	case keyExpireMsg:
+		if s, ok := m.keys[msg.button]; ok && !s.down {
+			k := make(map[string]keyState, len(m.keys))
+			for n, v := range m.keys {
+				k[n] = v
+			}
+			delete(k, msg.button)
+			m.keys = k
 		}
 	case tea.MouseMsg:
 		// Wheel over the log panel scrolls it; only while the panel is shown.
@@ -180,20 +272,36 @@ func (m *Model) clampLogScroll() {
 	}
 }
 
-func (m Model) click(button string) (tea.Model, tea.Cmd) {
-	if _, mapped := m.cfg.Bindings[button]; !mapped {
+// keyDown records a press (copy-on-write, like the old flash map) and asks
+// for an early redraw so pressed → hold flips on time. A duplicate down — the
+// pair's mirrored frame — is ignored, keeping the first press's stamp.
+func (m Model) keyDown(button string) (tea.Model, tea.Cmd) {
+	if s, ok := m.keys[button]; ok && s.down {
 		return m, nil
 	}
-	// Maps are shared by value copies of Model; copy before writing.
-	f := make(map[string]int, len(m.flash)+1)
-	for k, v := range m.flash {
-		f[k] = v
+	k := make(map[string]keyState, len(m.keys)+1)
+	for n, v := range m.keys {
+		k[n] = v
 	}
-	m.seq++
-	f[button] = m.seq
-	m.flash = f
-	id := m.seq
-	return m, tea.Tick(FlashFor, func(time.Time) tea.Msg { return expireMsg{button, id} })
+	k[button] = keyState{down: true, at: m.now()}
+	m.keys = k
+	return m, tea.Tick(holdTick, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+// keyUp records a release and schedules the fade-out expiry. A duplicate up
+// (mirrored frame) or an up for a key never seen down is ignored.
+func (m Model) keyUp(button string) (tea.Model, tea.Cmd) {
+	s, ok := m.keys[button]
+	if !ok || !s.down {
+		return m, nil
+	}
+	k := make(map[string]keyState, len(m.keys))
+	for n, v := range m.keys {
+		k[n] = v
+	}
+	k[button] = keyState{down: false, at: m.now()}
+	m.keys = k
+	return m, tea.Tick(releaseFor, func(time.Time) tea.Msg { return keyExpireMsg{button} })
 }
 
 // statusFor is how long a status message stays on screen.

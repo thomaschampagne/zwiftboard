@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -23,7 +24,8 @@ var (
 	sBad     = lipgloss.NewStyle().Foreground(cBad)
 	sBold    = lipgloss.NewStyle().Bold(true)
 	sKeycap  = lipgloss.NewStyle().Background(cCap).Padding(0, 1)
-	sFlash   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
+	sDown    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
+	sHold    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
 	sChip    = lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(cAccent).Padding(0, 1)
 	sKeyHint = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 )
@@ -133,13 +135,26 @@ func (m Model) table() string {
 		for _, name := range m.cfg.Buttons {
 			key, ok := m.cfg.Bindings[name]
 			cap := sMuted.Render("—")
+			label := ""
+			var style lipgloss.Style
 			if ok {
 				cap = sKeycap.Render(key)
-				if m.Flashing(name) {
-					cap = sFlash.Render(key) + sOK.Render(" ◀ triggered")
+				switch m.keyPhase(name) {
+				case PhasePressed:
+					cap = sDown.Render(key)
+					label, style = "▶ pressed", sDown
+				case PhaseHold:
+					cap = sHold.Render(key)
+					label, style = pulse(m.now())+" hold", sHold
+				case PhaseReleased:
+					label, style = "○ released", sMuted
 				}
 			}
-			b.WriteString(sBold.Render(padRight(name, 6)) + sMuted.Render("→ ") + cap + "\n")
+			out := padRight(label, 12)
+			if label != "" {
+				out = style.Render(padRight(label, 12))
+			}
+			b.WriteString(sBold.Render(padRight(name, 6)) + sMuted.Render("→ ") + cap + "  " + out + "\n")
 		}
 	}
 	focus := sMuted.Render("off")
@@ -214,6 +229,14 @@ func padRight(s string, n int) string {
 		s += " "
 	}
 	return s
+}
+
+// pulseFrames advance one frame per holdTick: the braille spinner is the
+// "key is repeating" motion cue while a key is held.
+var pulseFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func pulse(now time.Time) string {
+	return pulseFrames[int(now.UnixNano()/int64(holdTick))%len(pulseFrames)]
 }
 
 var (

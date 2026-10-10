@@ -3,6 +3,8 @@ package main
 import (
 	"path/filepath"
 	"testing"
+
+	"zwiftboard/internal/keys"
 )
 
 func TestEditorCommandPerOS(t *testing.T) {
@@ -42,3 +44,17 @@ var errTest = testErr("start failed")
 type testErr string
 
 func (e testErr) Error() string { return string(e) }
+
+func TestVKIndex(t *testing.T) {
+	idx := vkIndex(map[string]keys.Binding{
+		"A": {VK: 0x41, Token: "a"},
+		"B": {VK: 0x41, Token: "a"}, // two buttons, same key
+		"Z": {VK: 0x5A, Token: "z"},
+	})
+	if got := idx[0x41]; len(got) != 2 {
+		t.Fatalf("0x41 buttons = %v, want A and B", got)
+	}
+	if got := idx[0x5A]; len(got) != 1 || got[0] != "Z" {
+		t.Fatalf("0x5A buttons = %v, want [Z]", got)
+	}
+}
