@@ -139,10 +139,10 @@ jobs:
             echo "::error::Secret SCOOP_EXTRAS_PAT is not set. Add a classic PAT with 'repo' scope, owned by a user who has forked ScoopInstaller/Extras, as the repository secret SCOOP_EXTRAS_PAT."
             exit 1
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: extractions/setup-just@v4
       - name: Checkout ScoopInstaller/Extras
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ScoopInstaller/Extras
           ref: master
