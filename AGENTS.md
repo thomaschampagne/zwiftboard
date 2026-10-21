@@ -114,12 +114,11 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   this or held letters stop repeating in text fields.
 - The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
   the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
-  link. Both pods are connected (see BOTH PODS ARE CONNECTED); both
-  pods' buttons are mappable (LEFT UP RIGHT DOWN MIN on the left pod,
-  Y Z A B PLUS on the right); the shipped profiles map the right pod, the
-  `notepad` profile maps both. A lone RIGHT pod's
-  LED keeps blinking (advertising mode) even though its frames decode fine —
-  cosmetic, not a fault.
+  link. Both pods are connected (see BOTH PODS ARE CONNECTED); both pods'
+  buttons are mappable (LEFT UP RIGHT DOWN MIN on the left pod, Y Z A B PLUS on
+  the right); the shipped profiles map the right pod, the `notepad` profile
+  maps both. A lone RIGHT pod's LED keeps blinking (advertising mode) even
+  though its frames decode fine — cosmetic, not a fault.
 - Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`), then a keepalive
   every 3s re-sending the raw `RideOn` opcode frame. PROVEN NOT TO HOLD A LONE
   RIGHT POD: on Windows the link still dies ~65s after the pod's LAST OWN
