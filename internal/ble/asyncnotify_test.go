@@ -129,3 +129,20 @@ func TestPostResetStale(t *testing.T) {
 		t.Fatal("PostResetGrace=0: recycle disabled, want a liveness ping")
 	}
 }
+
+func TestLivenessReportDue(t *testing.T) {
+	// The liveness report is an Info-level breadcrumb that makes an Info-only
+	// log answer the question a Debug log would: how stale are the session's
+	// received frames right now. It is due every 60s per session, never
+	// before the first interval has passed.
+	now := time.Unix(1_000_000, 0)
+	if livenessReportDue(now, now, time.Minute) {
+		t.Fatal("fresh session: no report yet")
+	}
+	if livenessReportDue(now.Add(-59*time.Second), now, time.Minute) {
+		t.Fatal("59s since the last report: not due yet")
+	}
+	if !livenessReportDue(now.Add(-60*time.Second), now, time.Minute) {
+		t.Fatal("60s since the last report: due")
+	}
+}

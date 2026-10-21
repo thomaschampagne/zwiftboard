@@ -284,6 +284,15 @@ func postResetStale(resetAt, lastActivity, now time.Time) bool {
 		now.Sub(resetAt) >= PostResetGrace && lastActivity.Before(resetAt)
 }
 
+// livenessReportDue reports that this session owes its Info-level liveness
+// breadcrumb: one line per interval, so an Info-only log shows how stale the
+// received-frame stream has become without the Debug-rate frame spam. Used to
+// diagnose notification-stream deaths that writes cannot see (the
+// write-live zombie state).
+func livenessReportDue(lastReported, now time.Time, every time.Duration) bool {
+	return !lastReported.IsZero() && now.Sub(lastReported) >= every
+}
+
 // ReconnectWindow is how recently a controller must have advertised to count
 // as "seen": it opens the scan gate for that controller's session goroutine AND
 // marks the pod "detected" on the status screen. One value for both — the gate
@@ -514,9 +523,17 @@ func Session(t Target, km *KeyMap) error {
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
 	resetSent := false
-	var resetAt time.Time // armed when the scheduled 0x18 reset was sent
+	var resetAt time.Time    // armed when the scheduled 0x18 reset was sent
+	lastReport := time.Now() // liveness breadcrumb anchor (session start)
 	for range tick.C {
 		now := time.Now()
+		if livenessReportDue(lastReport, now, time.Minute) {
+			lastReport = now
+			slog.Info("session liveness", "controller", t.Label,
+				"secondsSinceLastFrame", now.Sub(activity.last()).Round(time.Second),
+				"resetSent", resetSent,
+				"resetStale", postResetStale(resetAt, activity.last(), now))
+		}
 		if keepaliveTick(resetSent, activity.last(), now) {
 			resetSent = true
 			resetAt = now
