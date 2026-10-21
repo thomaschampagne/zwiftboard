@@ -146,13 +146,22 @@ tall as today.
   (`LEFT UP RIGHT DOWN MIN` vs `Y Z A B PLUS`), and the status card above
   already names "Left Controller" and "Right Controller". A header line would
   cost a screen line for nothing.
-- **No wrapping, at any width.** A cell is `name(6) + "→ "(2) + keycap(9) +
-  "  " + status(12)` = 31 cells, so two columns need 31 + 2 + 31 = 64 cells
-  of inner width. The card's inner width is `min(terminal, 120) - 4` (minimum
-  36). **Rule:** render side by side when the inner width is ≥ 64; below that,
+- **No wrapping, at any width.** A cell is `name(6) + "→ "(2) + keycap(11) +
+  "  " + status(12..14)`. The keycap field is 11, not 9: the keycap style
+  carries its own one-space padding on each side (`sKeycap = …Padding(0, 1)`).
+  The status field is **12 idle and 14 when it carries a label** — the label
+  styles (`sDown`/`sHold`/`sReleased`) have `Padding(0, 1)` too, so the label
+  is 14 cells, not 12. A row is therefore **31 cells unmapped, 33 idle, 35
+  labelled**, and the cell is sized for the widest case: **35**. The
+  two-column table needs `35 + 2 + 35` = **72** cells of inner width. The
+  card's inner width is `min(terminal, 120) - 4` (minimum 36).
+  **Rule:** render side by side when the inner width is ≥ 72; below that,
   stack the two blocks vertically (left pod's rows, then the right pod's) so
   nothing ever wraps into a taller table. The stacked fallback is taller, but
-  only on a terminal too narrow for the side-by-side form.
+  only on a terminal too narrow for the side-by-side form. (Widths measured
+  with `ansi.StringWidth`, not guessed. The status cell keeps its current
+  rendering on purpose: the right-pod-only screen must stay byte for byte
+  the same.)
 - **The left column appears only when the active profile maps at least one
   left-pod button.** The other nine profiles keep today's screen byte for
   byte — the table is the *profile's* bindings, and a profile that does not
@@ -323,7 +332,7 @@ button that was pressed.
 - The `notepad` mapping uses **letters** (`l u r d m`), not arrow keys.
 - The **same-VK fix ships in this POC** rather than after it.
 - The status screen uses the **two-column** table, with no header row, a
-  stacked fallback below 64 cells of inner width, and the left column shown
+  stacked fallback below 72 cells of inner width, and the left column shown
   only for profiles that use the left pod.
 - Only the `notepad` profile is touched; the other nine keep their
   right-pod-only mapping.
