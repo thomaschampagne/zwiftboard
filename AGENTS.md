@@ -101,10 +101,11 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
 
 - WinRT returns a partial GATT service list right after connect: enumerate
   ALL services with retry and match characteristics by UUID (`connect`).
-- The Click pair MIRRORS button state: one press arrives as the same frame
-  from both units → dedup is edge-triggered per handler: only bits that
-  changed since the previous frame act, so an identical mirrored bitmap
-  changes nothing.
+- The Click pair MIRRORS button state, but ASYMMETRICALLY: the RIGHT pod's
+  buttons arrive as the same frame from both units, the LEFT pod's own
+  buttons ONLY from the left unit (seen in zwiftboard.log, 2026-10-21). Dedup
+  is edge-triggered per handler: only bits that changed since the previous
+  frame act, so an identical mirrored bitmap changes nothing.
 - A synthetic `keybd_event` down has NO OS auto-repeat: it is a single event
   and the keyboard driver does not repeat it for you. Games that poll the key
   state see the hold, but text apps (Notepad, chat) need the repeated
@@ -113,8 +114,10 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   this or held letters stop repeating in text fields.
 - The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
   the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
-  link. Both pods are connected (see BOTH PODS ARE CONNECTED); only the
-  RIGHT pod's buttons (Y Z A B PLUS) are normally mapped. A lone RIGHT pod's
+  link. Both pods are connected (see BOTH PODS ARE CONNECTED); both
+  pods' buttons are mappable (LEFT UP RIGHT DOWN MIN on the left pod,
+  Y Z A B PLUS on the right); the shipped profiles map the right pod, the
+  `notepad` profile maps both. A lone RIGHT pod's
   LED keeps blinking (advertising mode) even though its frames decode fine —
   cosmetic, not a fault.
 - Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`), then a keepalive
@@ -149,6 +152,14 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   session in use is never rebooted.
 - Button frame `0x23` + protobuf field 1 = bitmap, **0 = pressed**; bits are
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
+- The held state is a per-VK COUNT per handler (`Holds.own`), not a flag: two
+  different buttons of the SAME handler mapped to the SAME key (the mirrored
+  `Z` plus the left pod's own `LEFT`, both bound to `left`) must hold the key
+  until the LAST of them is released. With a flag the first release wiped it
+  and the second release found nothing to lift — the key stayed down for the
+  whole process. Every path gives back exactly what it took: `Press` counts
+  up, `Release` counts down, the `Press` rollback counts down (it must never
+  delete the whole VK), `ReleaseAll` subtracts the handler's whole count.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
   locked; `ff 04 00` keeps an unlocked device unlocked).
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence

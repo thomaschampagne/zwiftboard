@@ -15,10 +15,11 @@ Why?! I needed to gear +/- in MyWhoosh using my Zwift Click v2 without paying fo
 
 Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it to their app. `zwiftboard` unlocks it: connect over Bluetooth, press a button, and it **types real keyboard keys**.
 
-> **Only the RIGHT pod fires keys.** The Click V2 is a pair and zwiftboard keeps
-> _both_ pods connected, but the mapped buttons all live on the RIGHT pod
-> (`Y` `Z` `A` `B` `PLUS`). The LEFT pod's arrows/minus are not used — it just
-> has to stay switched on so the pair's link stays alive.
+> **Both pods can fire keys.** The Click V2 is a pair and zwiftboard keeps
+> _both_ pods connected. The RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`) are
+> mapped in every shipped profile; the LEFT pod's buttons (`LEFT` `UP` `RIGHT`
+> `DOWN` `MIN`) can be mapped too — the shipped `notepad` profile does, so the
+> left pod's arrows and minus are usable.
 
 - **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
 - **No tricks** - no Zwift account, no 24h controller unlock. Works out of the box.
@@ -227,7 +228,7 @@ zwiftboard [flags]
 | `biketerra`     | `S`/`W` gear down/up, `A`/`Z` menu right/left, `Y` UI toggle                  | [Biketerra virtual shifting](https://biketerra.com/help-center/virtual-shifting)                                                                        |
 | `rouvy`         | `,`/`.` gear down/up, `A`/`Z` turn right/left, `Y` hide interface             | [Rouvy remote controllers](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)                           |
 | `tacx`          | `+`/`B` difficulty down/up, `A`/`Z` next/previous screen, `Y` pause           | [Tacx keyboard shortcuts](https://support.garmin.com/en-US/?faq=aFNaNhVBpF1wKTKB40LYg7)                                                                 |
-| `notepad`       | `+ p`, `A a`, `B b`, `Y y`, `Z z`                                             | focuses `Notepad` and starts it — the shipped default                                                                                                   |
+| `notepad`       | `+ p`, `A a`, `B b`, `Y y`, `Z z`, plus the left pod's `LEFT l`, `UP u`, `RIGHT r`, `DOWN d`, `MIN m` | focuses `Notepad` and starts it — the shipped default                                                                                                   |
 
 ## How it works
 
@@ -272,18 +273,21 @@ zwiftboard [flags]
    in MyWhoosh needs the left/right hold). While held, the key auto-repeats
    like a real keyboard (250ms delay, ~33ms interval — a synthetic press is
    otherwise a single event, so letters would not repeat in text apps).
-   The pair mirrors every press (both units send the same frame), so dedup
-   is edge-triggered: a handler only acts on bits that changed since the
-   previous frame, and an identical mirrored bitmap changes nothing. If
+   The mirroring is asymmetric: the RIGHT pod's presses arrive on both
+   units' streams, the LEFT pod's own presses only on the left unit's.
+   Dedup is edge-triggered: a handler only acts on bits that changed since
+   the previous frame, and an identical mirrored bitmap changes nothing. If
    `focusProgramNamePrefixOnClick` is set, the configured window is brought
    to the foreground before the key goes out via Windows `keybd_event`.
 
-**Both pods connected, only the right mapped.** The Click V2 ships as two pods
+**Both pods connected, both mappable.** The Click V2 ships as two pods
 that work as a _pair_: the LEFT pod is the pair's BLE anchor and the RIGHT pod
 mirrors its state to the LEFT over a private RF link. This build connects _both_
 pods — keeping the LEFT anchor connected is what keeps the RIGHT pod's link
-alive — but maps only the RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`). Scanning
-never gives up, so a pod turned on minutes later still joins.
+alive — and both pods' buttons can be mapped. The shipped profiles map the
+RIGHT pod (`Y` `Z` `A` `B` `PLUS`); `notepad` also maps the LEFT pod (`LEFT`
+`UP` `RIGHT` `DOWN` `MIN`). Scanning never gives up, so a pod turned on
+minutes later still joins.
 
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.

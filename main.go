@@ -10,7 +10,9 @@
 // Click V2 is a PAIR: both pods are connected (each gets its own session and
 // keepalive). Connecting only the right pod, or merely detecting the left one,
 // does not stop the right pod's ~65s idle drop; with both connected the link
-// stays up. Only the right pod's buttons are normally mapped (Y Z A B PLUS).
+// stays up. Both pods' buttons are mappable (LEFT UP RIGHT DOWN MIN on the
+// left pod, Y Z A B PLUS on the right); the shipped profiles map the right
+// pod, the `notepad` profile maps both.
 // Startup checks Bluetooth (asks for it to be switched on and retries), then
 // asks for both controllers and reports the pair state as it changes.
 // Scanning runs in bursts until controllers appear and keeps listening for
@@ -35,6 +37,7 @@ import (
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
 	"zwiftboard/internal/tui"
+	"zwiftboard/internal/zwift"
 )
 
 //go:generate just gen-icon
@@ -200,14 +203,14 @@ func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
 		if !isFirst {
 			return
 		}
-		if n == 1 {
-			// First controller. Only the RIGHT pod's buttons are mapped; a lone
-			// RIGHT pod's LED may keep blinking (advertising) — cosmetic, not a fault.
-			slog.Info("controller connected — right pod supported (Y/Z/A/B/+); a lone right pod's LED may keep blinking (cosmetic)", "controller", t.Label)
-		} else if n >= 2 {
-			// Both pods of the pair are connected — the LEFT pod is the pair's BLE
-			// anchor and must stay connected; only the RIGHT pod's buttons are mapped.
-			slog.Info("more than one controller connected — only the right pod's buttons are mapped (left pod has just to stay on)", "controllers", n)
+		// The pod side comes from the advertisement's Zwift manufacturer
+		// record, so the log names it instead of guessing from the
+		// discovery order (the first controller found is often the LEFT one).
+		if n == 1 && t.Side == zwift.PodRight {
+			// A lone RIGHT pod keeps blinking (advertising) — cosmetic, not a fault.
+			slog.Info("controller connected — a lone right pod's LED may keep blinking (cosmetic)", "controller", t.Label, "pod", t.Side.String())
+		} else {
+			slog.Info("controller connected", "controller", t.Label, "pod", t.Side.String(), "controllers", n)
 		}
 		go func() {
 			waiting := false
