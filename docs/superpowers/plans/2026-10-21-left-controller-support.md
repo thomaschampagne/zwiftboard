@@ -133,7 +133,14 @@ func TestSameVKMirroredHeldTogether(t *testing.T) {
 - [ ] **Step 4: Run the test to verify it FAILS**
 
 Run: `go test ./internal/ble/ -run TestSameVK -v`
-Expected: FAIL — `TestSameVKTwoButtonsHeldTogether: both released: down=1 up=0, want 1/1` and `TestSameVKMirroredHeldTogether: mirrored + own button on one VK: down=1 up=0, want 1/1`.
+Expected: FAIL — both new tests fail. `TestSameVKTwoButtonsHeldTogether` reports
+`both released: down=1 up=0, want 1/1` (the key stays stuck down).
+`TestSameVKMirroredHeldTogether` reports whatever the shared count was left at
+— it is usually `down=0 up=0, want 1/1`, because the FIRST test's bug leaves
+`heldCount[0x25]` at 1, so the mirrored test's first press is not the first
+reservation and no key goes down at all. **Both are the same root cause**
+(the per-VK flag instead of a count); the exact numbers depend on the order
+the tests run in.
 
 - [ ] **Step 5: Change `Holds.own` to a count** — `internal/ble/buttons.go`:
 
