@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"zwiftboard/internal/config"
+	"zwiftboard/internal/zwift"
 )
 
 // shippedProfiles is the full set of profiles the embedded default config
@@ -76,6 +77,20 @@ func TestEveryShippedProfileLoads(t *testing.T) {
 	for _, name := range shippedProfiles {
 		if _, err := config.Load(path, name); err != nil {
 			t.Errorf("profile %s: %v", name, err)
+		}
+	}
+}
+
+// The notepad profile is the hardware-test profile of the left-controller
+// POC: it must map the LEFT pod's five buttons as well as the RIGHT pod's.
+func TestNotepadProfileMapsBothPods(t *testing.T) {
+	cfg, err := config.Load(writeDefaultConfig(t), "notepad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, btn := range append(append([]string{}, zwift.LeftButtons...), zwift.RightButtons...) {
+		if _, ok := cfg.Bindings[btn]; !ok {
+			t.Errorf("profile notepad: missing binding for %s", btn)
 		}
 	}
 }

@@ -54,16 +54,23 @@ loglevel: info
 # Apps checked and excluded: FulGaz (no in-ride keys), Strappo (Apple-only, no
 # Windows build, no keyboard shortcuts), BKOOL (undocumented).
 #
-# BOTH PODS CONNECTED, RIGHT POD MAPPED: the Click V2 is a pair and zwiftboard
+# BOTH PODS CONNECTED, BOTH PODS MAPPABLE: the Click V2 is a pair and zwiftboard
 # keeps BOTH pods connected — the LEFT pod is the pair's BLE anchor and letting
-# it drop drops the RIGHT pod's link too. Only the RIGHT pod's buttons
-# (Y Z A B PLUS) are mapped below. The left pod's buttons (LEFT UP RIGHT DOWN
-# MIN) can be mapped but are not used here. Gear shift lives on the right pod:
-# PLUS = gear down (k), B = gear up (i).
+# it drop drops the RIGHT pod's link too. Both pods' buttons can be mapped
+# below: the LEFT pod has LEFT UP RIGHT DOWN MIN, the RIGHT pod has Y Z A B
+# PLUS. The shipped profiles map the RIGHT pod only, except `notepad` which
+# maps both (the left-pod hardware-test profile). Gear shift lives on the
+# right pod: PLUS = gear down (k), B = gear up (i).
 profiles:
 
-  # Start notepad
+  # Start notepad. Both pods are mapped: the left pod's arrows and minus
+  # type l u r d m, the right pod's buttons type a b y z p.
   notepad:
+    LEFT: l           # left pod: arrow left
+    UP: u             # left pod: arrow up
+    RIGHT: r          # left pod: arrow right
+    DOWN: d           # left pod: arrow down
+    MIN: m            # left pod: minus
     PLUS: p
     A: a
     B: b
