@@ -89,3 +89,43 @@ func TestKeepaliveTick(t *testing.T) {
 		t.Fatal("IdleReset=0: want a liveness ping, reset path disabled")
 	}
 }
+
+func TestPostResetStale(t *testing.T) {
+	// After the scheduled 0x18 pod reset the session must end itself when the
+	// pod emits NO frame within the grace window: a pod whose app dies while
+	// its BLE stack still ACKs writes would otherwise be a zombie forever —
+	// writes "succeed", no frame ever arrives, no session end, no reconnect.
+	// Pre-reset idle silence must NEVER end a session (hard-won fact), and a
+	// single frame after the reset (challenge/status/button) proves the pod
+	// revived unless the grace expires first.
+	saved := PostResetGrace
+	defer func() { PostResetGrace = saved }()
+	PostResetGrace = 15 * time.Second
+
+	resetAt := time.Unix(1_000_000, 0)
+	e := resetAt.Add(-100 * time.Second)  // stale from long before the reset
+	frame := resetAt.Add(2 * time.Second) // a revival frame two seconds in
+
+	// Never reset armed: idle silence never ends a session.
+	if postResetStale(time.Time{}, e, resetAt.Add(60*time.Second)) {
+		t.Fatal("no reset armed: want a liveness ping, never a recycle")
+	}
+	// Within the grace window: wait for the pod to reboot and speak.
+	if postResetStale(resetAt, e, resetAt.Add(14*time.Second)) {
+		t.Fatal("within the grace window: want the session to wait")
+	}
+	// Grace elapsed with no frame since the reset: the pod is a zombie — recycle.
+	if !postResetStale(resetAt, e, resetAt.Add(15*time.Second)) {
+		t.Fatal("silent past the grace: want the session recycled")
+	}
+	// One frame after the reset: the pod revived, keep the session.
+	if postResetStale(resetAt, frame, resetAt.Add(60*time.Second)) {
+		t.Fatal("frame arrived after the reset: keep the session")
+	}
+
+	// PostResetGrace=0 disables the recycle entirely (liveness-only behavior).
+	PostResetGrace = 0
+	if postResetStale(resetAt, e, resetAt.Add(time.Hour)) {
+		t.Fatal("PostResetGrace=0: recycle disabled, want a liveness ping")
+	}
+}

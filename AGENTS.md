@@ -149,6 +149,16 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   re-advertises within seconds and the scan gate reconnects. Activity (any
   received frame) restarts the idle clock and suppresses the reset, so a
   session in use is never rebooted.
+- THE WRITE-LIVE ZOMBIE (seen on the LEFT pod, 2026-10-21 log): a pod's app
+  can die (LED sleep) while its BLE stack keeps ACK-ing our writes — the
+  stream stops, `Session` never returns, nothing logs. The scheduled `0x18`
+  reset is swallowed by it, and a rebooted pod can revive on the maintained
+  link WITHOUT notifications. So the keepalive loop recycles the session
+  when it hears NOTHING for `PostResetGrace` (15s) after the reset it sent
+  (`postResetStale`): the caller tears down and the scan gate reconnects for
+  a fresh handshake + CCCD. A single frame after the reset (the `0xFF`
+  challenge marks a revived pod) cancels the recycle. Pre-reset idle
+  silence still NEVER ends a session.
 - Button frame `0x23` + protobuf field 1 = bitmap, **0 = pressed**; bits are
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
 - The held state is a per-VK COUNT per handler (`Holds.own`), not a flag: two

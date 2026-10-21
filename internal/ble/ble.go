@@ -60,6 +60,19 @@ var (
 	// 0 disables the reset.
 	IdleReset = 55 * time.Second
 
+	// PostResetGrace is how long the session waits AFTER the scheduled 0x18
+	// reset for any inbound frame (challenge, status, button) before ending
+	// itself so the caller reconnects cleanly. The pod's app can die while its
+	// BLE stack still ACKs writes (seen on the LEFT pod, 2026-10-21: the stream
+	// stops, writes keep "succeeding", nothing logs — a zombie forever), and a
+	// rebooted pod can revive on a maintained link without notifications. A
+	// rebooted pod speaks within seconds (the 0xFF challenge), so 15s of total
+	// silence after OUR OWN reset means the session state is dead and only a
+	// fresh connect (handshake trio + notifications) can recover the pod. This
+	// does NOT touch pre-reset idle silence: with no reset armed the session is
+	// never ended on silence (hard-won fact). 0 disables the recycle.
+	PostResetGrace = 15 * time.Second
+
 	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
 	// once after connect. The periodic keepalive re-sends plain rideOn ("RideOn").
 	// Nothing we write to sync-rx holds a LONE RIGHT pod: the pod drops the link
@@ -256,6 +269,19 @@ func scanBurst(burst time.Duration, known func(addr string) bool) (map[string]Ta
 // its last button, so the reset is sent regardless of the left pod.
 func keepaliveTick(resetSent bool, lastActivity, now time.Time) bool {
 	return IdleReset > 0 && !resetSent && now.Sub(lastActivity) >= IdleReset
+}
+
+// postResetStale reports that a session which ALREADY sent its scheduled 0x18
+// pod reset at resetAt has heard nothing since: the pod was rebooted on our
+// schedule and should have spoken within seconds (the 0xFF challenge), so
+// PostResetGrace of total inbound silence means the session's notification
+// state is dead (died app / re-linked pod without a CCCD) and only a fresh
+// Session() can recover the pod — the caller tears down and reconnects
+// scan-gated. A single frame after the reset marks the pod revived and
+// cancels the recycle; silence BEFORE a reset never recycles a session.
+func postResetStale(resetAt, lastActivity, now time.Time) bool {
+	return PostResetGrace > 0 && !resetAt.IsZero() &&
+		now.Sub(resetAt) >= PostResetGrace && lastActivity.Before(resetAt)
 }
 
 // ReconnectWindow is how recently a controller must have advertised to count
@@ -488,14 +514,20 @@ func Session(t Target, km *KeyMap) error {
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
 	resetSent := false
+	var resetAt time.Time // armed when the scheduled 0x18 reset was sent
 	for range tick.C {
-		if keepaliveTick(resetSent, activity.last(), time.Now()) {
+		now := time.Now()
+		if keepaliveTick(resetSent, activity.last(), now) {
 			resetSent = true
+			resetAt = now
 			slog.Debug("idle — sending pod reset (0x18) to reboot before the ~65s sleep watchdog", "controller", t.Label, "idle", IdleReset)
 			if _, err := writeChar(syncRx, resetPod); err != nil {
 				return fmt.Errorf("reset: %w", err)
 			}
 			continue
+		}
+		if postResetStale(resetAt, activity.last(), now) {
+			return fmt.Errorf("pod silent %s past the scheduled reset (0x18) — recycling the session for a clean reconnect (handshake + notifications)", PostResetGrace)
 		}
 		if _, err := writeChar(syncRx, rideOn); err != nil {
 			return fmt.Errorf("disconnected: %w", err)
