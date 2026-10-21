@@ -295,6 +295,76 @@ func TestReleaseAllHeldLifts(t *testing.T) {
 	}
 }
 
+// Two buttons of the SAME handler mapped to the SAME key (a profile that
+// binds e.g. LEFT and UP to one key) must hold the key until the LAST of
+// them is released, and lift it exactly once. The held state is a per-VK
+// COUNT, not a flag: with a flag the first release wiped it and the second
+// release found nothing to lift, leaving the key stuck down for the whole
+// process.
+func TestSameVKTwoButtonsHeldTogether(t *testing.T) {
+	rec := &keyRecorder{}
+	hk := holdKeys(rec.downFn, rec.upFn)
+	km := NewKeyMap(map[string]keys.Binding{
+		"LEFT": {VK: 0x25, Token: "left"},
+		"UP":   {VK: 0x25, Token: "left"},
+	})
+	h := ButtonHandler("t", km, hk.Press, hk.Release)
+	t.Cleanup(hk.ReleaseAll)
+
+	both := []byte{0x23, 0x08, 0xFC, 0xFF, 0xFF, 0xFF, 0x0F}   // LEFT + UP pressed
+	upOnly := []byte{0x23, 0x08, 0xFD, 0xFF, 0xFF, 0xFF, 0x0F} // LEFT released, UP held
+	idle := []byte{0x23, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}   // all released
+
+	h(both)
+	if down, up := rec.counts(); down != 1 || up != 0 {
+		t.Fatalf("both buttons down: down=%d up=%d, want 1/0", down, up)
+	}
+	h(upOnly)
+	if down, up := rec.counts(); down != 1 || up != 0 {
+		t.Fatalf("one of them released: down=%d up=%d, want 1/0 (the key is still held)", down, up)
+	}
+	h(idle)
+	if down, up := rec.counts(); down != 1 || up != 1 {
+		t.Fatalf("both released: down=%d up=%d, want 1/1 (the key must not stay stuck)", down, up)
+	}
+}
+
+// The realistic shape: the LEFT pod's stream carries the mirrored RIGHT-pod
+// state AND the left pod's own button, so one handler sees two buttons on
+// one VK. The key must go down once and come up once — never stay down.
+func TestSameVKMirroredHeldTogether(t *testing.T) {
+	rec := &keyRecorder{}
+	rHK := holdKeys(rec.downFn, rec.upFn)
+	lHK := holdKeys(rec.downFn, rec.upFn)
+	// The right pod presses Z; the left pod mirrors Z and presses its own
+	// LEFT. Both are bound to the same key (left arrow).
+	rKM := NewKeyMap(map[string]keys.Binding{"Z": {VK: 0x25, Token: "left"}})
+	lKM := NewKeyMap(map[string]keys.Binding{
+		"Z":    {VK: 0x25, Token: "left"}, // mirrored from the right pod
+		"LEFT": {VK: 0x25, Token: "left"}, // the left pod's own button
+	})
+	right := ButtonHandler("right", rKM, rHK.Press, rHK.Release)
+	left := ButtonHandler("left", lKM, lHK.Press, lHK.Release)
+	t.Cleanup(rHK.ReleaseAll)
+	t.Cleanup(lHK.ReleaseAll)
+
+	zPress := []byte{0x23, 0x08, 0xFF, 0xFE, 0xFF, 0xFF, 0x0F} // Z pressed
+	zLeft := []byte{0x23, 0x08, 0xFE, 0xFE, 0xFF, 0xFF, 0x0F}  // Z + LEFT pressed
+	lPress := []byte{0x23, 0x08, 0xFE, 0xFF, 0xFF, 0xFF, 0x0F} // LEFT pressed, Z released
+	idle := []byte{0x23, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}   // all released
+
+	right(zPress)
+	left(zPress) // the mirrored copy of the right pod's press
+	left(zLeft)  // the left pod's own LEFT joins the mirrored Z
+	left(lPress) // Z released (mirrored), LEFT still held
+	right(idle)  // Z released on the right pod
+	left(idle)   // the mirrored release
+
+	if down, up := rec.counts(); down != 1 || up != 1 {
+		t.Fatalf("mirrored + own button on one VK: down=%d up=%d, want 1/1", down, up)
+	}
+}
+
 // A session dropped mid-hold never sees the release edge: ReleaseAll must
 // report each force-lifted VK so the UI can clear the held row.
 func TestReleaseAllLiftNotifiesOnLifted(t *testing.T) {

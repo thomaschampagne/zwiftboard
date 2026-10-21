@@ -41,14 +41,20 @@ var (
 type Holds struct {
 	down func(keys.Binding) bool
 	up   func(keys.Binding) bool
-	own  map[uint16]bool // VKs THIS handler currently sees pressed
+	// own counts how many of THIS handler's buttons currently hold the VK.
+	// A count, not a flag: two different buttons of one handler can map to
+	// the same key (the mirrored right-pod press plus the left pod's own
+	// button), and the key must stay down until the LAST of them is
+	// released. With a flag the first release wiped it and the second
+	// release found nothing to lift — the key stuck down for the process.
+	own map[uint16]int
 }
 
 // holdKeys wraps raw down/up key funcs with the per-VK refcount shared
 // across ALL handlers. down/up stay injectable for tests; return whether the
 // key was actually pressed/released.
 func holdKeys(down, up func(keys.Binding) bool) *Holds {
-	return &Holds{down: down, up: up, own: map[uint16]bool{}}
+	return &Holds{down: down, up: up, own: map[uint16]int{}}
 }
 
 // Press is called on a pressed transition of a mapped button. It reserves the
@@ -58,7 +64,7 @@ func holdKeys(down, up func(keys.Binding) bool) *Holds {
 // press can still land.
 func (h *Holds) Press(b keys.Binding) {
 	keyMu.Lock()
-	h.own[b.VK] = true
+	h.own[b.VK]++
 	heldCount[b.VK]++
 	first := heldCount[b.VK] == 1
 	keyMu.Unlock()
@@ -67,8 +73,15 @@ func (h *Holds) Press(b keys.Binding) {
 	}
 	if !h.down(b) {
 		keyMu.Lock()
-		delete(h.own, b.VK)
-		heldCount[b.VK]--
+		// Give back exactly what this press took: ONE reservation, not the
+		// whole key — another handler (or another button of this one) may
+		// still hold it.
+		if h.own[b.VK] > 0 {
+			h.own[b.VK]--
+		}
+		if heldCount[b.VK] > 0 {
+			heldCount[b.VK]--
+		}
 		if heldCount[b.VK] == 0 {
 			delete(heldCount, b.VK)
 		}
@@ -80,11 +93,11 @@ func (h *Holds) Press(b keys.Binding) {
 // reservation and sends Up when no live handler sees the key pressed anymore.
 func (h *Holds) Release(b keys.Binding) {
 	keyMu.Lock()
-	if !h.own[b.VK] {
+	if h.own[b.VK] == 0 {
 		keyMu.Unlock() // never saw it pressed (e.g. subscribed mid-hold): nothing to lift
 		return
 	}
-	delete(h.own, b.VK)
+	h.own[b.VK]--
 	if heldCount[b.VK] > 0 {
 		heldCount[b.VK]--
 	}
@@ -102,12 +115,15 @@ func (h *Holds) Release(b keys.Binding) {
 // that sibling and will lift it.
 func (h *Holds) ReleaseAll() {
 	keyMu.Lock()
-	for vk := range h.own {
-		delete(h.own, vk)
-		if heldCount[vk] > 0 {
-			heldCount[vk]--
+	for vk, n := range h.own {
+		// Give back exactly what this handler took: its whole count, not
+		// one — it may hold the same VK through several buttons.
+		heldCount[vk] -= n
+		if heldCount[vk] < 0 {
+			heldCount[vk] = 0
 		}
 	}
+	h.own = map[uint16]int{}
 	lift := make([]uint16, 0, len(heldCount))
 	for vk, n := range heldCount {
 		if n <= 0 {
