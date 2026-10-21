@@ -16,8 +16,8 @@ Why?! I needed to gear +/- in MyWhoosh using my Zwift Click v2 without paying fo
 Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it to their app. `zwiftboard` unlocks it: connect over Bluetooth, press a button, and it **types real keyboard keys**.
 
 > **Both pods can fire keys.** The Click V2 is a pair and zwiftboard keeps
-> _both_ pods connected. The RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`) are
-> mapped in every shipped profile; the LEFT pod's buttons (`LEFT` `UP` `RIGHT`
+> _both_ pods connected. The shipped profiles map the RIGHT pod's buttons
+> (`Y` `Z` `A` `B` `PLUS`); the LEFT pod's buttons (`LEFT` `UP` `RIGHT`
 > `DOWN` `MIN`) can be mapped too — the shipped `notepad` profile does, so the
 > left pod's arrows and minus are usable.
 
@@ -285,9 +285,9 @@ that work as a _pair_: the LEFT pod is the pair's BLE anchor and the RIGHT pod
 mirrors its state to the LEFT over a private RF link. This build connects _both_
 pods — keeping the LEFT anchor connected is what keeps the RIGHT pod's link
 alive — and both pods' buttons can be mapped. The shipped profiles map the
-RIGHT pod (`Y` `Z` `A` `B` `PLUS`); `notepad` also maps the LEFT pod (`LEFT`
-`UP` `RIGHT` `DOWN` `MIN`). Scanning never gives up, so a pod turned on
-minutes later still joins.
+RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`, the ones each profile needs);
+`notepad` also maps the LEFT pod's (`LEFT` `UP` `RIGHT` `DOWN` `MIN`).
+Scanning never gives up, so a pod turned on minutes later still joins.
 
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.

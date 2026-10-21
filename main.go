@@ -210,7 +210,9 @@ func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
 			// A lone RIGHT pod keeps blinking (advertising) — cosmetic, not a fault.
 			slog.Info("controller connected — a lone right pod's LED may keep blinking (cosmetic)", "controller", t.Label, "pod", t.Side.String())
 		} else {
-			slog.Info("controller connected", "controller", t.Label, "pod", t.Side.String(), "controllers", n)
+			// n counts the controllers with a session loop, not the ones
+			// connected right now: a loop outlives its pod by registryIdleTTL.
+			slog.Info("controller connected", "controller", t.Label, "pod", t.Side.String(), "sessions", n)
 		}
 		go func() {
 			waiting := false
