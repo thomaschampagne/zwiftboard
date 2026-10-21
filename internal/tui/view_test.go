@@ -445,7 +445,11 @@ func TestViewTableFitsInnerWidth(t *testing.T) {
 			}
 		}
 		check(m, "idle")
+		// One button per column: the widest row is the one where BOTH
+		// cells carry a status label (the labelled cell is 14, not 12),
+		// so a single pressed column would not measure the worst case.
 		next, _ := m.Update(KeyStateMsg{Button: "LEFT", Down: true})
+		next, _ = next.Update(KeyStateMsg{Button: "A", Down: true})
 		check(next.(Model), "pressed")
 	}
 }
