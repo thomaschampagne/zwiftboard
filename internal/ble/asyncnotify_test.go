@@ -130,6 +130,37 @@ func TestPostResetStale(t *testing.T) {
 	}
 }
 
+func TestAckDue(t *testing.T) {
+	// The LEFT pod's unlock latch expires ~30s after the last ff 04 00 ack
+	// (seen 2026-10-21: button stream died exactly 30.03s after ack #3), and
+	// the pod sends only ~2 challenges at connect, so challenge-driven acking
+	// stops and the pod's button engine locks while its status/heartbeat/echo
+	// frames keep flowing. The session therefore re-sends ff 04 00 every
+	// AckInterval ON OUR OWN CLOCK, anchored at the last ack actually sent
+	// (unlock echo, challenge re-arm, or a prior periodic ack). Never acked
+	// (no anchor) or AckInterval=0: nothing periodic.
+	saved := AckInterval
+	defer func() { AckInterval = saved }()
+
+	anchor := time.Unix(1_000_000, 0)
+
+	AckInterval = 15 * time.Second
+	if ackDue(time.Time{}, anchor) {
+		t.Fatal("never acked (no anchor): want no periodic ack")
+	}
+	if ackDue(anchor, anchor.Add(14*time.Second)) {
+		t.Fatal("14s since the last ack: not due yet")
+	}
+	if !ackDue(anchor, anchor.Add(15*time.Second)) {
+		t.Fatal("15s since the last ack: due")
+	}
+
+	AckInterval = 0
+	if ackDue(anchor, anchor.Add(time.Hour)) {
+		t.Fatal("AckInterval=0: periodic ack disabled")
+	}
+}
+
 func TestLivenessReportDue(t *testing.T) {
 	// The liveness report is an Info-level breadcrumb that makes an Info-only
 	// log answer the question a Debug log would: how stale are the session's

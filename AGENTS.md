@@ -170,7 +170,18 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   up, `Release` counts down, the `Press` rollback counts down (it must never
   delete the whole VK), `ReleaseAll` subtracts the handler's whole count.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
-  locked; `ff 04 00` keeps an unlocked device unlocked).
+  locked; `ff 04 00` keeps an unlocked device unlocked). THE UNLOCK LATCH
+  EXPIRES: the LEFT pod's button engine locks ~30s after its LAST `ff 04 00`
+  ack (seen 2026-10-21: button stream died at exactly last-ack + 30.03s while
+  status `2A`/battery `FF 05`/heartbeat `19 10 50`/RideOn echo frames kept
+  flowing — invisible to any frame-activity clock, writes still succeed,
+  nothing logs), and the pod only sends ~2 challenges at connect
+  (~15.5s cadence), so challenge-driven acking alone lets the latch expire
+  mid-session. The session must feed the latch ON OUR OWN CLOCK:
+  `AckInterval` (15s) re-sends `ff 04 00` anchored at the last ack actually
+  written (`ackDue`); a failed ack write is a real disconnect and ends the
+  session like the keepalive failure. Incoming frames say NOTHING about the
+  latch — do not gate the ack on them.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must

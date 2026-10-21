@@ -73,6 +73,18 @@ var (
 	// never ended on silence (hard-won fact). 0 disables the recycle.
 	PostResetGrace = 15 * time.Second
 
+	// AckInterval re-sends the unlock ack (ff 04 00) on OUR OWN clock, every
+	// interval, anchored at the last ack actually written (unlock echo,
+	// challenge re-arm, or a prior periodic ack). The LEFT pod's unlock latch
+	// expires ~30s after the last ack (seen 2026-10-21: the button stream died
+	// exactly 30.03s after ack #3), and the pod sends only ~2 challenges at
+	// connect — challenge-driven acking alone lets the latch expire while the
+	// pod's status/heartbeat/echo frames keep flowing, so the death is
+	// invisible to any frame-activity clock and looks like a zombie (writes
+	// still succeed, nothing logs). A failed ack write is a REAL disconnect
+	// and ends the session like the keepalive failure does. 0 disables.
+	AckInterval = 15 * time.Second
+
 	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
 	// once after connect. The periodic keepalive re-sends plain rideOn ("RideOn").
 	// Nothing we write to sync-rx holds a LONE RIGHT pod: the pod drops the link
@@ -284,6 +296,15 @@ func postResetStale(resetAt, lastActivity, now time.Time) bool {
 		now.Sub(resetAt) >= PostResetGrace && lastActivity.Before(resetAt)
 }
 
+// ackDue reports that the session owes the pod an unlock ack (ff 04 00):
+// AckInterval has elapsed since the last ack was actually WRITTEN (a zero
+// lastAck — never acked — and AckInterval=0 both disable the periodic ack).
+// See AckInterval for why the latch must be fed on our own clock.
+func ackDue(lastAck, now time.Time) bool {
+	return AckInterval > 0 && !lastAck.IsZero() &&
+		now.Sub(lastAck) >= AckInterval
+}
+
 // livenessReportDue reports that this session owes its Info-level liveness
 // breadcrumb: one line per interval, so an Info-only log shows how stale the
 // received-frame stream has become without the Debug-rate frame spam. Used to
@@ -447,13 +468,34 @@ func Session(t Target, km *KeyMap) error {
 	// challengeRearm answers the 0xFF crypto challenge that arrives on async
 	// (not sync-tx): a short ff 04 00 ack keeps an already-unlocked pod's button
 	// stream from going silent.
+	//
+	// ackAnchorN holds the UnixNano of the last SUCCESSFUL ff 04 00 write
+	// (0 = never) — the anchor for the periodic AckInterval ack, without
+	// which the LEFT pod's ~30s unlock latch expires mid-session and locks
+	// the button engine while every other frame keeps flowing (see
+	// AckInterval). The anchor is written from the notification goroutines
+	// and read by the keepalive loop below, hence atomic. A failed ack write
+	// does NOT anchor: if the link is really dead the next keepalive or
+	// periodic-ack write fails too and ends the session. The zero state is
+	// honest: with no ack ever sent there is no periodic ack to schedule yet.
+	var ackAnchorN atomic.Int64
+	anchorAck := func() { ackAnchorN.Store(time.Now().UnixNano()) }
+	ackAnchor := func() time.Time {
+		n := ackAnchorN.Load()
+		if n == 0 {
+			return time.Time{}
+		}
+		return time.Unix(0, n)
+	}
 	challengeRearm := func() {
 		if !SendAck {
 			return
 		}
 		if _, err := writeChar(syncRx, ackSeq); err != nil {
 			slog.Debug("challenge re-arm write failed", "controller", t.Label, "error", err)
+			return
 		}
+		anchorAck()
 	}
 
 	handler := ButtonHandler(t.Label, km, hk.Press, hk.Release)
@@ -486,7 +528,11 @@ func Session(t Target, km *KeyMap) error {
 				if SendAck {
 					go func() {
 						defer recoverLog("ack write " + t.Label)
-						_, _ = writeChar(syncRx, ackSeq)
+						if _, err := writeChar(syncRx, ackSeq); err != nil {
+							slog.Debug("unlock ack write failed", "controller", t.Label, "error", err)
+							return
+						}
+						anchorAck()
 					}()
 				}
 			}
@@ -529,8 +575,14 @@ func Session(t Target, km *KeyMap) error {
 		now := time.Now()
 		if livenessReportDue(lastReport, now, time.Minute) {
 			lastReport = now
+			lastAck := ackAnchor()
+			lastAckStr := "never"
+			if !lastAck.IsZero() {
+				lastAckStr = fmt.Sprintf("%ss ago", now.Sub(lastAck).Round(time.Second))
+			}
 			slog.Info("session liveness", "controller", t.Label,
 				"secondsSinceLastFrame", now.Sub(activity.last()).Round(time.Second),
+				"lastAck", lastAckStr,
 				"resetSent", resetSent,
 				"resetStale", postResetStale(resetAt, activity.last(), now))
 		}
@@ -545,6 +597,19 @@ func Session(t Target, km *KeyMap) error {
 		}
 		if postResetStale(resetAt, activity.last(), now) {
 			return fmt.Errorf("pod silent %s past the scheduled reset (0x18) — recycling the session for a clean reconnect (handshake + notifications)", PostResetGrace)
+		}
+		// Periodic unlock ack: feed the LEFT pod's ~30s latch every
+		// AckInterval regardless of incoming frames — challenge-driven
+		// acking stops when the pod stops challenging, and its frame stream
+		// says NOTHING about the latch (see AckInterval). The successful
+		// write doubles as the liveness probe, so a failure ends the session
+		// exactly like a failed keepalive would.
+		if SendAck && ackDue(ackAnchor(), now) {
+			if _, err := writeChar(syncRx, ackSeq); err != nil {
+				return fmt.Errorf("disconnected: %w", err)
+			}
+			anchorAck()
+			continue // the ack write itself proved the session live
 		}
 		if _, err := writeChar(syncRx, rideOn); err != nil {
 			return fmt.Errorf("disconnected: %w", err)
