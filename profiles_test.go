@@ -83,14 +83,28 @@ func TestEveryShippedProfileLoads(t *testing.T) {
 
 // The notepad profile is the hardware-test profile of the left-controller
 // POC: it must map the LEFT pod's five buttons as well as the RIGHT pod's.
+//
+// The tokens are asserted too, not only their presence: the left pod types
+// the letters l u r d m (not the arrow keys) so the character shows up in
+// the Notepad text box, and a silent edit of the shipped config would
+// otherwise ship a wrong mapping that only the hardware test would catch.
 func TestNotepadProfileMapsBothPods(t *testing.T) {
 	cfg, err := config.Load(writeDefaultConfig(t), "notepad")
 	if err != nil {
 		t.Fatal(err)
 	}
+	want := map[string]string{
+		"LEFT": "l", "UP": "u", "RIGHT": "r", "DOWN": "d", "MIN": "m",
+		"PLUS": "p", "A": "a", "B": "b", "Y": "y", "Z": "z",
+	}
 	for _, btn := range append(append([]string{}, zwift.LeftButtons...), zwift.RightButtons...) {
-		if _, ok := cfg.Bindings[btn]; !ok {
+		bind, ok := cfg.Bindings[btn]
+		if !ok {
 			t.Errorf("profile notepad: missing binding for %s", btn)
+			continue
+		}
+		if bind.Token != want[btn] {
+			t.Errorf("profile notepad: %s is bound to %q, want %q", btn, bind.Token, want[btn])
 		}
 	}
 }
