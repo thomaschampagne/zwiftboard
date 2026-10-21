@@ -59,19 +59,22 @@ const (
 // the profile fields (Profile/Bindings/Focus/StartProgram/ProfileIndex) are
 // updated live by ProfileMsg on a runtime switch.
 type Config struct {
-	Profile      string
-	Bindings     map[string]string // button -> key token
-	Buttons      []string          // ordered table rows (right pod)
-	Focus        string            // focusProgramNamePrefixOnClick; "" = off
-	StartProgram string            // program launched on activation; "" = none
-	NoMapping    bool              // config file missing
-	Demo         bool              // enable mock toggle keys
-	Logs         *LogBuffer        // log panel source; nil = none
-	ConfigPath   string            // shown in status messages
-	Version      string            // shown next to the title; the version stamp (e.g. "1.2.3"); "" hides it
-	OpenConfig   func() error      // opens the config file in an editor; nil = shortcut off
-	Profiles     []string          // profile names in order; nil = switching off
-	ProfileIndex int               // active index into Profiles
+	Profile  string
+	Bindings map[string]string // button -> key token
+	// LeftButtons and RightButtons are the Click V2 pods' button names, in
+	// table order: the left pod's column and the right pod's column.
+	LeftButtons  []string
+	RightButtons []string
+	Focus        string       // focusProgramNamePrefixOnClick; "" = off
+	StartProgram string       // program launched on activation; "" = none
+	NoMapping    bool         // config file missing
+	Demo         bool         // enable mock toggle keys
+	Logs         *LogBuffer   // log panel source; nil = none
+	ConfigPath   string       // shown in status messages
+	Version      string       // shown next to the title; the version stamp (e.g. "1.2.3"); "" hides it
+	OpenConfig   func() error // opens the config file in an editor; nil = shortcut off
+	Profiles     []string     // profile names in order; nil = switching off
+	ProfileIndex int          // active index into Profiles
 	// SwitchProfile requests a relative profile switch; main wires it and
 	// pushes a ProfileMsg back. nil = switching off.
 	SwitchProfile func(delta int)

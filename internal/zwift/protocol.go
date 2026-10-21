@@ -91,6 +91,15 @@ var Buttons = map[uint32]string{
 	0x01000: "PLUS", // right module, plus
 }
 
+// LeftButtons and RightButtons are the Click V2's two pods' buttons, in
+// table order. The LEFT pod owns the four arrows and MINUS; the RIGHT pod
+// owns Y Z A B and PLUS. The split is a protocol fact (it matches the bits
+// above), so it lives here and not in the UI.
+var (
+	LeftButtons  = []string{"LEFT", "UP", "RIGHT", "DOWN", "MIN"}
+	RightButtons = []string{"Y", "Z", "A", "B", "PLUS"}
+)
+
 // KnownMask is the union of all defined button bits.
 var KnownMask = func() (m uint32) {
 	for k := range Buttons {

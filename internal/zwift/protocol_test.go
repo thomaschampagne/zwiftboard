@@ -20,6 +20,26 @@ func TestPodSide(t *testing.T) {
 	}
 }
 
+// The pod button lists and the bit map must agree exactly: a bit added to
+// one and forgotten in the other would silently drop a button.
+func TestPodButtonListsMatchBitMap(t *testing.T) {
+	seen := map[string]bool{}
+	for _, n := range append(append([]string{}, LeftButtons...), RightButtons...) {
+		if seen[n] {
+			t.Errorf("button %q is listed twice", n)
+		}
+		seen[n] = true
+	}
+	if len(seen) != len(Buttons) {
+		t.Errorf("the pod lists cover %d buttons, the bit map has %d", len(seen), len(Buttons))
+	}
+	for bit, name := range Buttons {
+		if !seen[name] {
+			t.Errorf("bit 0x%x (%s) is in the bit map but in no pod list", bit, name)
+		}
+	}
+}
+
 func TestPodString(t *testing.T) {
 	cases := []struct {
 		p    Pod

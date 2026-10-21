@@ -14,9 +14,10 @@ import (
 
 func testCfg() Config {
 	return Config{
-		Profile:  "test",
-		Buttons:  []string{"Y", "Z", "A", "B", "PLUS"},
-		Bindings: map[string]string{"A": "a", "B": "b", "PLUS": "+"},
+		Profile:      "test",
+		LeftButtons:  []string{"LEFT", "UP", "RIGHT", "DOWN", "MIN"},
+		RightButtons: []string{"Y", "Z", "A", "B", "PLUS"},
+		Bindings:     map[string]string{"A": "a", "B": "b", "PLUS": "+"},
 	}
 }
 
@@ -149,7 +150,7 @@ func TestStaleExpiryDoesNotClearHeldKey(t *testing.T) {
 }
 
 func TestDemoPressRunsFullCycle(t *testing.T) {
-	n, cmd := demoModel().Update(key("3")) // Buttons[2] = "A"
+	n, cmd := demoModel().Update(key("8")) // demoButtons[7] = "A"
 	if cmd == nil {
 		t.Fatal("digit should emit a cmd")
 	}

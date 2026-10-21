@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )
 
@@ -99,9 +100,9 @@ func TestViewUpdateChip(t *testing.T) {
 func TestViewIntroLine(t *testing.T) {
 	v := on(testCfg(), PodOff, PodConnected).View()
 	has(t, v, "WAITING", "Both controllers must be ON")
-	lacks(t, v, "virtual keyboard", "READY")
+	lacks(t, v, "Both pods send clicks", "READY")
 	v = on(testCfg(), PodConnected, PodConnected).View()
-	has(t, v, "READY", "Both controllers connected", "Only the Right controller is supported as a virtual keyboard")
+	has(t, v, "READY", "Both controllers connected", "Both pods send clicks")
 	lacks(t, v, "Both controllers must be ON", "WAITING")
 }
 
@@ -317,5 +318,134 @@ func TestPadRightUsesDisplayWidth(t *testing.T) {
 		if w := lipgloss.Width(padRight(s, 12)); w != 12 {
 			t.Errorf("padRight(%q) display width = %d, want 12", s, w)
 		}
+	}
+}
+
+// leftCfg is the test config with a left-pod binding: the profile maps one
+// left-pod button, so the table gets a left column.
+func leftCfg() Config {
+	cfg := testCfg()
+	cfg.Bindings["LEFT"] = "l"
+	return cfg
+}
+
+// buttonRows counts the table's button rows (the rows carrying the "→").
+func buttonRows(table string) int {
+	n := 0
+	for _, l := range strings.Split(table, "\n") {
+		if strings.Contains(ansi.Strip(l), "→") {
+			n++
+		}
+	}
+	return n
+}
+
+// The two pods share the table: the left pod's column beside the right
+// pod's, five rows for ten buttons.
+func TestViewTableShowsBothPods(t *testing.T) {
+	m := on(leftCfg(), PodConnected, PodConnected)
+	m.width = 120
+	v := m.View()
+	has(t, v, "LEFT", "MIN", "PLUS")
+	if got := buttonRows(m.table()); got != 5 {
+		t.Errorf("table has %d rows, want 5 (ten buttons in two columns):\n%s", got, m.table())
+	}
+}
+
+// The two pods sit side by side on ONE line: the left pod's arrow at cell 6
+// (after the 6-cell name) and the right pod's at cell 43 (the 35-cell left
+// cell + the 2-cell gap + the 6-cell name). The cells are measured, so a
+// mis-sized cellWidth shows up here instead of as a wrapped table.
+func TestViewTableColumnsShareALine(t *testing.T) {
+	m := on(leftCfg(), PodConnected, PodConnected)
+	m.width = 120
+	var row string
+	for _, l := range strings.Split(m.table(), "\n") {
+		if plain := ansi.Strip(l); strings.Contains(plain, "→") {
+			row = plain
+			break
+		}
+	}
+	if row == "" {
+		t.Fatalf("no button row rendered:\n%s", m.table())
+	}
+	var arrows []int
+	cell := 0
+	for _, r := range row {
+		if r == '→' {
+			arrows = append(arrows, cell)
+		}
+		cell += ansi.StringWidth(string(r))
+	}
+	if len(arrows) != 2 {
+		t.Fatalf("row has %d arrows, want 2 (one per pod):\n%q", len(arrows), row)
+	}
+	if arrows[0] != 6 {
+		t.Errorf("left arrow at cell %d, want 6 (after the 6-cell name)", arrows[0])
+	}
+	if arrows[1] != 43 {
+		t.Errorf("right arrow at cell %d, want 43 (left cell 35 + gap 2 + name 6)", arrows[1])
+	}
+	if !strings.HasPrefix(row, "LEFT") {
+		t.Errorf("row should start with the left pod's name:\n%q", row)
+	}
+	if !strings.Contains(row, "Y") {
+		t.Errorf("row should carry the right pod's name:\n%q", row)
+	}
+}
+
+// A profile that maps no left-pod button keeps today's screen: the right
+// pod's column alone, and no left column.
+func TestViewTableNoLeftColumnWithoutLeftBinding(t *testing.T) {
+	m := on(testCfg(), PodConnected, PodConnected)
+	m.width = 120
+	if plain := ansi.Strip(m.table()); strings.Contains(plain, "LEFT") {
+		t.Fatalf("no left-pod button is mapped, the table must not show a left column:\n%s", plain)
+	}
+	if got := buttonRows(m.table()); got != 5 {
+		t.Errorf("table has %d rows, want 5:\n%s", got, m.table())
+	}
+}
+
+// Too narrow for the side-by-side form: the two blocks stack instead of
+// wrapping, so the table stays ten rows tall.
+func TestViewTableStacksOnNarrowScreen(t *testing.T) {
+	m := on(leftCfg(), PodConnected, PodConnected)
+	m.width = 60 // inner width 56 < 72
+	if got := buttonRows(m.table()); got != 10 {
+		t.Errorf("narrow table has %d rows, want 10 (the two blocks stacked):\n%s", got, m.table())
+	}
+}
+
+// No BUTTON ROW may be wider than the card's inner width: a wider line
+// wraps inside the card and shreds the layout. The focus line under the
+// table is not checked — it is 50 cells wide and has always wrapped on a
+// narrow terminal; that is a pre-existing quirk, not this change's
+// business.
+//
+// The pressed row is checked too: it is the widest one (a labelled status
+// cell is 14 cells, not 12), so a cell sized for the idle row alone would
+// overflow here.
+func TestViewTableFitsInnerWidth(t *testing.T) {
+	for _, w := range []int{40, 60, 76, 80, 120, 200} {
+		m := on(leftCfg(), PodConnected, PodConnected)
+		m.width = w
+		inner := m.innerWidth()
+		check := func(mm Model, what string) {
+			t.Helper()
+			for _, line := range strings.Split(mm.table(), "\n") {
+				plain := ansi.Strip(line)
+				if !strings.Contains(plain, "→") {
+					continue // not a button row
+				}
+				if got := ansi.StringWidth(line); got > inner {
+					t.Errorf("width %d (%s): a button row is %d cells wide, inner width is %d:\n%q",
+						w, what, got, inner, plain)
+				}
+			}
+		}
+		check(m, "idle")
+		next, _ := m.Update(KeyStateMsg{Button: "LEFT", Down: true})
+		check(next.(Model), "pressed")
 	}
 }

@@ -55,7 +55,7 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "log raw frames and button events (forces log level debug)")
 	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")
 	plain := flag.Bool("plain", false, "plain log output on stderr instead of the TUI status screen")
-	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b bluetooth, [ ] pods, f focus alert, 1-5 click), no Bluetooth — try the screen without hardware")
+	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b bluetooth, [ ] pods, f focus alert, 1-0 click), no Bluetooth — try the screen without hardware")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *showVersion {
