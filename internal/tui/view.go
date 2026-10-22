@@ -129,8 +129,14 @@ func podLine(side string, s PodState) string {
 // halts until the radio is on. Alt-screen and mouse cell-motion are View
 // fields in Bubble Tea v2 (the v1 program options are gone).
 func (m Model) View() tea.View {
+	if m.authGate() {
+		return m.authView()
+	}
 	var b strings.Builder
 	b.WriteString(m.header() + "\n")
+	if a := m.authAlert(); a != "" {
+		b.WriteString(a + "\n")
+	}
 
 	if !m.bt {
 		body := sBad.Render("○ Bluetooth is OFF") + "\n" +

@@ -85,6 +85,8 @@ type Config struct {
 	// Reload re-reads the config from disk and applies it to the active profile
 	// without a BLE reconnect (the "r" shortcut). nil = reload off.
 	Reload func()
+	// Auth is the start-up Zwift sign-in gate. AuthNone = no gate.
+	Auth AuthConfig
 }
 
 // Messages sent by main (live) or the demo handler.
@@ -131,12 +133,13 @@ type Model struct {
 	logOffset    int    // lines scrolled up from the newest; 0 = following the bottom
 	focusMissing bool   // default false: no alert until a FocusMsg says so
 	latest       string // newer release tag from UpdateMsg; "" = none/dev
+	auth         authModel
 }
 
 // New returns a model with Bluetooth off, both pods not detected and no key
 // state.
 func New(cfg Config) Model {
-	return Model{cfg: cfg, keys: map[string]keyState{}}
+	return Model{cfg: cfg, keys: map[string]keyState{}, auth: newAuthModel(cfg.Auth)}
 }
 
 // keyState is one emulated key's state: at is the press time while down and
@@ -205,12 +208,37 @@ func (m Model) tickCmd() tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-func (m Model) Init() tea.Cmd { return m.tickCmd() }
+func (m Model) Init() tea.Cmd {
+	// The stored-session check runs once, beside the screen's redraw chain.
+	if check := m.authCheckCmd(); check != nil {
+		return tea.Batch(m.tickCmd(), check)
+	}
+	return m.tickCmd()
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+	case authCheckDoneMsg:
+		if msg.err != nil {
+			m.auth.state = AuthPrompt
+			m.auth.message = msg.err.Error()
+			return m, nil
+		}
+		return m.resolveAuth(false), nil
+	case authLoginDoneMsg:
+		m.auth.busy = false
+		if msg.err != nil {
+			m.auth.err = "Sign-in failed: " + msg.err.Error()
+			return m, nil
+		}
+		m.auth.password = ""
+		return m.resolveAuth(false), nil
+	case tea.PasteMsg:
+		if m.authGate() {
+			return m.pasteAuth(msg.Content), nil
+		}
 	case openedMsg:
 		if msg.err != nil {
 			return m.setStatus("Could not open " + m.cfg.ConfigPath + ": " + msg.err.Error())
@@ -292,6 +320,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampLogScroll()
 		}
 	case tea.KeyPressMsg:
+		if m.authGate() {
+			return m.updateAuth(msg)
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
