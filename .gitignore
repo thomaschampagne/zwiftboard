@@ -42,3 +42,6 @@ go.work.sum
 # .idea/
 # .vscode/
 zwiftboard.log
+
+# Zwift session token created by the TUI sign-in (never commit)
+zwift-token.json
