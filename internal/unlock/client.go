@@ -1,6 +1,7 @@
 package unlock
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -251,4 +253,125 @@ func codeOrStatus(code string, status int) string {
 		return code
 	}
 	return fmt.Sprintf("HTTP %d", status)
+}
+
+// errUnauthorized triggers exactly one refresh-and-retry inside Solve.
+var errUnauthorized = errors.New("dlock: unauthorized")
+
+// Solve answers one pod challenge with the server-signed reply. The plan is:
+// refresh the access token if needed, POST the challenge, and on a 401 refresh
+// once and retry (the server may have rotated the session under us).
+func (c *Client) Solve(ctx context.Context, challenge []byte) ([]byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.loaded || c.tokens.RefreshToken == "" {
+		return nil, ErrNoToken
+	}
+	if c.dead {
+		return nil, ErrAuth
+	}
+	if !c.accessValidLocked() {
+		if err := c.refreshLocked(ctx); err != nil {
+			return nil, err
+		}
+	}
+	reply, err := c.authenticate(ctx, c.tokens.AccessToken, challenge)
+	if errors.Is(err, errUnauthorized) {
+		if rerr := c.refreshLocked(ctx); rerr != nil {
+			return nil, rerr
+		}
+		return c.authenticate(ctx, c.tokens.AccessToken, challenge)
+	}
+	return reply, err
+}
+
+// authenticate is the d-lock REST call itself: the challenge protobuf is the
+// body, the reply bytes are what the pod expects. A 401 is returned as
+// errUnauthorized so Solve can refresh once; every other non-200 is final.
+func (c *Client) authenticate(ctx context.Context, access string, challenge []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.dlockURL, bytes.NewReader(challenge))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+access)
+	req.Header.Set("Content-Type", "application/x-protobuf-lite")
+	req.Header.Set("Accept", "application/x-protobuf-lite")
+
+	slog.Debug("dlock request",
+		"method", req.Method,
+		"url", c.dlockURL,
+		"body_len", len(challenge),
+		"body", hexBody(challenge),
+		"headers", redactHeaders(req.Header))
+
+	start := time.Now()
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		slog.Debug("dlock request failed", "error", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return nil, err
+	}
+	slog.Debug("dlock response",
+		"status", resp.StatusCode,
+		"duration_ms", time.Since(start).Milliseconds(),
+		"body_len", len(body),
+		"body", hexBody(body),
+		"headers", redactHeaders(resp.Header))
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return nil, errUnauthorized
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("dlock: HTTP %d", resp.StatusCode)
+	case len(body) == 0:
+		return nil, errors.New("dlock: empty reply")
+	}
+	return body, nil
+}
+
+// maxLoggedBody caps the hex dump so one huge response cannot flood the log.
+const maxLoggedBody = 4 << 10
+
+// hexBody renders a body for the debug log, with a stable "AA BB CC" shape.
+func hexBody(b []byte) string {
+	if len(b) <= maxLoggedBody {
+		return fmt.Sprintf("% X", b)
+	}
+	return fmt.Sprintf("% X … (%d bytes total)", b[:maxLoggedBody], len(b))
+}
+
+// redactHeaders makes a header map safe to log: credential-bearing headers are
+// blanked, and the rest is sorted for stable lines.
+func redactHeaders(h http.Header) string {
+	keys := make([]string, 0, len(h))
+	for k := range h {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		if b.Len() > 0 {
+			b.WriteString("; ")
+		}
+		b.WriteString(k)
+		b.WriteString(": ")
+		if secretHeader(k) {
+			b.WriteString("<redacted>")
+			continue
+		}
+		b.WriteString(strings.Join(h[k], ", "))
+	}
+	return b.String()
+}
+
+func secretHeader(k string) bool {
+	switch strings.ToLower(k) {
+	case "authorization", "proxy-authorization", "cookie", "set-cookie":
+		return true
+	}
+	return false
 }

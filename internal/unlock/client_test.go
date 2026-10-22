@@ -191,3 +191,175 @@ func TestRefreshRejectedClearsTheSession(t *testing.T) {
 		t.Fatal("Ready = true after the refresh token was rejected")
 	}
 }
+
+// dlockServer serves the challenge endpoint at the path the game uses.
+func dlockServer(t *testing.T, challenge, reply []byte, calls *int, auth func(call int, header string) (status int, body []byte)) *httptest.Server {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const path = "/api/d-lock-service/device/authenticate"
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != path {
+			t.Errorf("path = %s, want %s", r.URL.Path, path)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf-lite" {
+			t.Errorf("Content-Type = %q", ct)
+		}
+		if ac := r.Header.Get("Accept"); ac != "application/x-protobuf-lite" {
+			t.Errorf("Accept = %q", ac)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		if challenge != nil && !bytes.Equal(body, challenge) {
+			t.Errorf("body = % X, want % X", body, challenge)
+		}
+		*calls++
+		status, out := http.StatusOK, reply
+		if auth != nil {
+			status, out = auth(*calls, r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(status)
+		w.Write(out)
+	}))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestSolvePostsChallenge(t *testing.T) {
+	challenge := []byte{0x0A, 0x21, 0x03, 0x10, 0x80}
+	reply := []byte{0xAA, 0xBB, 0xCC}
+	calls := 0
+	ts := dlockServer(t, challenge, reply, &calls, nil)
+	store := NewStore(t.TempDir())
+	now := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.Save(Tokens{AccessToken: "access-1", RefreshToken: "refresh-1", ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, ts.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := c.Solve(context.Background(), challenge)
+	if err != nil {
+		t.Fatalf("Solve: %v", err)
+	}
+	if !bytes.Equal(got, reply) {
+		t.Fatalf("reply = % X, want % X", got, reply)
+	}
+}
+
+func TestSolveRefreshesOn401ThenRetries(t *testing.T) {
+	challenge := []byte{0x0A, 0x21, 0x03}
+	reply := []byte{0x11, 0x22}
+	calls := 0
+	ts := dlockServer(t, challenge, reply, &calls, func(call int, header string) (int, []byte) {
+		if call == 1 {
+			return http.StatusUnauthorized, nil
+		}
+		if header != "Bearer access-2" {
+			t.Errorf("retry Authorization = %q, want the refreshed token", header)
+		}
+		return http.StatusOK, reply
+	})
+	tokenCalls := 0
+	tokens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenCalls++
+		io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
+	}))
+	defer tokens.Close()
+
+	store := NewStore(t.TempDir())
+	now := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.Save(Tokens{AccessToken: "access-1", RefreshToken: "refresh-1", ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, tokens.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := c.Solve(context.Background(), challenge)
+	if err != nil {
+		t.Fatalf("Solve: %v", err)
+	}
+	if !bytes.Equal(got, reply) {
+		t.Fatalf("reply = % X, want % X", got, reply)
+	}
+	if tokenCalls != 1 {
+		t.Fatalf("token refreshes = %d, want 1", tokenCalls)
+	}
+	if calls != 2 {
+		t.Fatalf("dlock calls = %d, want 2", calls)
+	}
+}
+
+func TestSolveRejectsEmptyReply(t *testing.T) {
+	calls := 0
+	ts := dlockServer(t, []byte{0x01}, nil, &calls, nil)
+	store := NewStore(t.TempDir())
+	now := time.Now()
+	if err := store.Save(Tokens{AccessToken: "a", RefreshToken: "r", ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, ts.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := c.Solve(context.Background(), []byte{0x01}); err == nil {
+		t.Fatal("Solve accepted an empty reply")
+	}
+}
+
+func TestSolveHTTPError(t *testing.T) {
+	calls := 0
+	ts := dlockServer(t, []byte{0x01}, nil, &calls, func(int, string) (int, []byte) {
+		return http.StatusForbidden, []byte("RBAC: access denied")
+	})
+	store := NewStore(t.TempDir())
+	now := time.Now()
+	if err := store.Save(Tokens{AccessToken: "a", RefreshToken: "r", ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, ts.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := c.Solve(context.Background(), []byte{0x01}); err == nil {
+		t.Fatal("Solve accepted a 403")
+	}
+}
+
+func TestSolveLogsExchangeWithoutToken(t *testing.T) {
+	challenge := []byte{0x0A, 0x21, 0x7F}
+	reply := []byte{0xAA, 0xBB}
+	calls := 0
+	ts := dlockServer(t, challenge, reply, &calls, nil)
+	var out bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	store := NewStore(t.TempDir())
+	now := time.Now()
+	if err := store.Save(Tokens{AccessToken: "secret-access", RefreshToken: "secret-refresh", ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, ts.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := c.Solve(context.Background(), challenge); err != nil {
+		t.Fatalf("Solve: %v", err)
+	}
+	logged := out.String()
+	if !strings.Contains(logged, "0A 21 7F") || !strings.Contains(logged, "AA BB") {
+		t.Fatalf("log lacks the exchange hex:\n%s", logged)
+	}
+	for _, secret := range []string{"secret-access", "secret-refresh", "Bearer secret"} {
+		if strings.Contains(logged, secret) {
+			t.Fatalf("log leaked %q:\n%s", secret, logged)
+		}
+	}
+}
