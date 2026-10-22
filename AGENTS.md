@@ -170,18 +170,21 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   up, `Release` counts down, the `Press` rollback counts down (it must never
   delete the whole VK), `ReleaseAll` subtracts the handler's whole count.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
-  locked; `ff 04 00` keeps an unlocked device unlocked). THE UNLOCK LATCH
-  EXPIRES: the LEFT pod's button engine locks ~30s after its LAST `ff 04 00`
-  ack (seen 2026-10-21: button stream died at exactly last-ack + 30.03s while
-  status `2A`/battery `FF 05`/heartbeat `19 10 50`/RideOn echo frames kept
-  flowing — invisible to any frame-activity clock, writes still succeed,
-  nothing logs), and the pod only sends ~2 challenges at connect
-  (~15.5s cadence), so challenge-driven acking alone lets the latch expire
-  mid-session. The session must feed the latch ON OUR OWN CLOCK:
-  `AckInterval` (15s) re-sends `ff 04 00` anchored at the last ack actually
-  written (`ackDue`); a failed ack write is a real disconnect and ends the
-  session like the keepalive failure. Incoming frames say NOTHING about the
-  latch — do not gate the ack on them.
+  locked; only the app's real crypto handshake GRANTS the unlock — the bare
+  `ff 04 00` just keeps an already-unlocked pod unlocked). With an expired
+  unlock the LEFT pod's button engine locks silently ~45–65s after the unlock
+  echo (2026-10-22: 11–25s after a CONFIRMED written ack, while status
+  `2A`/battery `FF 05`/heartbeat `19 10 50`/RideOn echo frames kept flowing —
+  invisible to any frame-activity clock, writes still succeed, nothing logs;
+  the lock is permanent for the session because those status frames keep the
+  idle clock fresh, so the scheduled `0x18` reset never fires and only a
+  reconnect recovers it). The `AckInterval` (15s) ladder does NOT renew the
+  unlock (disproven 2026-10-22: gaps ≤18s still lost the engine; Run A's
+  "last-ack + 30.03s" was coincidence). With a FRESH ~24h unlock from the
+  Zwift app the pod streams for the full test window (2026-10-22: 3m48s /
+  1894 frames, through an explicit 30s pause, with only ONE challenge and no
+  second `03→02` countdown). Operational rule: re-run the Zwift-app unlock
+  when the LEFT pod stops typing after ~1 minute of otherwise-healthy frames.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must
