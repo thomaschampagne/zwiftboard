@@ -54,6 +54,18 @@ release version:
     (cd dist && zip -q zwiftboard.zip zwiftboard.exe)
     (cd dist && sha256sum zwiftboard.exe zwiftboard.zip > checksums.txt)
 
+# Build the native Apple Silicon macOS release. This must run on macOS because
+# CoreBluetooth is linked through cgo.
+release-macos version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf dist/macos && mkdir -p dist/macos
+    GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -trimpath \
+        -ldflags="-s -w -X main.version={{version}}" \
+        -o dist/macos/zwiftboard .
+    (cd dist/macos && zip -q zwiftboard-macos-arm64.zip zwiftboard)
+    (cd dist/macos && shasum -a 256 zwiftboard zwiftboard-macos-arm64.zip > checksums-macos.txt)
+
 # --- scoop (local + CI) ---------------------------------------------------
 
 # Render the ScoopInstaller/Extras manifest for VERSION + exe SHA256 to stdout.

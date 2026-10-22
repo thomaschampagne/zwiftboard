@@ -3,7 +3,7 @@
 ## What this is
 
 `zwiftboard` — Go CLI that turns Zwift Click V2 controllers (BLE) into
-keyboard input on Windows. Runs on Windows only; developed cross-platform.
+keyboard input on Windows and Apple Silicon macOS.
 
 ## Superpowers
 

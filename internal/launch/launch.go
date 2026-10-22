@@ -67,7 +67,7 @@ func command(spec string, k Kind) *exec.Cmd {
 	case KindStore:
 		return exec.Command("explorer.exe", `shell:AppsFolder\`+spec)
 	default:
-		return exec.Command(spec)
+		return platformCommand(spec)
 	}
 }
 

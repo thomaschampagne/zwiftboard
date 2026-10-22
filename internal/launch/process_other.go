@@ -1,11 +1,10 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package launch
 
 import "os/exec"
 
-// defaultEnv on non-Windows is inert: the app ships for Windows, and tests
-// inject their own Env instead of reaching the real OS.
+// defaultEnv on unsupported platforms is inert; tests inject their own Env.
 func defaultEnv() Env {
 	return Env{
 		Exists:  func(string) bool { return true },
@@ -14,9 +13,12 @@ func defaultEnv() Env {
 	}
 }
 
-// resolveExe off Windows only consults PATH: App Paths is a Windows registry
-// mechanism. Kept so launch.go compiles on the dev platform.
+// resolveExe on unsupported platforms only consults PATH.
 func resolveExe(name string) (string, bool) {
 	p, err := exec.LookPath(name)
 	return p, err == nil
+}
+
+func platformCommand(spec string) *exec.Cmd {
+	return exec.Command(spec)
 }

@@ -2,7 +2,8 @@ name: Release
 
 # semantic-release: conventional commits on main decide the next semver
 # (feat -> minor, fix/perf -> patch, BREAKING CHANGE -> major), tag X.Y.Z,
-# create the GitHub Release, and attach the Windows build.
+# create the GitHub Release, and attach the Windows build. A separate macOS
+# runner uploads the native Apple Silicon artifact after the release exists.
 # Runs only after the CI checks pass on the same commit.
 on:
   push:
@@ -80,6 +81,31 @@ jobs:
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
+
+  macos:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: extractions/setup-just@v4
+      - name: Build Apple Silicon release
+        run: just release-macos "${{ needs.release.outputs.tag }}"
+      - name: Upload Apple Silicon release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.release.outputs.tag }}" \
+            dist/macos/zwiftboard-macos-arm64.zip \
+            dist/macos/checksums-macos.txt \
+            --clobber
 
   # Personal scoop bucket: this repo IS the bucket (scoop bucket add <name>
   # <repo-url>), so the manifest is committed straight back to main on every
