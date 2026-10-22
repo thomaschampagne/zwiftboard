@@ -12,8 +12,10 @@
 //     an idle pod is rebooted with a lone 0x18 before its ~65s watchdog strands
 //     it asleep for 30-40s (see ble.Session)
 //   - button frames: 0x23 + protobuf; field 1 = uint32 bitmap, bit==0 means pressed
-//   - LEFT needs a ~24h hardware unlock done by the Zwift app; "ff 04 00" keeps an
-//     already-unlocked device unlocked
+//   - LEFT needs a ~24h unlock granted by Zwift's servers: the pod sends a
+//     0xFF 03 challenge and the game relays a server-signed reply as
+//     ff 04 00 <reply>. ff 04 00 alone does NOT renew it (proven 2026-10-22);
+//     it is only the fallback ack that keeps an already-unlocked pod streaming
 package zwift
 
 import (

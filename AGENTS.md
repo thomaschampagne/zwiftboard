@@ -41,7 +41,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   `//go:embed config.yaml` (embed cannot `..` above its package dir), and
   `tuirun.go`/`defaultconfig.go` are `package main` wiring — package main
   lives where the binary lives.
-- `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup.
+- `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup, and the challenge hook (`Session` takes a `ChallengeSolver`; nil = the old `ff 04 00` ack).
   Scan/reconnect windows and the idle-reset are internal defaults now (the old
   `-scan`/`-reconnect`/`-addr`/`-ack`/`-idle-reset` flags were removed)
 - `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, no-op elsewhere)
@@ -53,9 +53,17 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   fatal), a `profiles:` map of button→key, plus the per-profile
   `focusProgramNamePrefixOnClick` and `startProgram`; returns errors (never exits)
 - `internal/zwift/` — protocol facts: GATT UUIDs, button bits, frame decode, label helpers
+- `internal/unlock/` — Zwift sign-in and the d-lock exchange: Keycloak
+  password/refresh grants (`Zwift Game Client`), the session file beside
+  `config.yml` (`zwift-token.json`, 0600), and `Solve` for the pod's `FF 03`
+  challenge. Debug logs keep the full exchange (challenge/request/response
+  hex) but never the email, password, tokens or `Authorization` header.
 - `internal/tui/` — Bubble Tea **v2** (`charm.land/bubbletea/v2`; lipgloss stays
   v1) status screen (default UI; `-plain` = logs). OBSERVATIONAL
   only: fed by `ble.Connected`/`SideSeenRecently`/`ble.OnKey`; never gate a session on it.
+  Exception: the start-up **Zwift sign-in gate** (email + masked password,
+  `Esc` skips) runs before scanning — a start-up ordering gate, not a session
+  gate, because the pod challenges as soon as it connects.
   Handles the profile-switch chords (`ctrl+left`/`ctrl+right`, fallbacks
   `ctrl+n`/`ctrl+p`), plus `r` reload config, `s` start the profile's program,
   `e` edit config, `l` toggle the log panel and `q` quit.
@@ -183,8 +191,19 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   "last-ack + 30.03s" was coincidence). With a FRESH ~24h unlock from the
   Zwift app the pod streams for the full test window (2026-10-22: 3m48s /
   1894 frames, through an explicit 30s pause, with only ONE challenge and no
-  second `03→02` countdown). Operational rule: re-run the Zwift-app unlock
-  when the LEFT pod stops typing after ~1 minute of otherwise-healthy frames.
+  second `03→02` countdown). Operational rule: when the LEFT pod stops typing
+  after ~1 minute of otherwise-healthy frames, its unlock expired — zwiftboard
+  renews it on the next connect only while signed in.
+- The unlock is SERVER-SIGNED. The pod sends `FF 03 00 <payload>`; the game
+  POSTs `<payload>` to
+  `https://us-or-rly101.zwift.com/api/d-lock-service/device/authenticate`
+  with a Keycloak `Zwift Game Client` bearer token and relays the reply as
+  `ff 04 00 <reply>`. The bare `ff 04 00` does NOT renew it and is only the
+  no-token/offline fallback. Sign-in is one-time from the TUI *before* BLE
+  scanning (the pod challenges immediately after connect); the password is
+  never stored, only `zwift-token.json` beside `config.yml`. The full exchange
+  is logged at Debug (credentials redacted) so a future session can study
+  whether the API dependency can be dropped — no local forge is known.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must

@@ -22,7 +22,7 @@ Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it
 > left pod's arrows and minus are usable.
 
 - **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
-- **No tricks** - no Zwift account, no 24h controller unlock. Works out of the box.
+- **RIGHT pod needs no account** - it works out of the box. The LEFT pod's ~24h Zwift unlock is renewed for you after a one-time sign-in in the app: your email and password are used once and never stored, only the resulting session token sits beside `config.yml`.
 - **Free** - no paid features, no subscriptions like some others implementations.
 - **Profiles** - configurable with pre-built profiles per platform.
 - **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
@@ -65,7 +65,13 @@ Manual downloads remain available on the [Releases](../../releases) page.
    `%LocalAppData%\zwiftboard\config.yml`.
 2. **Close Zwift / the Companion app** — each controller accepts only one BLE
    connection at a time.
-3. **Run it** and press a button on each controller while it scans to wake them — the mapped keys come from the **RIGHT** pod:
+3. **Sign in on first run.** The status screen asks for your Zwift email and
+   password so it can renew the LEFT controller's ~24h unlock (the app uses
+   Zwift's own sign-in once; nothing is stored but a session token beside
+   `config.yml`). Press `Esc` to skip — only the RIGHT controller works
+   normally then, and the warning stays on the screen. The prompt comes back on
+   the next launch until you sign in.
+4. **Run it** and press a button on each controller while it scans to wake them — the mapped keys come from the **RIGHT** pod:
 
    ```
    zwiftboard.exe                 # startup profile: `defaultProfile:` from the config (ships as notepad)
@@ -289,6 +295,16 @@ RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`, the ones each profile needs);
 `notepad` also maps the LEFT pod's (`LEFT` `UP` `RIGHT` `DOWN` `MIN`).
 Scanning never gives up, so a pod turned on minutes later still joins.
 
+**The LEFT pod's daily Zwift unlock.** The LEFT pod's button engine only
+streams while a ~24h unlock granted by Zwift's servers is valid. The pod sends
+a `FF 03` challenge when it connects; the game app forwards it to Zwift's
+d-lock service and writes the signed reply back as `ff 04 00 <reply>`.
+zwiftboard does the same once you are signed in — the challenge, the HTTP
+request and the response are logged at debug level with credentials redacted —
+so a single sign-in keeps the LEFT pod working without opening Zwift. With no
+sign-in, or when the API is unreachable, the session falls back to the plain
+`ff 04 00` ack and the RIGHT pod is unaffected.
+
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.
 
@@ -297,6 +313,7 @@ connects are serialized so they never overlap an active scan.
 | Symptom                                    | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Right pod drops, logs `session ended`      | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again.                                                                                                                                                                                         |
+| LEFT pod stops typing after ~1 min         | Its ~24h Zwift unlock expired. Restart zwiftboard and sign in when the form appears (it only appears when no session is stored or the stored one was rejected); the new challenge is then answered with the signed reply. With no sign-in only the RIGHT controller works.                                                                                                                                                                  |
 | Right pod's LED keeps blinking             | The pair's LEFT anchor is not connected. Switch the LEFT controller on too (both pods must be on); a lone RIGHT pod's blinking LED is cosmetic but its link drops ~65s after its last button.                                                                                                                                                                                                                                               |
 | One press holds the key down               | Normal: keys follow the button — held while pressed, released on release (steering needs the hold).                                                                                                                                                                                                                                                                                                                                         |
 | `found controller name=… addr=D4:06:0F:…`  | Normal — the advertisement may carry no name; address is what matters.                                                                                                                                                                                                                                                                                                                                                                      |
