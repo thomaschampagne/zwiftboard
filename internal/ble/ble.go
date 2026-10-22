@@ -21,7 +21,10 @@ var (
 	adapter   = bluetooth.DefaultAdapter
 	connectMu sync.Mutex // Windows copes better with serialized connects
 
-	// SendAck sends ff 04 00 to devices that echo RideOn (keeps unlock).
+	// SendAck keeps the historical empty ff 04 00 ack (the RideOn echo plus
+	// every AckInterval). It does NOT renew the server-signed unlock
+	// (disproven 2026-10-22), so it is only the no-solver fallback: a wired
+	// solver replaces it with the real reply.
 	SendAck = true
 
 	// lastSeenAt records the last scan sighting of every Zwift controller
@@ -73,16 +76,13 @@ var (
 	// never ended on silence (hard-won fact). 0 disables the recycle.
 	PostResetGrace = 15 * time.Second
 
-	// AckInterval re-sends the unlock ack (ff 04 00) on OUR OWN clock, every
-	// interval, anchored at the last ack actually written (unlock echo,
-	// challenge re-arm, or a prior periodic ack). The LEFT pod's unlock latch
-	// expires ~30s after the last ack (seen 2026-10-21: the button stream died
-	// exactly 30.03s after ack #3), and the pod sends only ~2 challenges at
-	// connect — challenge-driven acking alone lets the latch expire while the
-	// pod's status/heartbeat/echo frames keep flowing, so the death is
-	// invisible to any frame-activity clock and looks like a zombie (writes
-	// still succeed, nothing logs). A failed ack write is a REAL disconnect
-	// and ends the session like the keepalive failure does. 0 disables.
+	// AckInterval is the cadence of the historical empty ff 04 00 ack (no
+	// solver only: RideOn echo + this ladder). It does NOT renew the
+	// server-signed unlock — disproven 2026-10-22, gaps <=18s still lost the
+	// LEFT pod's button engine — so it is kept only because it is harmless
+	// without a solver, and is skipped whenever a solver is wired. A failed
+	// ack write is a REAL disconnect and ends the session like a failed
+	// keepalive. 0 disables.
 	AckInterval = 15 * time.Second
 
 	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
@@ -471,14 +471,12 @@ func Session(t Target, km *KeyMap, solver ChallengeSolver) error {
 	// reply carries the server-signed unlock answer.
 	//
 	// ackAnchorN holds the UnixNano of the last SUCCESSFUL ff 04 00 write
-	// (0 = never) — the anchor for the periodic AckInterval ack, without
-	// which the LEFT pod's ~30s unlock latch expires mid-session and locks
-	// the button engine while every other frame keeps flowing (see
-	// AckInterval). The anchor is written from the notification goroutines
-	// and read by the keepalive loop below, hence atomic. A failed ack write
-	// does NOT anchor: if the link is really dead the next keepalive or
-	// periodic-ack write fails too and ends the session. The zero state is
-	// honest: with no ack ever sent there is no periodic ack to schedule yet.
+	// (0 = never) — the anchor for the no-solver AckInterval ladder. The
+	// anchor is written from the notification goroutines and read by the
+	// keepalive loop below, hence atomic. A failed ack write does NOT anchor:
+	// if the link is really dead the next keepalive or periodic-ack write
+	// fails too and ends the session. The zero state is honest: with no ack
+	// ever sent there is no periodic ack yet.
 	var ackAnchorN atomic.Int64
 	anchorAck := func() { ackAnchorN.Store(time.Now().UnixNano()) }
 	ackAnchor := func() time.Time {
@@ -505,9 +503,30 @@ func Session(t Target, km *KeyMap, solver ChallengeSolver) error {
 	// the newest challenge wins. The reply itself is written as ff 04 00 <reply>;
 	// a failed solve falls back to the empty ack, so a network outage is never
 	// worse than no sign-in at all.
+	// solveCtx lasts exactly as long as the session: teardown cancels an
+	// in-flight (or queued) challenge solve so it cannot write to a
+	// characteristic that is being released, and a slow API cannot pin the
+	// session open after the keepalive loop returned.
+	solveCtx, cancelSolves := context.WithCancel(context.Background())
+	defer cancelSolves()
 	var solves *latestSolve
 	if solver != nil {
-		solves = &latestSolve{}
+		solves = newLatestSolve(func(challenge []byte) {
+			if solveCtx.Err() != nil {
+				return // the session ended before this queued solve ran
+			}
+			ctx, cancel := context.WithTimeout(solveCtx, solveTimeout)
+			reply := solveFrame(ctx, solver, challenge)
+			cancel()
+			if solveCtx.Err() != nil {
+				return // teardown won the race; the write would only fail
+			}
+			if _, err := writeChar(syncRx, reply); err != nil {
+				slog.Debug("unlock reply write failed", "controller", t.Label, "error", err)
+				return
+			}
+			anchorAck()
+		})
 	}
 	onChallenge := func(frame []byte) {
 		if solver == nil {
@@ -523,16 +542,7 @@ func Session(t Target, km *KeyMap, solver ChallengeSolver) error {
 		}
 		slog.Debug("crypto challenge from click — solving for the server-signed unlock",
 			"controller", t.Label, "frame", fmt.Sprintf("% X", frame), "payload", fmt.Sprintf("% X", payload))
-		solves.push(payload, func(challenge []byte) {
-			ctx, cancel := context.WithTimeout(context.Background(), solveTimeout)
-			defer cancel()
-			reply := solveFrame(ctx, solver, challenge)
-			if _, err := writeChar(syncRx, reply); err != nil {
-				slog.Debug("unlock reply write failed", "controller", t.Label, "error", err)
-				return
-			}
-			anchorAck()
-		})
+		solves.push(payload)
 	}
 
 	handler := ButtonHandler(t.Label, km, hk.Press, hk.Release)
@@ -564,7 +574,7 @@ func Session(t Target, km *KeyMap, solver ChallengeSolver) error {
 				slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
 				// With a solver the challenge reply already carries the signed
 				// unlock; an extra empty ack would just race it.
-				if solver == nil && SendAck {
+				if periodicAckEnabled(solver) {
 					go func() {
 						defer recoverLog("ack write " + t.Label)
 						if _, err := writeChar(syncRx, ackSeq); err != nil {
@@ -637,15 +647,13 @@ func Session(t Target, km *KeyMap, solver ChallengeSolver) error {
 		if postResetStale(resetAt, activity.last(), now) {
 			return fmt.Errorf("pod silent %s past the scheduled reset (0x18) — recycling the session for a clean reconnect (handshake + notifications)", PostResetGrace)
 		}
-		// Periodic unlock ack (no-solver path only): feed the LEFT pod's
-		// ~30s latch every AckInterval regardless of incoming frames —
-		// challenge-driven acking stops when the pod stops challenging, and
-		// its frame stream says NOTHING about the latch (see AckInterval).
-		// With a solver the server-signed reply replaces this ladder; an
-		// empty ack would only race it. The successful write doubles as the
-		// liveness probe, so a failure ends the session exactly like a failed
-		// keepalive would.
-		if solver == nil && SendAck && ackDue(ackAnchor(), now) {
+		// Historical empty ack (no-solver path only): re-send ff 04 00 every
+		// AckInterval, anchored at the last ack actually written. It does NOT
+		// renew the server-signed unlock (see AckInterval); it is kept because
+		// it is harmless without a solver. A wired solver replaces it with the
+		// signed reply. The successful write doubles as the liveness probe, so
+		// a failure ends the session exactly like a failed keepalive would.
+		if periodicAckEnabled(solver) && ackDue(ackAnchor(), now) {
 			if _, err := writeChar(syncRx, ackSeq); err != nil {
 				return fmt.Errorf("disconnected: %w", err)
 			}

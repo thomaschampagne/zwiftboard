@@ -59,14 +59,13 @@ func TestLatestSolveKeepsNewest(t *testing.T) {
 	// While one solve is in flight, a burst of challenges must collapse to the
 	// newest one: the pod repeats its challenge at connect, and a stale reply
 	// must never be written after a newer one.
-	q := &latestSolve{}
 	started := make(chan struct{})
 	release := make(chan struct{})
 	done := make(chan struct{})
 	var mu sync.Mutex
 	var got []byte
 	var runs int
-	run := func(b []byte) {
+	q := newLatestSolve(func(b []byte) {
 		mu.Lock()
 		runs++
 		got = append(got, b[0])
@@ -79,11 +78,11 @@ func TestLatestSolveKeepsNewest(t *testing.T) {
 		if n == 2 {
 			close(done)
 		}
-	}
-	q.push([]byte{1}, run)
+	})
+	q.push([]byte{1})
 	<-started
-	q.push([]byte{2}, run)
-	q.push([]byte{3}, run)
+	q.push([]byte{2})
+	q.push([]byte{3})
 	close(release)
 	select {
 	case <-done:
@@ -94,5 +93,57 @@ func TestLatestSolveKeepsNewest(t *testing.T) {
 	defer mu.Unlock()
 	if len(got) != 2 || got[0] != 1 || got[1] != 3 {
 		t.Fatalf("solves = %v, want [1 3]", got)
+	}
+}
+
+func TestLatestSolveCopiesTheChallenge(t *testing.T) {
+	// The payload is a slice of the BLE notification buffer. The queue must own
+	// a copy: the stack may reuse or invalidate its buffer before the solve
+	// (or a queued solve) reads it.
+	challenge := []byte{7, 8}
+	got := make(chan byte, 1)
+	q := newLatestSolve(func(b []byte) { got <- b[0] })
+	q.push(challenge)
+	challenge[0] = 9
+	if b := <-got; b != 7 {
+		t.Fatalf("solve saw %d, want the copy 7", b)
+	}
+}
+
+func TestLatestSolveSurvivesAPanickingSolve(t *testing.T) {
+	// recoverLog guards the worker: a bad solver must not kill the goroutine
+	// and leave every later challenge unanswered.
+	pushed := make(chan struct{})
+	ran := make(chan struct{})
+	q := newLatestSolve(func(b []byte) {
+		if b[0] == 1 {
+			close(pushed)
+			panic("solver blew up")
+		}
+		close(ran)
+	})
+	q.push([]byte{1})
+	<-pushed
+	q.push([]byte{2})
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the solve worker did not survive the panic")
+	}
+}
+
+func TestPeriodicAckEnabled(t *testing.T) {
+	saved := SendAck
+	defer func() { SendAck = saved }()
+	SendAck = true
+	if !periodicAckEnabled(nil) {
+		t.Fatal("no solver: the historical empty ack ladder stays on")
+	}
+	if periodicAckEnabled(&fakeSolver{}) {
+		t.Fatal("a solver replaces the empty ack ladder")
+	}
+	SendAck = false
+	if periodicAckEnabled(nil) {
+		t.Fatal("SendAck=false disables the ack ladder")
 	}
 }

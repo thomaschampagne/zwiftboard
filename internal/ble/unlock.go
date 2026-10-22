@@ -46,21 +46,39 @@ func solveFrame(ctx context.Context, solver ChallengeSolver, challenge []byte) [
 	return append(frame, reply...)
 }
 
+// periodicAckEnabled reports whether the session still runs the historical
+// empty ff 04 00 ladder (the RideOn echo plus every AckInterval). It does NOT
+// renew the server-signed unlock; it is only the no-solver fallback, and an
+// empty ack racing a real signed reply could be read as a failed challenge.
+func periodicAckEnabled(solver ChallengeSolver) bool {
+	return solver == nil && SendAck
+}
+
 // latestSolve runs solves one at a time and keeps only the newest queued
 // challenge. The pod repeats its challenge at connect; an older challenge's
 // reply must never be written after a newer one, and a slow network must not
-// stack goroutines.
+// stack goroutines. The handler is bound once: it is the session's one way of
+// answering a challenge, no matter which payload wins the queue.
 type latestSolve struct {
+	run func([]byte)
+
 	mu      sync.Mutex
 	running bool
 	pending []byte
 	queued  bool
 }
 
-// push queues a challenge and starts the worker when idle.
-func (q *latestSolve) push(challenge []byte, run func([]byte)) {
+// newLatestSolve starts an idle queue whose worker answers challenges with run.
+func newLatestSolve(run func([]byte)) *latestSolve {
+	return &latestSolve{run: run}
+}
+
+// push queues the newest challenge and starts the worker when idle.
+func (q *latestSolve) push(challenge []byte) {
 	q.mu.Lock()
-	q.pending = challenge
+	// Own the payload: challenge is a slice of the BLE notification buffer,
+	// which the stack may reuse or invalidate once the callback returns.
+	q.pending = append([]byte(nil), challenge...)
 	q.queued = true
 	if q.running {
 		q.mu.Unlock()
@@ -80,7 +98,13 @@ func (q *latestSolve) push(challenge []byte, run func([]byte)) {
 				return
 			}
 			q.mu.Unlock()
-			run(ch)
+			// A panic in the solver (or its transport) must not kill the
+			// worker and leave every later challenge unanswered; recoverLog
+			// keeps the loop alive, like every other BLE goroutine boundary.
+			func() {
+				defer recoverLog("unlock solve")
+				q.run(ch)
+			}()
 		}
 	}()
 }
