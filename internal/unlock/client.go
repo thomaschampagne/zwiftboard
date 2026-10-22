@@ -39,6 +39,16 @@ var ErrNoToken = errors.New("no Zwift sign-in stored")
 // The user must sign in again; retrying is pointless.
 var ErrAuth = errors.New("Zwift sign-in rejected")
 
+// authErrorCodes are the only Keycloak error codes that mean "these
+// credentials/session will never work". A 403 from a proxy or a 5xx is NOT an
+// auth failure, even though it may arrive with an error body: the stored
+// session must survive it.
+var authErrorCodes = map[string]bool{
+	"invalid_grant":       true,
+	"invalid_client":      true,
+	"unauthorized_client": true,
+}
+
 // Client owns the Zwift session: the stored tokens, their refresh, and the
 // d-lock call that answers a pod challenge. One client is shared by the TUI
 // (sign-in) and the BLE sessions (solve), so its state is mutex-guarded.
@@ -142,13 +152,11 @@ func (c *Client) Login(ctx context.Context, email, password string) error {
 	c.tokens = t
 	c.loaded = true
 	c.dead = false
-	if err := c.store.Save(t); err != nil {
-		return err
-	}
-	slog.Debug("zwift sign-in: token stored", "path", c.store.Path(), "expires_at", t.ExpiresAt.Format(time.RFC3339))
+	c.saveSession(t, "login")
 	return nil
 }
 
+// refreshLocked rotates the access token (and usually the refresh token).
 // refreshLocked rotates the access token (and usually the refresh token).
 // A rejected refresh token marks the client dead for the rest of the run.
 func (c *Client) refreshLocked(ctx context.Context) error {
@@ -166,11 +174,21 @@ func (c *Client) refreshLocked(ctx context.Context) error {
 		return err
 	}
 	c.tokens = t
+	c.saveSession(t, "refresh")
+	return nil
+}
+
+// saveSession persists the session without failing the request. The tokens are
+// already live in memory: a disk problem must not block this run's LEFT pod
+// (the sign-in gate would otherwise never release), so it only costs a new
+// sign-in after a restart. The warning says exactly that.
+func (c *Client) saveSession(t Tokens, when string) {
 	if err := c.store.Save(t); err != nil {
-		return err
+		slog.Warn("zwift sign-in: could not persist the session — it will be lost on restart",
+			"when", when, "path", c.store.Path(), "error", err)
+		return
 	}
 	slog.Debug("zwift sign-in: token stored", "path", c.store.Path(), "expires_at", t.ExpiresAt.Format(time.RFC3339))
-	return nil
 }
 
 // tokenResponse is the subset of Keycloak's answer we keep.
@@ -209,10 +227,17 @@ func (c *Client) tokenRequest(ctx context.Context, form url.Values, keepRefresh 
 		"error", code)
 
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return Tokens{}, fmt.Errorf("%w: %s", ErrAuth, codeOrStatus(code, resp.StatusCode))
+		// Only these codes mean the credentials/session will never work.
+		// Everything else (WAF 403, 5xx, proxy errors) is transient: the
+		// stored refresh token must survive and the user must not be asked
+		// for a password that was never wrong.
+		if authErrorCodes[code] {
+			return Tokens{}, fmt.Errorf("%w: %s", ErrAuth, code)
 		}
-		return Tokens{}, fmt.Errorf("token endpoint: HTTP %d", resp.StatusCode)
+		if code == "" {
+			return Tokens{}, fmt.Errorf("token endpoint: HTTP %d", resp.StatusCode)
+		}
+		return Tokens{}, fmt.Errorf("token endpoint: HTTP %d (%s)", resp.StatusCode, code)
 	}
 
 	var tr tokenResponse
@@ -246,13 +271,6 @@ func tokenErrorCode(body []byte) string {
 		return ""
 	}
 	return e.Error
-}
-
-func codeOrStatus(code string, status int) string {
-	if code != "" {
-		return code
-	}
-	return fmt.Sprintf("HTTP %d", status)
 }
 
 // errUnauthorized triggers exactly one refresh-and-retry inside Solve.

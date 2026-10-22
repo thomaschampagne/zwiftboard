@@ -363,3 +363,58 @@ func TestSolveLogsExchangeWithoutToken(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenEndpointOnlyCredentialErrorsAreAuth(t *testing.T) {
+	// Only Keycloak's credential/session error codes mean "never retry". A
+	// WAF 403, a 5xx or a malformed 400 must stay transient: wiping the stored
+	// session and asking for the password again would be wrong.
+	cases := []struct {
+		status   int
+		body     string
+		wantAuth bool
+	}{
+		{http.StatusBadRequest, `{"error":"invalid_grant"}`, true},
+		{http.StatusUnauthorized, `{"error":"invalid_client"}`, true},
+		{http.StatusBadRequest, `{"error":"unauthorized_client"}`, true},
+		{http.StatusForbidden, `{"error":"access_denied"}`, false},
+		{http.StatusBadRequest, `{"error":"invalid_request"}`, false},
+		{http.StatusBadGateway, `<html>bad gateway</html>`, false},
+	}
+	for _, tc := range cases {
+		ts, _ := tokenServer(t, tc.status, tc.body)
+		c := newTestClient(NewStore(t.TempDir()), ts.URL, ts.URL, time.Now)
+		err := c.Login(context.Background(), "rider@example.com", "hunter2")
+		if err == nil {
+			t.Fatalf("%d %s: Login succeeded", tc.status, tc.body)
+		}
+		if got := errors.Is(err, ErrAuth); got != tc.wantAuth {
+			t.Fatalf("%d %s: ErrAuth = %v, want %v (err: %v)", tc.status, tc.body, got, tc.wantAuth, err)
+		}
+	}
+}
+
+func TestTransientRefreshFailureKeepsTheSession(t *testing.T) {
+	// The stored access token is expired and the refresh hits a 403. The
+	// session must survive: the next challenge can try again, and the user is
+	// not asked to retype a password that was never wrong.
+	ts, _ := tokenServer(t, http.StatusForbidden, `{"error":"access_denied"}`)
+	store := NewStore(t.TempDir())
+	now := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.Save(Tokens{AccessToken: "old", RefreshToken: "refresh-1", ExpiresAt: now.Add(-time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, ts.URL, ts.URL, func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	err := c.Ensure(context.Background())
+	if err == nil {
+		t.Fatal("Ensure should report the failed refresh")
+	}
+	if errors.Is(err, ErrAuth) {
+		t.Fatalf("403 mapped to ErrAuth: %v", err)
+	}
+	if !c.Ready() {
+		t.Fatal("a transient refresh failure discarded the stored session")
+	}
+}
