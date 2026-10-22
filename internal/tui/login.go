@@ -204,7 +204,7 @@ func (m Model) authView() tea.View {
 		b.WriteString(sBad.Render(m.auth.err) + "\n")
 	}
 	if m.auth.busy {
-		b.WriteString(sWarn.Render(pulse(m.now()) + " Signing in…") + "\n")
+		b.WriteString(sWarn.Render(pulse(m.now())+" Signing in…") + "\n")
 	}
 	hint := func(k, label string) string { return sKeyHint.Render(k) + sMuted.Render(" "+label) }
 	b.WriteString(hint("enter", "sign in") + sMuted.Render("   ") +
