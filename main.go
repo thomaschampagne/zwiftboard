@@ -54,6 +54,15 @@ var version = "dev"
 // the TUI's "detected" status share one value.
 var scanFor = 10 * time.Second
 
+// newGate is the BLE start-up gate. The returned channel closes on release,
+// and release is idempotent: the TUI's Done callback and the "no gate needed"
+// path may both release it, and a late second release must not panic.
+func newGate() (<-chan struct{}, func()) {
+	ready := make(chan struct{})
+	var once sync.Once
+	return ready, func() { once.Do(func() { close(ready) }) }
+}
+
 func main() {
 	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing; an explicit path must already exist)")
 	var profile string
@@ -181,9 +190,7 @@ func main() {
 		// The BLE start-up gate: scanning must not begin before the sign-in
 		// decision, because the pod challenges as soon as it connects and an
 		// empty ack would already have lost the LEFT controller for the run.
-		ready := make(chan struct{})
-		var once sync.Once
-		release := func() { once.Do(func() { close(ready) }) }
+		ready, release := newGate()
 		if tcfg.Auth.State == tui.AuthNone {
 			release()
 		} else {

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -245,5 +248,39 @@ func TestTuiAuthStateFollowsTheStoredSession(t *testing.T) {
 	}
 	if auth.Check == nil {
 		t.Fatal("AuthChecking needs a Check callback")
+	}
+}
+
+func TestNewGateReleasesOnce(t *testing.T) {
+	// The TUI's Done callback and the "no gate" path can both release; a
+	// second release must not panic on a closed channel, and the feed must not
+	// pass the gate before the sign-in decision.
+	ready, release := newGate()
+	select {
+	case <-ready:
+		t.Fatal("the gate opened before the sign-in decision")
+	default:
+	}
+	release()
+	release()
+	select {
+	case <-ready:
+	default:
+		t.Fatal("release did not open the gate")
+	}
+}
+
+func TestCheckPrompt(t *testing.T) {
+	if err := checkPrompt(nil); err != nil {
+		t.Fatalf("checkPrompt(nil) = %v, want nil", err)
+	}
+	err := checkPrompt(fmt.Errorf("ensure: %w", unlock.ErrAuth))
+	if err == nil || !strings.Contains(err.Error(), "session expired") {
+		t.Fatalf("rejected session = %v, want the re-sign-in message", err)
+	}
+	// An offline or Zwift-side failure is not a password problem: scanning must
+	// start and the next challenge retries with the stored token.
+	if err := checkPrompt(errors.New("dial tcp: network is unreachable")); err != nil {
+		t.Fatalf("transient check failure = %v, want nil", err)
 	}
 }

@@ -74,6 +74,21 @@ func solverFor(c *unlock.Client) ble.ChallengeSolver {
 	return c
 }
 
+// checkPrompt maps the stored-session check to what the sign-in form shows.
+// nil means "start scanning": an offline token endpoint or a Zwift-side
+// failure is not a password problem, and the next challenge retries with the
+// stored token. Only a rejected session (ErrAuth) reopens the form.
+func checkPrompt(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, unlock.ErrAuth) {
+		return errors.New("your Zwift session expired — sign in again")
+	}
+	slog.Warn("could not check the Zwift session — will retry on the next challenge", "error", err)
+	return nil
+}
+
 // tuiAuth builds the sign-in gate for the screen. A stored session is checked
 // before scanning; a missing or rejected one opens the form; an offline check
 // is not an auth failure (the next challenge retries with the stored token).
@@ -99,15 +114,7 @@ func tuiAuth(c *unlock.Client, loadErr error) tui.AuthConfig {
 		auth.Check = func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			err := c.Ensure(ctx)
-			if err == nil {
-				return nil
-			}
-			if errors.Is(err, unlock.ErrAuth) {
-				return errors.New("your Zwift session expired — sign in again")
-			}
-			slog.Warn("could not check the Zwift session — will retry on the next challenge", "error", err)
-			return nil
+			return checkPrompt(c.Ensure(ctx))
 		}
 	case errors.Is(loadErr, unlock.ErrNoToken):
 		// First run: no message, the form's own copy explains.
