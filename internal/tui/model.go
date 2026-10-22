@@ -221,6 +221,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 	case authCheckDoneMsg:
+		// The check runs off the UI goroutine; Esc can resolve the gate while
+		// it is in flight. A late result must not reopen the form (nothing
+		// would consume a login there) nor start BLE a second time.
+		if !m.authGate() {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.auth.state = AuthPrompt
 			m.auth.message = msg.err.Error()
@@ -228,6 +234,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.resolveAuth(false), nil
 	case authLoginDoneMsg:
+		if !m.authGate() {
+			return m, nil
+		}
 		m.auth.busy = false
 		if msg.err != nil {
 			m.auth.err = "Sign-in failed: " + msg.err.Error()

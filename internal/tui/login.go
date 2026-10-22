@@ -103,7 +103,13 @@ func (m Model) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	if msg.String() == "esc" {
-		// Esc during the stored-session check also skips: waiting is optional.
+		// Esc during the stored-session check also skips: waiting is
+		// optional. During a login request it is ignored instead: skipping
+		// then would start BLE with no solver and a late success would have
+		// no session left to serve. The request is short; wait for it.
+		if m.auth.busy {
+			return m, nil
+		}
 		return m.resolveAuth(true), nil
 	}
 	if m.auth.state != AuthPrompt || m.auth.busy {

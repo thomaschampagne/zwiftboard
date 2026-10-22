@@ -212,3 +212,102 @@ func TestAuthSkipBannerVisibleWithoutBluetooth(t *testing.T) {
 	m = next.(Model) // bt stays off
 	has(t, m.View(), "LEFT controller locked")
 }
+
+func TestLateCheckResultAfterSkipIsIgnored(t *testing.T) {
+	// Esc during the stored-session check closes the gate and starts BLE with
+	// no solver. A check failure that lands afterwards must not reopen the
+	// form: nothing would consume its login, and the status screen would show
+	// no warning.
+	done := 0
+	m := authPrompt(t, &AuthConfig{
+		State: AuthChecking,
+		Check: func() error { return errors.New("your Zwift session expired — sign in again") },
+		Done:  func() { done++ },
+	})
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(Model)
+	if m.authGate() {
+		t.Fatal("Esc should close the checking gate")
+	}
+	if done != 1 {
+		t.Fatalf("Done calls = %d, want 1", done)
+	}
+
+	next, _ = m.Update(authCheckDoneMsg{err: errors.New("expired")})
+	m = next.(Model)
+	if m.authGate() {
+		t.Fatal("a late check failure reopened the gate after a skip")
+	}
+	if done != 1 {
+		t.Fatalf("Done calls = %d after the late check, want 1", done)
+	}
+	has(t, m.View(), "LEFT controller locked")
+}
+
+func TestLateLoginResultAfterSkipIsIgnored(t *testing.T) {
+	// Belt and braces for any other path that closes the gate while a login
+	// is in flight: a late success must not close it again (Done once) nor
+	// clear the skip banner.
+	done := 0
+	m := authPrompt(t, &AuthConfig{
+		State: AuthPrompt,
+		Login: func(string, string) error { return nil },
+		Done:  func() { done++ },
+	})
+	m = typeText(m, "rider@example.com")
+	m = tab(m)
+	m = typeText(m, "hunter2")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	m = m.resolveAuth(true)
+	if done != 1 {
+		t.Fatalf("Done calls = %d, want 1", done)
+	}
+	next, _ = m.Update(authLoginDoneMsg{})
+	m = next.(Model)
+	if m.authGate() {
+		t.Fatal("a late login result reopened the gate")
+	}
+	if done != 1 {
+		t.Fatalf("Done calls = %d after the late login, want 1", done)
+	}
+	if !m.auth.skipped {
+		t.Fatal("a late login success cleared the skip banner")
+	}
+}
+
+func TestEscWhileLoginIsBusyIsIgnored(t *testing.T) {
+	// Skipping mid-request would start BLE with a nil solver and then a late
+	// success would have nobody to hand the session to. The request is short;
+	// wait for it, then decide.
+	done := 0
+	m := authPrompt(t, &AuthConfig{
+		State: AuthPrompt,
+		Login: func(string, string) error { return nil },
+		Done:  func() { done++ },
+	})
+	m = typeText(m, "rider@example.com")
+	m = tab(m)
+	m = typeText(m, "hunter2")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(Model)
+	if !m.authGate() || !m.auth.busy {
+		t.Fatalf("Esc during the login must be ignored (gate=%v busy=%v)", m.authGate(), m.auth.busy)
+	}
+	if done != 0 {
+		t.Fatal("Done ran while the login was still in flight")
+	}
+
+	next, _ = m.Update(authLoginDoneMsg{})
+	m = next.(Model)
+	if m.authGate() {
+		t.Fatal("the login result should close the gate")
+	}
+	if done != 1 {
+		t.Fatalf("Done calls = %d, want 1", done)
+	}
+}
