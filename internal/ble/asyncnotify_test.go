@@ -1,17 +1,19 @@
 package ble
 
 import (
+	"bytes"
 	"testing"
 	"time"
 )
 
-func TestAsyncNotifyRearmsOnChallengeAndPassesFrames(t *testing.T) {
-	// Only the 0xFF 03 crypto challenge re-arms the pod (ff 04 00). Every
-	// frame, including 0x23 buttons and the routine 0xFF 05 status, still
-	// reaches the decode handler unchanged; no frame ends a session. Every
-	// non-empty frame also counts as pod activity (the idle-reset gate).
-	rearmed, handled, activity := 0, 0, 0
-	h := asyncNotify("zwift/00:00", func() { rearmed++ }, func() { activity++ }, func([]byte) { handled++ })
+func TestAsyncNotifyPassesChallengeAndFrames(t *testing.T) {
+	// Only the 0xFF 03 crypto challenge is passed to the session's challenge
+	// handler (which writes either ff 04 00 or the signed reply). Every frame,
+	// including 0x23 buttons and the routine 0xFF 05 status, still reaches the
+	// decode handler unchanged; no frame ends a session. Every non-empty frame
+	// also counts as pod activity (the idle-reset gate).
+	challenges, got, handled, activity := 0, []byte(nil), 0, 0
+	h := asyncNotify(func(f []byte) { challenges++; got = f }, func() { activity++ }, func([]byte) { handled++ })
 
 	idle := []byte{0x23, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F}
 	challenge := []byte{0xFF, 0x03, 0x00, 0x0A, 0x21, 0x02, 0xAB}
@@ -23,8 +25,11 @@ func TestAsyncNotifyRearmsOnChallengeAndPassesFrames(t *testing.T) {
 	h(status)
 	h(heartbeat)
 
-	if rearmed != 1 {
-		t.Fatalf("rearmed=%d, want 1 (only the 0xFF 03 challenge re-arms)", rearmed)
+	if challenges != 1 {
+		t.Fatalf("challenges=%d, want 1 (only the 0xFF 03 challenge)", challenges)
+	}
+	if !bytes.Equal(got, challenge) {
+		t.Fatalf("challenge frame = % X, want % X", got, challenge)
 	}
 	if handled != 4 {
 		t.Fatalf("handled=%d, want 4 (every frame reaches the decode handler)", handled)
@@ -35,12 +40,12 @@ func TestAsyncNotifyRearmsOnChallengeAndPassesFrames(t *testing.T) {
 }
 
 func TestAsyncNotifySkipsEmpty(t *testing.T) {
-	rearmed, handled, activity := 0, 0, 0
-	h := asyncNotify("zwift/00:00", func() { rearmed++ }, func() { activity++ }, func([]byte) { handled++ })
+	challenges, handled, activity := 0, 0, 0
+	h := asyncNotify(func([]byte) { challenges++ }, func() { activity++ }, func([]byte) { handled++ })
 
 	h(nil)
-	if handled != 0 || rearmed != 0 || activity != 0 {
-		t.Fatalf("empty frame handled=%d rearmed=%d activity=%d, want 0/0/0", handled, rearmed, activity)
+	if handled != 0 || challenges != 0 || activity != 0 {
+		t.Fatalf("empty frame handled=%d challenges=%d activity=%d, want 0/0/0", handled, challenges, activity)
 	}
 }
 

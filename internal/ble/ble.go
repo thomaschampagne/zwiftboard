@@ -427,7 +427,7 @@ func endSession(where string, probe func() error, disconnect func()) {
 
 // Session connects, handshakes and listens on one controller until the link
 // breaks; the caller retries.
-func Session(t Target, km *KeyMap) error {
+func Session(t Target, km *KeyMap, solver ChallengeSolver) error {
 	connectMu.Lock()
 	dev, async, syncRx, syncTx, err := connect(t)
 	connectMu.Unlock()
@@ -467,7 +467,8 @@ func Session(t Target, km *KeyMap) error {
 
 	// challengeRearm answers the 0xFF crypto challenge that arrives on async
 	// (not sync-tx): a short ff 04 00 ack keeps an already-unlocked pod's button
-	// stream from going silent.
+	// stream from going silent. It is the fallback path only: with a solver the
+	// reply carries the server-signed unlock answer.
 	//
 	// ackAnchorN holds the UnixNano of the last SUCCESSFUL ff 04 00 write
 	// (0 = never) — the anchor for the periodic AckInterval ack, without
@@ -498,13 +499,49 @@ func Session(t Target, km *KeyMap) error {
 		anchorAck()
 	}
 
+	// onChallenge answers a 0xFF 03 challenge. Without a solver this is the old
+	// empty ack. With one, the server-signed reply is fetched OFF the BLE
+	// notification goroutine (a REST call must never stall notifications) and
+	// the newest challenge wins. The reply itself is written as ff 04 00 <reply>;
+	// a failed solve falls back to the empty ack, so a network outage is never
+	// worse than no sign-in at all.
+	var solves *latestSolve
+	if solver != nil {
+		solves = &latestSolve{}
+	}
+	onChallenge := func(frame []byte) {
+		if solver == nil {
+			slog.Debug("crypto challenge from click — acking to keep the button stream alive",
+				"controller", t.Label, "frame", fmt.Sprintf("% X", frame))
+			challengeRearm()
+			return
+		}
+		payload := challengePayload(frame)
+		if len(payload) == 0 {
+			slog.Debug("crypto challenge from click — no payload to solve", "controller", t.Label, "frame", fmt.Sprintf("% X", frame))
+			return
+		}
+		slog.Debug("crypto challenge from click — solving for the server-signed unlock",
+			"controller", t.Label, "frame", fmt.Sprintf("% X", frame), "payload", fmt.Sprintf("% X", payload))
+		solves.push(payload, func(challenge []byte) {
+			ctx, cancel := context.WithTimeout(context.Background(), solveTimeout)
+			defer cancel()
+			reply := solveFrame(ctx, solver, challenge)
+			if _, err := writeChar(syncRx, reply); err != nil {
+				slog.Debug("unlock reply write failed", "controller", t.Label, "error", err)
+				return
+			}
+			anchorAck()
+		})
+	}
+
 	handler := ButtonHandler(t.Label, km, hk.Press, hk.Release)
 	// activity tracks the pod's last own transmission (any received frame). It
 	// gates the proactive pod reset so an active session is never rebooted.
 	// Notification callbacks run on the BLE stack's goroutine while the
 	// keepalive loop reads it below, so the access is atomic (see activityClock).
 	activity := newActivityClock()
-	if err := async.EnableNotifications(asyncNotify(t.Label, challengeRearm, activity.touch, handler)); err != nil {
+	if err := async.EnableNotifications(asyncNotify(onChallenge, activity.touch, handler)); err != nil {
 		return fmt.Errorf("subscribe async: %w", err)
 	}
 
@@ -525,7 +562,9 @@ func Session(t Target, km *KeyMap) error {
 			// handled by asyncNotify above.
 			if b[0] == 'R' && acked.CompareAndSwap(false, true) {
 				slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
-				if SendAck {
+				// With a solver the challenge reply already carries the signed
+				// unlock; an extra empty ack would just race it.
+				if solver == nil && SendAck {
 					go func() {
 						defer recoverLog("ack write " + t.Label)
 						if _, err := writeChar(syncRx, ackSeq); err != nil {
@@ -598,13 +637,15 @@ func Session(t Target, km *KeyMap) error {
 		if postResetStale(resetAt, activity.last(), now) {
 			return fmt.Errorf("pod silent %s past the scheduled reset (0x18) — recycling the session for a clean reconnect (handshake + notifications)", PostResetGrace)
 		}
-		// Periodic unlock ack: feed the LEFT pod's ~30s latch every
-		// AckInterval regardless of incoming frames — challenge-driven
-		// acking stops when the pod stops challenging, and its frame stream
-		// says NOTHING about the latch (see AckInterval). The successful
-		// write doubles as the liveness probe, so a failure ends the session
-		// exactly like a failed keepalive would.
-		if SendAck && ackDue(ackAnchor(), now) {
+		// Periodic unlock ack (no-solver path only): feed the LEFT pod's
+		// ~30s latch every AckInterval regardless of incoming frames —
+		// challenge-driven acking stops when the pod stops challenging, and
+		// its frame stream says NOTHING about the latch (see AckInterval).
+		// With a solver the server-signed reply replaces this ladder; an
+		// empty ack would only race it. The successful write doubles as the
+		// liveness probe, so a failure ends the session exactly like a failed
+		// keepalive would.
+		if solver == nil && SendAck && ackDue(ackAnchor(), now) {
 			if _, err := writeChar(syncRx, ackSeq); err != nil {
 				return fmt.Errorf("disconnected: %w", err)
 			}
@@ -620,13 +661,13 @@ func Session(t Target, km *KeyMap) error {
 
 // asyncNotify wraps one controller's async (keypad) notification stream — the
 // characteristic that carries 0x23 button frames AND the Zwift 0xFF crypto
-// challenge (delivered here, NOT on sync-tx). A 0xFF 03 challenge triggers the
-// re-arm ack (ff 04 00) so an already-unlocked pod keeps its button stream
-// alive; the routine 0xFF 05 battery/status frame is deliberately ignored.
-// Every frame still reaches bh unchanged for decode/logging; any frame counts
-// as pod activity (it proves the pod's own radio woke enough to transmit),
-// which is what keeps the idle-reset from firing during a close session.
-func asyncNotify(label string, rearm func(), activity func(), bh func([]byte)) func([]byte) {
+// challenge (delivered here, NOT on sync-tx). A 0xFF 03 challenge is passed to
+// onChallenge (the session decides between the empty ack and the signed reply);
+// the routine 0xFF 05 battery/status frame is deliberately ignored. Every frame
+// still reaches bh unchanged for decode/logging; any frame counts as pod
+// activity (it proves the pod's own radio woke enough to transmit), which is
+// what keeps the idle-reset from firing during a close session.
+func asyncNotify(onChallenge func([]byte), activity func(), bh func([]byte)) func([]byte) {
 	return func(b []byte) {
 		defer recoverLog("async frame")
 		if len(b) == 0 {
@@ -634,8 +675,7 @@ func asyncNotify(label string, rearm func(), activity func(), bh func([]byte)) f
 		}
 		activity()
 		if b[0] == 0xFF && len(b) > 1 && b[1] == 0x03 {
-			slog.Debug("crypto challenge from click — acking to keep the button stream alive", "controller", label, "frame", fmt.Sprintf("% X", b))
-			rearm()
+			onChallenge(b)
 		}
 		bh(b)
 	}

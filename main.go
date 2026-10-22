@@ -223,7 +223,7 @@ func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
 					var err error
 					// ble.Guarded turns a panic in one controller's session into a
 					// warn + retry, so a single bad event never kills the process.
-					ble.Guarded("session "+t.Label, func() { err = ble.Session(t, km) })
+					ble.Guarded("session "+t.Label, func() { err = ble.Session(t, km, nil) })
 					// Session blocks while connected; reset the idle clock at the
 					// drop so a long connected run never looks "unseen" here.
 					lastSeen = time.Now()
