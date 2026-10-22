@@ -418,3 +418,81 @@ func TestTransientRefreshFailureKeepsTheSession(t *testing.T) {
 		t.Fatal("a transient refresh failure discarded the stored session")
 	}
 }
+
+func TestSolveRefreshesOnlyOnceOnRepeated401(t *testing.T) {
+	// A 401 after the refresh is final: exactly one refresh, no loop, and the
+	// caller gets an error instead of an empty reply.
+	challenge := []byte{0x0A, 0x21, 0x03}
+	calls := 0
+	ts := dlockServer(t, challenge, nil, &calls, func(int, string) (int, []byte) {
+		return http.StatusUnauthorized, nil
+	})
+	tokenCalls := 0
+	tokens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenCalls++
+		io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
+	}))
+	defer tokens.Close()
+
+	store := NewStore(t.TempDir())
+	now := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.Save(Tokens{AccessToken: "access-1", RefreshToken: "refresh-1", ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, tokens.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := c.Solve(context.Background(), challenge); err == nil {
+		t.Fatal("Solve accepted a reply after a second 401")
+	}
+	if tokenCalls != 1 {
+		t.Fatalf("token refreshes = %d, want exactly 1", tokenCalls)
+	}
+	if calls != 2 {
+		t.Fatalf("dlock calls = %d, want 2 (one retry, no loop)", calls)
+	}
+}
+
+func TestSolveRefreshesExpiredTokenBeforeTheCall(t *testing.T) {
+	// An expired access token is refreshed BEFORE the dlock call, so the first
+	// request already carries the new token (no wasted 401 round trip).
+	challenge := []byte{0x0A, 0x21, 0x03}
+	reply := []byte{0x11, 0x22}
+	calls := 0
+	ts := dlockServer(t, challenge, reply, &calls, func(call int, header string) (int, []byte) {
+		if header != "Bearer access-2" {
+			t.Errorf("call %d Authorization = %q, want the pre-refreshed token", call, header)
+		}
+		return http.StatusOK, reply
+	})
+	tokenCalls := 0
+	tokens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenCalls++
+		io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
+	}))
+	defer tokens.Close()
+
+	store := NewStore(t.TempDir())
+	now := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.Save(Tokens{AccessToken: "access-1", RefreshToken: "refresh-1", ExpiresAt: now.Add(-time.Minute)}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c := newTestClient(store, tokens.URL, ts.URL+"/api/d-lock-service/device/authenticate", func() time.Time { return now })
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := c.Solve(context.Background(), challenge)
+	if err != nil {
+		t.Fatalf("Solve: %v", err)
+	}
+	if !bytes.Equal(got, reply) {
+		t.Fatalf("reply = % X, want % X", got, reply)
+	}
+	if tokenCalls != 1 {
+		t.Fatalf("token refreshes = %d, want 1", tokenCalls)
+	}
+	if calls != 1 {
+		t.Fatalf("dlock calls = %d, want 1", calls)
+	}
+}
