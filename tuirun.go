@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
 	"zwiftboard/internal/tui"
+	"zwiftboard/internal/unlock"
 	"zwiftboard/internal/update"
 	"zwiftboard/internal/zwift"
 )
@@ -62,6 +64,59 @@ func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath str
 	}
 }
 
+// solverFor hands the unlock client to BLE only when a usable session is
+// loaded. A nil solver keeps the old empty-ack behaviour: with no sign-in,
+// nothing we can send renews the LEFT pod's unlock anyway.
+func solverFor(c *unlock.Client) ble.ChallengeSolver {
+	if c == nil || !c.Ready() {
+		return nil
+	}
+	return c
+}
+
+// tuiAuth builds the sign-in gate for the screen. A stored session is checked
+// before scanning; a missing or rejected one opens the form; an offline check
+// is not an auth failure (the next challenge retries with the stored token).
+func tuiAuth(c *unlock.Client, loadErr error) tui.AuthConfig {
+	if c == nil {
+		return tui.AuthConfig{State: tui.AuthNone}
+	}
+	auth := tui.AuthConfig{
+		State: tui.AuthPrompt,
+		Login: func(email, password string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			err := c.Login(ctx, email, password)
+			if errors.Is(err, unlock.ErrAuth) {
+				return errors.New("wrong email or password")
+			}
+			return err
+		},
+	}
+	switch {
+	case loadErr == nil:
+		auth.State = tui.AuthChecking
+		auth.Check = func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			err := c.Ensure(ctx)
+			if err == nil {
+				return nil
+			}
+			if errors.Is(err, unlock.ErrAuth) {
+				return errors.New("your Zwift session expired — sign in again")
+			}
+			slog.Warn("could not check the Zwift session — will retry on the next challenge", "error", err)
+			return nil
+		}
+	case errors.Is(loadErr, unlock.ErrNoToken):
+		// First run: no message, the form's own copy explains.
+	default:
+		auth.Message = "The stored Zwift session could not be read — sign in again."
+	}
+	return auth
+}
+
 // runTUI runs the screen until the user quits, then exits the process (BLE
 // sessions are process-scoped; there is no separate teardown path). start, if
 // non-nil, runs in its own goroutine with the program for sending messages.
@@ -81,7 +136,7 @@ func runTUI(tcfg tui.Config, start func(p *tea.Program)) {
 // retry (every 5s while Bluetooth is off), then the same startListening. It
 // only OBSERVES: the screen reads ble.Connected / ble.SideSeenRecently and the
 // OnKey hook, and nothing in a session waits on it.
-func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.KeyMap) {
+func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.KeyMap, solver ble.ChallengeSolver) {
 	// Update check: fire once, never block or warn. A failure (offline,
 	// rate-limited, dev stamp) is simply "no update".
 	go func() {
@@ -129,7 +184,7 @@ func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.Ke
 		}
 	}
 
-	startListening(km, scanFor, ble.ReconnectWindow)
+	startListening(km, scanFor, ble.ReconnectWindow, solver)
 	// The "detected" window is the reconnect window: the screen and the scan
 	// gate must agree on what "recently seen" means.
 	src := tui.Sources{

@@ -4,10 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"zwiftboard/internal/ble"
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
+	"zwiftboard/internal/tui"
+	"zwiftboard/internal/unlock"
 )
 
 func TestEditorCommandPerOS(t *testing.T) {
@@ -184,5 +187,63 @@ func TestLaunchCurrentNoProgramIsNoOp(t *testing.T) {
 	s := &profileState{cur: config.Config{}}
 	if err := s.launchCurrent(); err != nil {
 		t.Fatalf("empty startProgram should be a no-op, got %v", err)
+	}
+}
+
+func TestSolverForOnlyWithAStoredSession(t *testing.T) {
+	// No token: the solver stays nil so BLE keeps the old ff 04 00 behaviour.
+	// A stored session hands the client to every session, so the first
+	// challenge after the gate gets the signed reply.
+	dir := t.TempDir()
+	c := unlock.New(unlock.NewStore(dir))
+	_ = c.Load()
+	if got := solverFor(c); got != nil {
+		t.Fatal("solverFor = non-nil without a stored session")
+	}
+
+	if err := unlock.NewStore(dir).Save(unlock.Tokens{
+		AccessToken: "access", RefreshToken: "refresh", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c = unlock.New(unlock.NewStore(dir))
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := solverFor(c); got == nil {
+		t.Fatal("solverFor = nil with a stored session")
+	}
+}
+
+func TestTuiAuthStateFollowsTheStoredSession(t *testing.T) {
+	dir := t.TempDir()
+	c := unlock.New(unlock.NewStore(dir))
+	loadErr := c.Load()
+	auth := tuiAuth(c, loadErr)
+	if auth.State != tui.AuthPrompt {
+		t.Fatalf("state = %v, want AuthPrompt without a token", auth.State)
+	}
+	if auth.Login == nil {
+		t.Fatal("the prompt needs a Login callback")
+	}
+	if auth.Check != nil {
+		t.Fatal("the prompt must not run a session check")
+	}
+
+	if err := unlock.NewStore(dir).Save(unlock.Tokens{
+		AccessToken: "access", RefreshToken: "refresh", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c = unlock.New(unlock.NewStore(dir))
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	auth = tuiAuth(c, nil)
+	if auth.State != tui.AuthChecking {
+		t.Fatalf("state = %v, want AuthChecking with a token", auth.State)
+	}
+	if auth.Check == nil {
+		t.Fatal("AuthChecking needs a Check callback")
 	}
 }

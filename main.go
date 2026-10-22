@@ -24,11 +24,14 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -37,6 +40,7 @@ import (
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
 	"zwiftboard/internal/tui"
+	"zwiftboard/internal/unlock"
 	"zwiftboard/internal/zwift"
 )
 
@@ -140,6 +144,24 @@ func main() {
 	}
 	keys.SetWindowTarget(cfg.FocusProgramNamePrefixOnClick)
 
+	// The Zwift session lives beside config.yml. A missing or rejected token
+	// only costs the LEFT pod: everything else works without it, and the TUI
+	// offers the sign-in on first run (or when the session expired).
+	var client *unlock.Client
+	var authErr error
+	if !*demo {
+		client = unlock.New(unlock.NewStore(filepath.Dir(configFile)))
+		authErr = client.Load()
+		switch {
+		case authErr == nil:
+			slog.Info("Zwift sign-in found — the LEFT controller's daily unlock will be renewed")
+		case errors.Is(authErr, unlock.ErrNoToken):
+			slog.Info("no Zwift sign-in yet — the LEFT controller's daily unlock cannot be renewed until you sign in")
+		default:
+			slog.Warn("Zwift sign-in file unreadable — sign in again", "error", authErr)
+		}
+	}
+
 	if tuiMode {
 		if *demo {
 			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
@@ -155,11 +177,24 @@ func main() {
 		tcfg.SwitchProfile = state.switchBy
 		tcfg.Reload = state.reload
 		tcfg.LaunchProgram = state.launchCurrent
+		tcfg.Auth = tuiAuth(client, authErr)
+		// The BLE start-up gate: scanning must not begin before the sign-in
+		// decision, because the pod challenges as soon as it connects and an
+		// empty ack would already have lost the LEFT controller for the run.
+		ready := make(chan struct{})
+		var once sync.Once
+		release := func() { once.Do(func() { close(ready) }) }
+		if tcfg.Auth.State == tui.AuthNone {
+			release()
+		} else {
+			tcfg.Auth.Done = release
+		}
 		runTUI(tcfg, func(p *tea.Program) {
+			<-ready
 			state.mu.Lock()
 			state.prog = p
 			state.mu.Unlock()
-			liveFeed(p, cfg, state, km)
+			liveFeed(p, cfg, state, km, solverFor(client))
 		})
 	}
 
@@ -182,7 +217,11 @@ func main() {
 	launchProfile(cfg)
 
 	km := ble.NewKeyMap(cfg.Bindings)
-	startListening(km, scanFor, ble.ReconnectWindow)
+	solver := solverFor(client)
+	if solver == nil {
+		slog.Warn("LEFT controller unlock: no Zwift sign-in — only the RIGHT controller is guaranteed to work (run zwiftboard once without -plain to sign in)")
+	}
+	startListening(km, scanFor, ble.ReconnectWindow, solver)
 	slog.Info("running — Ctrl+C to quit")
 	select {}
 }
@@ -190,7 +229,7 @@ func main() {
 // startListening starts the scanner and one reconnecting session goroutine per
 // controller. Moved out of main verbatim so the TUI and -plain paths share the
 // exact same BLE behavior.
-func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
+func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration, solver ble.ChallengeSolver) {
 	// Registry of controllers we already have a session goroutine for. Each
 	// goroutine releases its own entry once its controller has been gone for
 	// registryIdleTTL (see sessionRegistry), so nothing leaks.
@@ -223,7 +262,7 @@ func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
 					var err error
 					// ble.Guarded turns a panic in one controller's session into a
 					// warn + retry, so a single bad event never kills the process.
-					ble.Guarded("session "+t.Label, func() { err = ble.Session(t, km, nil) })
+					ble.Guarded("session "+t.Label, func() { err = ble.Session(t, km, solver) })
 					// Session blocks while connected; reset the idle clock at the
 					// drop so a long connected run never looks "unseen" here.
 					lastSeen = time.Now()
