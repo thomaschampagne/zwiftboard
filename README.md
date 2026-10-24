@@ -25,7 +25,7 @@ Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it
 - **Free** - no paid features, no subscriptions like some others implementations.
 - **Profiles** - configurable with pre-built profiles per platform.
 - **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
-- **Scope** - Zwift Click V2 only, Windows only.
+- **Scope** - Zwift Click V2 only; Windows and native macOS CLI (see [macOS setup and validation](docs/macos.md)).
 
 ---
 
@@ -57,7 +57,13 @@ submitted to the community [extras](https://github.com/ScoopInstaller/Extras)
 bucket — once that PR is merged, `scoop install extras/zwiftboard` works too.
 Manual downloads remain available on the [Releases](../../releases) page.
 
-## Quick start
+### macOS (build from source)
+
+See [macOS setup](docs/macos.md) for building the native CLI, Bluetooth and
+Accessibility permissions, and controller validation. macOS uses the foreground
+application; window focusing and app launching remain Windows-only.
+
+## Quick start (Windows)
 
 1. **Download** the latest release: grab `zwiftboard.exe` from the
    [Releases](../../releases) page. The config file is created on first run at
@@ -224,6 +230,7 @@ zwiftboard [flags]
 | `systm`         | `A` space pause, `B` `` ` `` ERG, `Y` m mute, `Z` esc close settings          | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)                                                  |
 | `zwift`         | `+`/`B` FTP bias down/up, `A`/`Z` turn right/left, `Y` power-up               | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                                                         |
 | `trainingpeaks` | `-`/`=` resistance down/up, `A`/`Z` turn right/left, `Y` graph toggle         | [TrainingPeaks Virtual controls](https://help.trainingpeaks.com/hc/en-us/articles/31340399556877-TrainingPeaks-Virtual-Controls-and-Keyboard-Shortcuts) |
+| `keyboard` | Foreground keyboard demo: PLUS=p, A=a, B=b, Y=y, Z=z | macOS first-run default; no focus or launch |
 | `biketerra`     | `S`/`W` gear down/up, `A`/`Z` menu right/left, `Y` UI toggle                  | [Biketerra virtual shifting](https://biketerra.com/help-center/virtual-shifting)                                                                        |
 | `rouvy`         | `,`/`.` gear down/up, `A`/`Z` turn right/left, `Y` hide interface             | [Rouvy remote controllers](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)                           |
 | `tacx`          | `+`/`B` difficulty down/up, `A`/`Z` next/previous screen, `Y` pause           | [Tacx keyboard shortcuts](https://support.garmin.com/en-US/?faq=aFNaNhVBpF1wKTKB40LYg7)                                                                 |

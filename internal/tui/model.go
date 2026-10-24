@@ -59,19 +59,21 @@ const (
 // the profile fields (Profile/Bindings/Focus/StartProgram/ProfileIndex) are
 // updated live by ProfileMsg on a runtime switch.
 type Config struct {
-	Profile      string
-	Bindings     map[string]string // button -> key token
-	Buttons      []string          // ordered table rows (right pod)
-	Focus        string            // focusProgramNamePrefixOnClick; "" = off
-	StartProgram string            // program launched on activation; "" = none
-	NoMapping    bool              // config file missing
-	Demo         bool              // enable mock toggle keys
-	Logs         *LogBuffer        // log panel source; nil = none
-	ConfigPath   string            // shown in status messages
-	Version      string            // shown next to the title; the version stamp (e.g. "1.2.3"); "" hides it
-	OpenConfig   func() error      // opens the config file in an editor; nil = shortcut off
-	Profiles     []string          // profile names in order; nil = switching off
-	ProfileIndex int               // active index into Profiles
+	BluetoothHelp string // platform-specific setup instructions
+	InputWarning  string // persistent platform/permission diagnostic; empty when ready
+	Profile       string
+	Bindings      map[string]string // button -> key token
+	Buttons       []string          // ordered table rows (right pod)
+	Focus         string            // focusProgramNamePrefixOnClick; "" = off
+	StartProgram  string            // program launched on activation; "" = none
+	NoMapping     bool              // config file missing
+	Demo          bool              // enable mock toggle keys
+	Logs          *LogBuffer        // log panel source; nil = none
+	ConfigPath    string            // shown in status messages
+	Version       string            // shown next to the title; the version stamp (e.g. "1.2.3"); "" hides it
+	OpenConfig    func() error      // opens the config file in an editor; nil = shortcut off
+	Profiles      []string          // profile names in order; nil = switching off
+	ProfileIndex  int               // active index into Profiles
 	// SwitchProfile requests a relative profile switch; main wires it and
 	// pushes a ProfileMsg back. nil = switching off.
 	SwitchProfile func(delta int)
@@ -86,8 +88,9 @@ type Config struct {
 
 // Messages sent by main (live) or the demo handler.
 type (
-	BTMsg  bool
-	PodMsg struct{ Left, Right PodState }
+	InputWarningMsg string
+	BTMsg           bool
+	PodMsg          struct{ Left, Right PodState }
 	// FocusMsg reports whether the configured focus window currently exists.
 	FocusMsg bool
 	// UpdateMsg reports a newer release found by the startup check. Sent at
@@ -230,6 +233,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case BTMsg:
 		m.bt = bool(msg)
+	case InputWarningMsg:
+		m.cfg.InputWarning = string(msg)
 	case FocusMsg:
 		m.focusMissing = !bool(msg)
 	case UpdateMsg:

@@ -3,7 +3,8 @@
 ## What this is
 
 `zwiftboard` — Go CLI that turns Zwift Click V2 controllers (BLE) into
-keyboard input on Windows. Runs on Windows only; developed cross-platform.
+keyboard input on Windows and macOS. macOS uses cgo/Quartz and CoreBluetooth;
+see `docs/macos.md` for permissions, dependency limitations and hardware checks.
 
 ## Superpowers
 
@@ -21,7 +22,7 @@ keyboard input on Windows. Runs on Windows only; developed cross-platform.
 ## Commands
 
 - Lint, Test, Build (local): `just sanity`
-- CI (check-only): `just ci`
+- CI (check-only): `just ci` (existing Windows cross-build), `just ci-macos` (native macOS)
 - Deps: `just update-deps` (blanket `go get -u ./...`; BLE libs included —
   hardware re-verify before a release with BLE bumps)
 - List tasks: `just --list`
@@ -44,7 +45,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
 - `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup.
   Scan/reconnect windows and the idle-reset are internal defaults now (the old
   `-scan`/`-reconnect`/`-addr`/`-ack`/`-idle-reset` flags were removed)
-- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, no-op elsewhere)
+- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, Quartz on macOS, no-op elsewhere)
 - `internal/launch/` — per-profile `startProgram` launcher (exe/script/MS Store);
   Windows impl (`process_windows.go`) + no-op stub (`process_other.go`); the
   classify/resolve policy lives in `launch.go`
@@ -198,3 +199,18 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   goroutine retargets it while BLE handler goroutines read it. A reload error is
   shown on the status screen and the current profile stays active. `loglevel:`
   is NOT hot-reloaded.
+
+## macOS backend
+
+- Config/VK identifiers stay compatible; Darwin translates to US physical key
+  positions. Insert is unsupported. Never silently redirect a configured focus
+  target: macOS blocks input until the target is cleared. Launch is unsupported.
+- Quartz event posts/repeat cancellation are serialized. Use injected event,
+  trust, hardware-flag and clock functions in tests; never emit real keys.
+- On Darwin, queued writes without response do not prove connectivity. Check
+  native peripheral state and cancel on teardown, including discovery failure.
+  Windows retains its write-before-disconnect workaround described above.
+- Keep both pods, protocol facts and scan-gated reconnect. Do not remove the
+  Windows workarounds when changing Darwin behavior.
+- The pinned TinyGo import creates CoreBluetooth managers; tests do not call
+  Enable/Scan, but import-time privacy prompts remain an upstream limitation.

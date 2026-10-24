@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -108,9 +109,18 @@ func ensureConfig(path string) {
 		return
 	}
 	defer f.Close()
-	if _, err := f.Write(defaultConfig); err != nil {
+	if _, err := f.Write(initialConfig()); err != nil {
 		slog.Warn("cannot write default config", "file", path, "err", err)
 		return
 	}
 	slog.Info("created default config", "file", path)
+}
+
+// initialConfig changes only the first-run profile on macOS. Existing files and
+// migrated configs are never rewritten, and Windows keeps its Notepad demo.
+func initialConfig() []byte {
+	if runtime.GOOS == "darwin" {
+		return []byte(strings.Replace(string(defaultConfig), "defaultProfile: notepad", "defaultProfile: keyboard", 1))
+	}
+	return defaultConfig
 }

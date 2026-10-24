@@ -1,9 +1,8 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package keys
 
-// Tap/Down/Up/ReleaseVK are no-ops off Windows; BLE support here is
-// Windows-only anyway. Down/Up report true so the hold tracker sees the key
+// Tap/Down/Up/ReleaseVK are no-ops on unsupported platforms. Down/Up report true so the hold tracker sees the key
 // "sent" (there is no window to drop into on the dev platform).
 func Tap(b Binding) {}
 

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -127,4 +128,9 @@ func (e Env) Launch(spec string) error {
 }
 
 // Launch starts the program described by spec using the real OS seam.
-func Launch(spec string) error { return defaultEnv().Launch(spec) }
+func Launch(spec string) error {
+	if runtime.GOOS == "darwin" && strings.TrimSpace(spec) != "" {
+		return fmt.Errorf("startProgram is not supported on macOS; open the application manually")
+	}
+	return defaultEnv().Launch(spec)
+}

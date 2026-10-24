@@ -15,7 +15,7 @@ import (
 // ships AND the README "Included profiles" table documents. Adding a profile
 // means adding it in both places; this set fails when either side drifts.
 var shippedProfiles = []string{
-	"biketerra", "mywhoosh", "mywhoosh-hd", "notepad", "rouvy",
+	"biketerra", "keyboard", "mywhoosh", "mywhoosh-hd", "notepad", "rouvy",
 	"systm", "tacx", "trainerroad", "trainingpeaks", "zwift",
 }
 

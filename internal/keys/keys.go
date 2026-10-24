@@ -80,6 +80,9 @@ func Resolve(token string) (Binding, error) {
 		return Binding{}, fmt.Errorf("empty key")
 	}
 	if vk, ok := namedKeys[tok]; ok {
+		if err := validateNamedKey(vk); err != nil {
+			return Binding{}, err
+		}
 		return Binding{VK: vk, Token: tok}, nil
 	}
 	if len(tok) >= 2 && len(tok) <= 3 && tok[0] == 'f' {
