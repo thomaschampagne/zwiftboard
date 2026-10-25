@@ -520,7 +520,19 @@ func Session(t Target, km *KeyMap) error {
 		}
 		return time.Unix(0, n)
 	}
+	// challenges counts THIS session's 0xFF crypto challenges (asyncNotify
+	// calls rearm once per challenge). A healthy, unlocked pod challenges
+	// exactly once at connect (2026-10-25: one challenge, then 5.5 minutes of
+	// button frames); the locked runs of 2026-10-21/22 challenged twice ~15s
+	// apart before the engine died while every other frame kept flowing. The
+	// counting deliberately precedes the SendAck check: a challenge is
+	// evidence whether or not we ack it.
+	var challenges atomic.Int64
 	challengeRearm := func() {
+		if n := challenges.Add(1); n > 1 {
+			slog.Info("crypto challenge again in session — pod unlock suspect",
+				"controller", t.Label, "challenge", n)
+		}
 		if !SendAck {
 			return
 		}
@@ -602,8 +614,9 @@ func Session(t Target, km *KeyMap) error {
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
 	resetSent := false
-	var resetAt time.Time    // armed when the scheduled 0x18 reset was sent
-	lastReport := time.Now() // liveness breadcrumb anchor (session start)
+	var resetAt time.Time // armed when the scheduled 0x18 reset was sent
+	started := time.Now() // session-age anchor for the lock-net log
+	lastReport := started // liveness breadcrumb anchor (session start)
 	for range tick.C {
 		now := time.Now()
 		if livenessReportDue(lastReport, now, time.Minute) {
@@ -617,12 +630,19 @@ func Session(t Target, km *KeyMap) error {
 				"secondsSinceLastFrame", now.Sub(activity.last()).Round(time.Second),
 				"lastAck", lastAckStr,
 				"resetSent", resetSent,
-				"resetStale", postResetStale(resetAt, activity.last(), now))
+				"resetStale", postResetStale(resetAt, activity.last(), now),
+				"challenges", challenges.Load())
 		}
-		if keepaliveTick(resetSent, activity.last(), now) {
+		if net, idle := resetTick(resetSent, challenges.Load(), activity.last(), now); net || idle {
 			resetSent = true
 			resetAt = now
-			slog.Debug("idle — sending pod reset (0x18) to reboot before the ~65s sleep watchdog", "controller", t.Label, "idle", IdleReset)
+			if net {
+				slog.Info("pod re-challenged — unlock suspect; sending pod reset (0x18)",
+					"controller", t.Label, "challenges", challenges.Load(),
+					"sessionAge", now.Sub(started).Round(time.Second))
+			} else {
+				slog.Debug("idle — sending pod reset (0x18) to reboot before the ~65s sleep watchdog", "controller", t.Label, "idle", IdleReset)
+			}
 			if _, err := writeChar(syncRx, resetPod); err != nil {
 				return fmt.Errorf("reset: %w", err)
 			}
