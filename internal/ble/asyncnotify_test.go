@@ -139,6 +139,9 @@ func TestResetTick(t *testing.T) {
 	if net, idle := resetTick(false, 1, idleOld, now); net || !idle {
 		t.Fatalf("healthy pod, idle past IdleReset: net=%v idle=%v, want false/true", net, idle)
 	}
+	if net, idle := resetTick(false, 2, idleOld, now); !net || idle {
+		t.Fatal("both conditions: the net must win over the idle path (the Info log depends on it)")
+	}
 	IdleReset = 0
 	if _, idle := resetTick(false, 1, idleOld, now); idle {
 		t.Fatal("IdleReset=0 must disable the idle path")
