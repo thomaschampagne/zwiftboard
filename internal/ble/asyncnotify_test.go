@@ -90,6 +90,64 @@ func TestKeepaliveTick(t *testing.T) {
 	}
 }
 
+func TestLockSuspect(t *testing.T) {
+	// A healthy, unlocked pod challenges exactly ONCE per session
+	// (2026-10-25: one challenge, then 5.5 minutes of button frames); the
+	// locked runs of 2026-10-21/22 challenged TWICE ~15s apart before the
+	// engine died while status frames kept flowing. LockChallenges=0
+	// disables the net, like every other interval constant.
+	saved := LockChallenges
+	defer func() { LockChallenges = saved }()
+
+	LockChallenges = 2
+	for _, n := range []int64{0, 1} {
+		if lockSuspect(n) {
+			t.Fatalf("lockSuspect(%d)=true, want false (healthy pod: one challenge)", n)
+		}
+	}
+	if !lockSuspect(2) || !lockSuspect(5) {
+		t.Fatal("lockSuspect(>=2) must be true (the locked pods re-challenged)")
+	}
+	LockChallenges = 0
+	if lockSuspect(2) {
+		t.Fatal("LockChallenges=0 must disable the net")
+	}
+}
+
+func TestResetTick(t *testing.T) {
+	// The NET fires on the challenge count ALONE — even with fresh activity,
+	// because a locked pod streams status frames every ~3s while its button
+	// engine is dead (2026-10-21/22), so the idle clock never expires for it.
+	// Both paths are one-shot per session via resetSent, and IdleReset=0 must
+	// not disable the net.
+	savedIdle, savedLock := IdleReset, LockChallenges
+	defer func() { IdleReset, LockChallenges = savedIdle, savedLock }()
+	now := time.Unix(1_000_000, 0)
+	IdleReset, LockChallenges = 55*time.Second, 2
+
+	fresh := now.Add(-1 * time.Second) // the locked-pod signature: frames keep flowing
+	if net, idle := resetTick(false, 1, fresh, now); net || idle {
+		t.Fatalf("one challenge + fresh activity: net=%v idle=%v, want false/false (healthy pod)", net, idle)
+	}
+	if net, idle := resetTick(false, 2, fresh, now); !net || idle {
+		t.Fatalf("two challenges + fresh activity: net=%v idle=%v, want true/false — the net must not depend on the idle clock", net, idle)
+	}
+	if net, _ := resetTick(true, 5, fresh, now); net {
+		t.Fatal("resetSent must make the net one-shot per session")
+	}
+	idleOld := now.Add(-56 * time.Second)
+	if net, idle := resetTick(false, 1, idleOld, now); net || !idle {
+		t.Fatalf("healthy pod, idle past IdleReset: net=%v idle=%v, want false/true", net, idle)
+	}
+	IdleReset = 0
+	if _, idle := resetTick(false, 1, idleOld, now); idle {
+		t.Fatal("IdleReset=0 must disable the idle path")
+	}
+	if net, _ := resetTick(false, 2, fresh, now); !net {
+		t.Fatal("IdleReset=0 must NOT disable the net")
+	}
+}
+
 func TestPostResetStale(t *testing.T) {
 	// After the scheduled 0x18 pod reset the session must end itself when the
 	// pod emits NO frame within the grace window: a pod whose app dies while

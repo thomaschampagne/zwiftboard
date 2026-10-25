@@ -85,6 +85,16 @@ var (
 	// and ends the session like the keepalive failure does. 0 disables.
 	AckInterval = 15 * time.Second
 
+	// LockChallenges is the per-session 0xFF-challenge count at which a pod is
+	// considered LOCKED (button engine dead): a healthy, unlocked pod sends
+	// exactly ONE challenge at connect (2026-10-25: one challenge, then 5.5
+	// minutes of button frames), while the locked runs of 2026-10-21/22 sent
+	// TWO ~15s apart before the engine died ~45-65s after the echo. A locked
+	// pod keeps streaming status frames, so no activity clock sees the death —
+	// the second challenge is the only visible precursor, and it arms the
+	// lock-reset net (resetTick). 0 disables the net.
+	LockChallenges int64 = 2
+
 	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
 	// once after connect. The periodic keepalive re-sends plain rideOn ("RideOn").
 	// Nothing we write to sync-rx holds a LONE RIGHT pod: the pod drops the link
@@ -294,6 +304,29 @@ func keepaliveTick(resetSent bool, lastActivity, now time.Time) bool {
 func postResetStale(resetAt, lastActivity, now time.Time) bool {
 	return PostResetGrace > 0 && !resetAt.IsZero() &&
 		now.Sub(resetAt) >= PostResetGrace && lastActivity.Before(resetAt)
+}
+
+// lockSuspect reports that a session's challenge count marks a locked pod —
+// see LockChallenges.
+func lockSuspect(challenges int64) bool {
+	return LockChallenges > 0 && challenges >= LockChallenges
+}
+
+// resetTick decides ONE keepalive-tick action: the lock-reset NET fires when
+// the pod has re-challenged past LockChallenges in this session and the
+// session has not reset yet; the IDLE path fires per keepaliveTick after
+// IdleReset of silence. The net check runs FIRST and ignores activity on
+// purpose: a locked pod streams status frames every ~3s (activity!) while its
+// button engine is dead, which is exactly why the idle path never fires for
+// it — the second challenge is the only visible precursor. Both paths share
+// the caller's resetSent so exactly ONE reset fires per session no matter
+// which armed it; postResetStale then recycles a session left silent after
+// the reset and the scan-gated caller reconnects for a fresh handshake.
+func resetTick(resetSent bool, challenges int64, lastActivity, now time.Time) (net, idle bool) {
+	if lockSuspect(challenges) && !resetSent {
+		return true, false
+	}
+	return false, keepaliveTick(resetSent, lastActivity, now)
 }
 
 // ackDue reports that the session owes the pod an unlock ack (ff 04 00):
