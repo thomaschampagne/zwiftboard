@@ -181,13 +181,16 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   `19 10 50`/RideOn echo frames keep flowing — invisible to any
   frame-activity clock, writes still succeed, nothing logs; the lock is
   permanent for the session (status frames keep the idle clock fresh, so the
-  scheduled `0x18` reset never fires). The lock PRECURSOR is the challenge
-  count: a healthy pod sends exactly ONE `0xFF` challenge per session, the
-  locked runs sent TWO ~15s apart — so the lock-reset NET reboots the pod
-  (`0x18`) on the second challenge of a session (`resetTick`/
-  `LockChallenges`): the pod reboots on our schedule, reconnects scan-gated,
-  and a factory-locked pod keeps working in windows without any app
-  (BikeControl's restart-every-minute, evidence-triggered instead of blind).
+  scheduled `0x18` reset never fires). The proposed lock trigger — the
+  challenge count — is FALSIFIED: on 2026-10-25 13:36 the proven-stable
+  c1ac085 binary logged a demonstrably HEALTHY LEFT pod sending TWO connect
+  challenges ~15.5s apart (different EC keys) and then 535 button frames over
+  4 minutes. A second challenge is therefore NOT a lock precursor; arming the
+  lock-reset net on that count reboot-looped healthy pods (user-reported
+  regression). The net (`resetTick`) ships DISABLED (`LockChallenges=0`), so
+  the tick is exactly c1ac085's idle-only `keepaliveTick`. The `challenges`
+  count stays observational in the liveness breadcrumb; re-enable the net only
+  on a signal that provably correlates with the locked state.
   The `AckInterval` (15s) ladder does NOT renew the unlock (disproven
   2026-10-22: gaps ≤18s still lost the engine; Run A's "last-ack + 30.03s"
   was coincidence). The challenge frame is an 85-byte SIGNED message:
@@ -196,12 +199,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   a misread of the EC point prefix across different challenges (the old docs
   quoted 6-byte prefixes of full 85-byte frames). Open: whether the unlock
   survives battery removal or a `0x18` reboot (never exercised on an
-  unlocked pod); whether a rebooted pod that revives WITH notifications gets
-  a second working window is unresolved (the net is one-shot per session — a
-  post-reset challenge spends no second net; the per-challenge Info log +
-  `challenges` breadcrumb adjudicate on the next real lockout, and only then
-  re-arm the net if the chatty path shows up); re-run the Zwift-app unlock
-  only if a pod factory-locks.
+  unlocked pod); re-run the Zwift-app unlock only if a pod factory-locks.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must

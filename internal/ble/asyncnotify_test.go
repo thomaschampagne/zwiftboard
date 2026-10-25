@@ -114,6 +114,27 @@ func TestLockSuspect(t *testing.T) {
 	}
 }
 
+func TestLockNetDisabledByDefault(t *testing.T) {
+	// The lock-reset net ships DISABLED: the "second challenge = locked"
+	// discriminator is FALSIFIED — 2026-10-25 13:36, old c1ac085 binary: a
+	// demonstrably healthy LEFT pod sent TWO connect challenges ~15.5s apart
+	// (03 then 02 EC keys) and streamed 535 button frames over the following
+	// 4 minutes. Arming the net on that count reboot-looped healthy pods
+	// (user-reported regression, same day). Re-enable only on a signal that
+	// provably correlates with the locked state.
+	if LockChallenges != 0 {
+		t.Fatalf("LockChallenges=%d, want 0 (the net must ship disabled)", LockChallenges)
+	}
+	// And the shipped default must leave the tick exactly as c1ac085 had it:
+	// no reset while the pod is active, no matter how many challenges it sent.
+	now := time.Unix(1_000_000, 0)
+	for _, n := range []int64{1, 2, 5} {
+		if net, idle := resetTick(false, n, now.Add(-1*time.Second), now); net || idle {
+			t.Fatalf("shipped default, %d challenges, fresh activity: net=%v idle=%v, want no reset", n, net, idle)
+		}
+	}
+}
+
 func TestResetTick(t *testing.T) {
 	// The NET fires on the challenge count ALONE — even with fresh activity,
 	// because a locked pod streams status frames every ~3s while its button

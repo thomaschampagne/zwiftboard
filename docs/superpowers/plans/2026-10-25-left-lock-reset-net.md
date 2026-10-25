@@ -1,5 +1,12 @@
 # Left-pod lock reset net + unlock facts correction — Implementation Plan
 
+> **Status (2026-10-25, post-merge):** the facts corrections shipped; the reset
+> net ships **DISABLED** (`LockChallenges=0`). Its discriminator — "two
+> challenges per session = locked" — was falsified by a healthy LEFT pod that
+> re-challenged twice ~15.5s apart and then streamed 535 button frames over 4
+> minutes (c1ac085 binary). Do NOT re-enable without a proven lock signal. See
+> `docs/superpowers/specs/2026-10-25-left-lock-reset-net-design.md` ("Outcome").
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Reboot a pod that re-challenges mid-session (`0x18`, evidence-triggered) so a factory-locked LEFT pod keeps working without any Zwift app, and correct the falsified "~24h unlock" facts everywhere they are recorded.

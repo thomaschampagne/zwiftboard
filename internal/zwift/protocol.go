@@ -15,9 +15,9 @@
 //   - LEFT ships LOCKED; ONE Zwift-app handshake grants a persistent unlock
 //     (2026-10-25: one unlock held 3 days through a ~26h non-use gap — "~24h"
 //     is folklore); "ff 04 00" only keeps an already-unlocked device happy.
-//     A locked pod re-challenges (2 challenges/session vs 1 healthy) and the
-//     session reboots it with a lone 0x18 so it works in windows — see
-//     ble.resetTick / ble.LockChallenges
+//     A per-session challenge-count lock trigger was falsified (a healthy pod
+//     re-challenges too), so the lock-reset net ships DISABLED — see
+//     ble.LockChallenges / ble.resetTick
 package zwift
 
 import (

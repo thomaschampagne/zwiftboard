@@ -84,14 +84,17 @@ var (
 	AckInterval = 15 * time.Second
 
 	// LockChallenges is the per-session 0xFF-challenge count at which a pod is
-	// considered LOCKED (button engine dead): a healthy, unlocked pod sends
-	// exactly ONE challenge at connect (2026-10-25: one challenge, then 5.5
-	// minutes of button frames), while the locked runs of 2026-10-21/22 sent
-	// TWO ~15s apart before the engine died ~45-65s after the echo. A locked
-	// pod keeps streaming status frames, so no activity clock sees the death —
-	// the second challenge is the only visible precursor, and it arms the
-	// lock-reset net (resetTick). 0 disables the net.
-	LockChallenges int64 = 2
+	// treated as LOCKED (button engine dead) and rebooted by resetTick.
+	//
+	// It ships DISABLED: the "second challenge = locked" discriminator is
+	// FALSIFIED. 2026-10-25 13:36 (old c1ac085 binary): a demonstrably healthy
+	// LEFT pod sent TWO connect challenges ~15.5s apart (different EC keys)
+	// and streamed 535 button frames over the following 4 minutes. Arming the
+	// net on that count reboot-looped healthy pods — the user-reported
+	// regression. c1ac085's behavior (idle-only periodic reset) is the stable
+	// baseline; re-enable only on a signal that provably correlates with the
+	// locked state. 0 disables the net.
+	LockChallenges int64 = 0
 
 	// handshakeStart is the Click V2 activation frame ("RideOn" 02 03), written
 	// once after connect. The periodic keepalive re-sends plain rideOn ("RideOn").
@@ -310,14 +313,16 @@ func lockSuspect(challenges int64) bool {
 	return LockChallenges > 0 && challenges >= LockChallenges
 }
 
-// resetTick decides ONE keepalive-tick action: the lock-reset NET fires when
-// the pod has re-challenged past LockChallenges in this session and the
+// resetTick decides ONE keepalive-tick action: the lock-reset NET would fire
+// when the pod has re-challenged past LockChallenges in this session and the
 // session has not reset yet; the IDLE path fires per keepaliveTick after
-// IdleReset of silence. The net check runs FIRST and ignores activity on
-// purpose: a locked pod streams status frames every ~3s (activity!) while its
-// button engine is dead, which is exactly why the idle path never fires for
-// it — the second challenge is the only visible precursor. Both paths share
-// the caller's resetSent so exactly ONE reset fires per session no matter
+// IdleReset of silence. The net SHIPS DISABLED (LockChallenges=0) because the
+// discriminator was falsified — a healthy pod re-challenges too — so with the
+// shipped constant resetTick is exactly keepaliveTick (the c1ac085 behavior).
+// If re-armed, the net check runs FIRST and ignores activity on purpose: a
+// locked pod streams status frames every ~3s (activity!) while its button
+// engine is dead, which is why the idle path never fires for it. Both paths
+// share the caller's resetSent so exactly ONE reset fires per session no matter
 // which armed it; postResetStale then recycles a session left silent after
 // the reset and the scan-gated caller reconnects for a fresh handshake.
 func resetTick(resetSent bool, challenges int64, lastActivity, now time.Time) (net, idle bool) {
@@ -498,9 +503,9 @@ func Session(t Target, km *KeyMap) error {
 
 	// challengeRearm answers the 0xFF crypto challenge that arrives on async
 	// (not sync-tx): a short ff 04 00 ack keeps an already-unlocked pod's button
-	// stream from going silent, and the call also counts the session's
-	// challenges for the lock-reset net (a second challenge in one session is
-	// the only visible precursor of a locked pod — see resetTick).
+	// stream from going silent. The call also counts the session's challenges
+	// for the lock-reset net (see resetTick), which ships DISABLED: a healthy
+	// pod can re-challenge too, so the count alone is not a lock signal.
 	//
 	// ackAnchorN holds the UnixNano of the last SUCCESSFUL ff 04 00 write
 	// (0 = never) — the anchor for the periodic AckInterval ack (kept from
@@ -520,15 +525,14 @@ func Session(t Target, km *KeyMap) error {
 		return time.Unix(0, n)
 	}
 	// challenges counts THIS session's 0xFF crypto challenges (asyncNotify
-	// calls rearm once per challenge). A healthy, unlocked pod challenges
-	// exactly once at connect (2026-10-25: one challenge, then 5.5 minutes of
-	// button frames); the locked runs of 2026-10-21/22 challenged twice ~15s
-	// apart before the engine died while every other frame kept flowing. The
+	// calls rearm once per challenge). The count is observational: the
+	// lock-reset net is disabled by default (LockChallenges) because a healthy
+	// LEFT pod also re-challenges (2 connect challenges, 2026-10-25). The
 	// counting deliberately precedes the SendAck check: a challenge is
 	// evidence whether or not we ack it.
 	var challenges atomic.Int64
 	challengeRearm := func() {
-		if n := challenges.Add(1); n > 1 {
+		if n := challenges.Add(1); lockSuspect(n) {
 			slog.Info("crypto challenge again in session — pod unlock suspect",
 				"controller", t.Label, "challenge", n)
 		}

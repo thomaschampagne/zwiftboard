@@ -1,9 +1,22 @@
 # Left-pod lock reset net + unlock facts correction — Design
 
 **Date:** 2026-10-25
-**Status:** approved in chat (brainstorming)
+**Status:** partially shipped — facts corrections landed; the reset net ships
+DISABLED (see "Outcome" below)
 **Branch:** `feat/left-lock-reset-net` (worktree), merge target
 `feat/left-controller-support`
+
+## Outcome (2026-10-25, post-merge)
+
+The net's discriminator is **FALSIFIED**, and the net ships disabled
+(`LockChallenges=0`). On 2026-10-25 13:36 the proven-stable c1ac085 binary
+logged a demonstrably healthy LEFT pod sending TWO connect challenges ~15.5s
+apart (different EC keys) and then streaming 535 button frames over the
+following 4 minutes. Arming the net on that count reboot-looped healthy pods
+(the user-reported regression). The stable behavior is c1ac085's idle-only
+`keepaliveTick`; `resetTick` now delegates to it while `LockChallenges=0`.
+The `challenges` counter remains observational in the liveness breadcrumb.
+Re-enable only on a signal that provably correlates with the locked state.
 
 ## Intent and why
 
@@ -146,12 +159,9 @@ one logged hiccup and teach us something. A time window is YAGNI.
 ## Risks / open
 
 - If a healthy pod ever re-challenges (never observed), we cost one hiccup
-  and log it. If a `0x18` reboot were to CLEAR a valid unlock (unknown: the
-  unlock survived 3 days of pod sleeps, but a rebooted unlocked pod was
-  never exercised), the net could cascade resets — the logs would show the
-  2× challenge pattern returning after every reset, and we gate the net off.
-  Accepted: reset-on-lock is the ecosystem's standard answer and our trigger
-  is strictly more informed than a blind timer.
+  and log it. **REALIZED 2026-10-25**: a healthy pod did re-challenge (2
+  connect challenges, 535 button frames after), the net reboot-looped it, and
+  the net was gated off (`LockChallenges=0`). See "Outcome".
 - Threshold evidence: two locked runs (2026-10-21/22, prefixes only — full
   frames lost with the old log) vs two healthy runs (2026-10-24 without log,
   2026-10-25 with log). The net's Info logging exists precisely to collect
