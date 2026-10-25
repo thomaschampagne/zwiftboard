@@ -189,14 +189,10 @@ func TestPostResetStale(t *testing.T) {
 }
 
 func TestAckDue(t *testing.T) {
-	// The LEFT pod's unlock latch expires ~30s after the last ff 04 00 ack
-	// (seen 2026-10-21: button stream died exactly 30.03s after ack #3), and
-	// the pod sends only ~2 challenges at connect, so challenge-driven acking
-	// stops and the pod's button engine locks while its status/heartbeat/echo
-	// frames keep flowing. The session therefore re-sends ff 04 00 every
-	// AckInterval ON OUR OWN CLOCK, anchored at the last ack actually sent
-	// (unlock echo, challenge re-arm, or a prior periodic ack). Never acked
-	// (no anchor) or AckInterval=0: nothing periodic.
+	// The periodic ack ladder is kept from the proven-stable build; it does
+	// NOT renew the unlock (disproven 2026-10-22: gaps <=18s still lost the
+	// engine on a locked pod). ackDue is pure clock arithmetic: anchored at
+	// the last WRITTEN ack, AckInterval later, 0/never disables.
 	saved := AckInterval
 	defer func() { AckInterval = saved }()
 

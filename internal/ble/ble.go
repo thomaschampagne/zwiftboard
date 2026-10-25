@@ -21,7 +21,7 @@ var (
 	adapter   = bluetooth.DefaultAdapter
 	connectMu sync.Mutex // Windows copes better with serialized connects
 
-	// SendAck sends ff 04 00 to devices that echo RideOn (keeps unlock).
+	// SendAck sends ff 04 00 to devices that echo RideOn (keeps an already-unlocked pod's stream alive).
 	SendAck = true
 
 	// lastSeenAt records the last scan sighting of every Zwift controller
@@ -650,12 +650,11 @@ func Session(t Target, km *KeyMap) error {
 		if postResetStale(resetAt, activity.last(), now) {
 			return fmt.Errorf("pod silent %s past the scheduled reset (0x18) — recycling the session for a clean reconnect (handshake + notifications)", PostResetGrace)
 		}
-		// Periodic unlock ack: feed the LEFT pod's ~30s latch every
-		// AckInterval regardless of incoming frames — challenge-driven
-		// acking stops when the pod stops challenging, and its frame stream
-		// says NOTHING about the latch (see AckInterval). The successful
-		// write doubles as the liveness probe, so a failure ends the session
-		// exactly like a failed keepalive would.
+		// Periodic unlock ack (see AckInterval): kept from the proven-stable
+		// build; it does NOT renew the unlock, and whether an unlocked pod
+		// needs it at all is untested. The successful write doubles as the
+		// liveness probe, so a failure ends the session exactly like a
+		// failed keepalive would.
 		if SendAck && ackDue(ackAnchor(), now) {
 			if _, err := writeChar(syncRx, ackSeq); err != nil {
 				return fmt.Errorf("disconnected: %w", err)
