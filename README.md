@@ -22,7 +22,10 @@ Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it
 > left pod's arrows and minus are usable.
 
 - **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
-- **No tricks** - no Zwift account, no 24h controller unlock. Works out of the box.
+- **No tricks** - no Zwift account, no subscription. Unlock the pair once with
+  the Zwift app; the unlock persists for days (not a 24h lease). Even a
+  factory-locked LEFT pod keeps working: zwiftboard reboots it automatically
+  when it re-challenges.
 - **Free** - no paid features, no subscriptions like some others implementations.
 - **Profiles** - configurable with pre-built profiles per platform.
 - **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.

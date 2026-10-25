@@ -75,13 +75,11 @@ var (
 
 	// AckInterval re-sends the unlock ack (ff 04 00) on OUR OWN clock, every
 	// interval, anchored at the last ack actually written (unlock echo,
-	// challenge re-arm, or a prior periodic ack). The LEFT pod's unlock latch
-	// expires ~30s after the last ack (seen 2026-10-21: the button stream died
-	// exactly 30.03s after ack #3), and the pod sends only ~2 challenges at
-	// connect — challenge-driven acking alone lets the latch expire while the
-	// pod's status/heartbeat/echo frames keep flowing, so the death is
-	// invisible to any frame-activity clock and looks like a zombie (writes
-	// still succeed, nothing logs). A failed ack write is a REAL disconnect
+	// challenge re-arm, or a prior periodic ack). The ladder is kept from the
+	// proven-stable build; it does NOT renew the unlock (disproven
+	// 2026-10-22: gaps ≤18s still lost the engine on a locked pod) and
+	// whether an unlocked pod needs it at all is untested (2026-10-25 held
+	// with the ladder active). A failed ack write is a REAL disconnect
 	// and ends the session like the keepalive failure does. 0 disables.
 	AckInterval = 15 * time.Second
 
@@ -332,7 +330,7 @@ func resetTick(resetSent bool, challenges int64, lastActivity, now time.Time) (n
 // ackDue reports that the session owes the pod an unlock ack (ff 04 00):
 // AckInterval has elapsed since the last ack was actually WRITTEN (a zero
 // lastAck — never acked — and AckInterval=0 both disable the periodic ack).
-// See AckInterval for why the latch must be fed on our own clock.
+// See AckInterval for why the ladder is kept from the proven-stable build.
 func ackDue(lastAck, now time.Time) bool {
 	return AckInterval > 0 && !lastAck.IsZero() &&
 		now.Sub(lastAck) >= AckInterval
@@ -500,12 +498,13 @@ func Session(t Target, km *KeyMap) error {
 
 	// challengeRearm answers the 0xFF crypto challenge that arrives on async
 	// (not sync-tx): a short ff 04 00 ack keeps an already-unlocked pod's button
-	// stream from going silent.
+	// stream from going silent, and the call also counts the session's
+	// challenges for the lock-reset net (a second challenge in one session is
+	// the only visible precursor of a locked pod — see resetTick).
 	//
 	// ackAnchorN holds the UnixNano of the last SUCCESSFUL ff 04 00 write
-	// (0 = never) — the anchor for the periodic AckInterval ack, without
-	// which the LEFT pod's ~30s unlock latch expires mid-session and locks
-	// the button engine while every other frame keeps flowing (see
+	// (0 = never) — the anchor for the periodic AckInterval ack (kept from
+	// the proven-stable build; it does not renew the unlock, see
 	// AckInterval). The anchor is written from the notification goroutines
 	// and read by the keepalive loop below, hence atomic. A failed ack write
 	// does NOT anchor: if the link is really dead the next keepalive or

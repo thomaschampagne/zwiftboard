@@ -12,8 +12,12 @@
 //     an idle pod is rebooted with a lone 0x18 before its ~65s watchdog strands
 //     it asleep for 30-40s (see ble.Session)
 //   - button frames: 0x23 + protobuf; field 1 = uint32 bitmap, bit==0 means pressed
-//   - LEFT needs a ~24h hardware unlock done by the Zwift app; "ff 04 00" keeps an
-//     already-unlocked device unlocked
+//   - LEFT ships LOCKED; ONE Zwift-app handshake grants a persistent unlock
+//     (2026-10-25: one unlock held 3 days through a ~26h non-use gap — "~24h"
+//     is folklore); "ff 04 00" only keeps an already-unlocked device happy.
+//     A locked pod re-challenges (2 challenges/session vs 1 healthy) and the
+//     session reboots it with a lone 0x18 so it works in windows — see
+//     ble.resetTick / ble.LockChallenges
 package zwift
 
 import (

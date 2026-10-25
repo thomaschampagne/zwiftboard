@@ -169,22 +169,34 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   whole process. Every path gives back exactly what it took: `Press` counts
   up, `Release` counts down, the `Press` rollback counts down (it must never
   delete the whole VK), `ReleaseAll` subtracts the handler's whole count.
-- LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
-  locked; only the app's real crypto handshake GRANTS the unlock — the bare
-  `ff 04 00` just keeps an already-unlocked pod unlocked). With an expired
-  unlock the LEFT pod's button engine locks silently ~45–65s after the unlock
-  echo (2026-10-22: 11–25s after a CONFIRMED written ack, while status
-  `2A`/battery `FF 05`/heartbeat `19 10 50`/RideOn echo frames kept flowing —
-  invisible to any frame-activity clock, writes still succeed, nothing logs;
-  the lock is permanent for the session because those status frames keep the
-  idle clock fresh, so the scheduled `0x18` reset never fires and only a
-  reconnect recovers it). The `AckInterval` (15s) ladder does NOT renew the
-  unlock (disproven 2026-10-22: gaps ≤18s still lost the engine; Run A's
-  "last-ack + 30.03s" was coincidence). With a FRESH ~24h unlock from the
-  Zwift app the pod streams for the full test window (2026-10-22: 3m48s /
-  1894 frames, through an explicit 30s pause, with only ONE challenge and no
-  second `03→02` countdown). Operational rule: re-run the Zwift-app unlock
-  when the LEFT pod stops typing after ~1 minute of otherwise-healthy frames.
+- LEFT controller unlock: ONE Zwift-app handshake GRANTS a persistent unlock
+  (the bare `ff 04 00` only keeps an already-unlocked pod happy). NOT a ~24h
+  lease: one unlock (2026-10-22) still held through the 2026-10-24 (~morning)
+  and 2026-10-25 (11:54) sessions, the second after ~26h of complete non-use
+  — the "~24h" figure was folklore (clickbridge: multi-day rides with no app;
+  BikeControl #68: one app session fixed it permanently for several users).
+  The 2026-10-21/22 lockouts were a NEVER-unlocked pod (the first-ever unlock
+  came AFTER those failures), not an expired one. A LOCKED pod's engine dies
+  ~45-65s after the unlock echo while status `2A`/battery `FF 05`/heartbeat
+  `19 10 50`/RideOn echo frames keep flowing — invisible to any
+  frame-activity clock, writes still succeed, nothing logs; the lock is
+  permanent for the session (status frames keep the idle clock fresh, so the
+  scheduled `0x18` reset never fires). The lock PRECURSOR is the challenge
+  count: a healthy pod sends exactly ONE `0xFF` challenge per session, the
+  locked runs sent TWO ~15s apart — so the lock-reset NET reboots the pod
+  (`0x18`) on the second challenge of a session (`resetTick`/
+  `LockChallenges`): the pod reboots on our schedule, reconnects scan-gated,
+  and a factory-locked pod keeps working in windows without any app
+  (BikeControl's restart-every-minute, evidence-triggered instead of blind).
+  The `AckInterval` (15s) ladder does NOT renew the unlock (disproven
+  2026-10-22: gaps ≤18s still lost the engine; Run A's "last-ack + 30.03s"
+  was coincidence). The challenge frame is an 85-byte SIGNED message:
+  `FF 03 00` + protobuf {field1: 33-byte SEC1 compressed EC point, field2:
+  varint 33751040, field3: 40-byte signature} — the old "03→02 countdown" was
+  a misread of the EC point prefix across different challenges (the old docs
+  quoted 6-byte prefixes of full 85-byte frames). Open: whether the unlock
+  survives battery removal or a `0x18` reboot (never exercised on an
+  unlocked pod); re-run the Zwift-app unlock only if a pod factory-locks.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must
