@@ -196,7 +196,12 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   a misread of the EC point prefix across different challenges (the old docs
   quoted 6-byte prefixes of full 85-byte frames). Open: whether the unlock
   survives battery removal or a `0x18` reboot (never exercised on an
-  unlocked pod); re-run the Zwift-app unlock only if a pod factory-locks.
+  unlocked pod); whether a rebooted pod that revives WITH notifications gets
+  a second working window is unresolved (the net is one-shot per session — a
+  post-reset challenge spends no second net; the per-challenge Info log +
+  `challenges` breadcrumb adjudicate on the next real lockout, and only then
+  re-arm the net if the chatty path shows up); re-run the Zwift-app unlock
+  only if a pod factory-locks.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must
