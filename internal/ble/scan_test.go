@@ -28,12 +28,8 @@ func (f fakePayload) ManufacturerData() []bluetooth.ManufacturerDataElement {
 func (f fakePayload) ServiceData() []bluetooth.ServiceDataElement { return nil }
 
 func zwiftResult(addr string) bluetooth.ScanResult {
-	mac, err := bluetooth.ParseMAC(addr)
-	if err != nil {
-		panic(err)
-	}
 	return bluetooth.ScanResult{
-		Address:              bluetooth.Address{MACAddress: bluetooth.MACAddress{MAC: mac}},
+		Address:              testAddress(addr),
 		RSSI:                 -50,
 		AdvertisementPayload: fakePayload{name: "Zwift Click"},
 	}

@@ -99,3 +99,7 @@ func startDetached(cmd *exec.Cmd) error {
 	go func() { _ = cmd.Wait() }()
 	return nil
 }
+
+func platformCommand(spec string) *exec.Cmd {
+	return exec.Command(spec)
+}

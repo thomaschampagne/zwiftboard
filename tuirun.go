@@ -101,7 +101,7 @@ func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.Ke
 	for enabled := false; !enabled; {
 		ble.Guarded("enable BLE adapter", func() {
 			if err := ble.Enable(); err != nil {
-				slog.Error("Bluetooth is OFF or unavailable — turn it ON (Windows: Settings > Bluetooth & devices); retrying in 5s", "error", err)
+				slog.Error("Bluetooth is OFF or unavailable — turn it ON in system settings; retrying in 5s", "error", err)
 			} else {
 				enabled = true
 			}

@@ -52,15 +52,25 @@ loglevel: info
 #   rouvy         support.rouvy.com "Remote controllers and control mapping"
 #   tacx          Garmin FAQ aFNaNhVBpF1wKTKB40LYg7 + the app's Settings -> Keyboard Shortcuts screen
 # Apps checked and excluded: FulGaz (no in-ride keys), Strappo (Apple-only, no
-# Windows build, no keyboard shortcuts), BKOOL (undocumented).
+# Apple-only build, no keyboard shortcuts), BKOOL (undocumented).
 #
-# BOTH PODS CONNECTED, RIGHT POD MAPPED: the Click V2 is a pair and zwiftboard
-# keeps BOTH pods connected — the LEFT pod is the pair's BLE anchor and letting
-# it drop drops the RIGHT pod's link too. Only the RIGHT pod's buttons
-# (Y Z A B PLUS) are mapped below. The left pod's buttons (LEFT UP RIGHT DOWN
-# MIN) can be mapped but are not used here. Gear shift lives on the right pod:
-# PLUS = gear down (k), B = gear up (i).
+# BOTH PODS CONNECTED: the Click V2 is a pair and zwiftboard keeps BOTH pods
+# connected — the LEFT pod is the pair's BLE anchor and letting it drop drops
+# the RIGHT pod's link too. The macOS MyWhoosh profile uses PLUS on the right
+# pod for gear down and MIN on the left pod for gear up.
 profiles:
+
+  # Apple Silicon macOS: use with `-p mywhoosh-macos`.
+  # MyWhoosh must be installed in /Applications. macOS asks for Bluetooth,
+  # Accessibility and (when focus is enabled) Automation permissions.
+  mywhoosh-macos:
+    PLUS: k
+    A: right
+    MIN: i
+    Y: u
+    Z: left
+    focusProgramNamePrefixOnClick: "MyWhoosh Indoor Cycling App"
+    startProgram: "MyWhoosh Indoor Cycling App"
 
   # Start notepad
   notepad:

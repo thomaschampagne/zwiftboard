@@ -1,9 +1,9 @@
-// Zwift Click V2 BLE listener for Windows (WinRT via tinygo.org/x/bluetooth).
+// Zwift Click V2 BLE listener for Windows and macOS.
 //
 //	go run . [-v] [-config path] [-p mywhoosh] [-log zwiftboard.log]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
-// keyboard keys (Windows keybd_event). Log level comes from config.yaml
+// keyboard keys. Log level comes from config.yaml
 // (loglevel: debug|info|warn|error); -v forces debug.
 //
 // Click V2 is a pair of devices (LEFT: arrows + minus, RIGHT: Y/Z/A/B + plus).
@@ -166,7 +166,7 @@ func main() {
 	for enabled := false; !enabled; {
 		ble.Guarded("enable BLE adapter", func() {
 			if err := ble.Enable(); err != nil {
-				slog.Error("Bluetooth is OFF or unavailable — turn it ON (Windows: Settings > Bluetooth & devices); retrying in 5s", "error", err)
+				slog.Error("Bluetooth is OFF or unavailable — turn it ON in system settings; retrying in 5s", "error", err)
 			} else {
 				enabled = true
 			}

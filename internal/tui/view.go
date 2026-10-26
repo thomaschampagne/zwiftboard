@@ -114,7 +114,7 @@ func (m Model) View() tea.View {
 
 	if !m.bt {
 		body := sBad.Render("○ Bluetooth is OFF") + "\n" +
-			sWarn.Render("Please turn Bluetooth ON") + sMuted.Render(" (Windows: Settings > Bluetooth & devices)") + "\n" +
+			sWarn.Render("Please turn Bluetooth ON in system settings") + "\n" +
 			sMuted.Render("Waiting for it — this screen updates by itself.")
 		b.WriteString(m.card(cBad, "Bluetooth", body) + "\n")
 		b.WriteString(m.logsPanel())

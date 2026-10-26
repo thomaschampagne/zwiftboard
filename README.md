@@ -6,7 +6,7 @@
     <a href="https://github.com/thomaschampagne/zwiftboard/actions/workflows/ci.yml"><img src="https://github.com/thomaschampagne/zwiftboard/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/thomaschampagne/zwiftboard/releases/latest"><img src="https://img.shields.io/github/v/release/thomaschampagne/zwiftboard?sort=semver" alt="Latest release"></a>
     <a href="https://scoop.sh"><img src="https://img.shields.io/badge/scoop-extras-4B8BBE" alt="Scoop (extras bucket)"></a>
-    <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Platform: Windows">
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4" alt="Platform: Windows and macOS">
     <a href="LICENSE"><img src="https://img.shields.io/github/license/thomaschampagne/zwiftboard" alt="License: MIT"></a>
   </p>
 </div>
@@ -15,17 +15,16 @@ Why?! I needed to gear +/- in MyWhoosh using my Zwift Click v2 without paying fo
 
 Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it to their app. `zwiftboard` unlocks it: connect over Bluetooth, press a button, and it **types real keyboard keys**.
 
-> **Only the RIGHT pod fires keys.** The Click V2 is a pair and zwiftboard keeps
-> _both_ pods connected, but the mapped buttons all live on the RIGHT pod
-> (`Y` `Z` `A` `B` `PLUS`). The LEFT pod's arrows/minus are not used — it just
-> has to stay switched on so the pair's link stays alive.
+> **Both pods can fire keys.** The Click V2 is a pair and zwiftboard keeps
+> _both_ pods connected. The standard profiles mostly use the RIGHT pod, while
+> `mywhoosh-macos` uses `PLUS` on the right and `MIN` on the left for shifting.
 
 - **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
 - **No tricks** - no Zwift account, no 24h controller unlock. Works out of the box.
 - **Free** - no paid features, no subscriptions like some others implementations.
 - **Profiles** - configurable with pre-built profiles per platform.
 - **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
-- **Scope** - Zwift Click V2 only, Windows only.
+- **Scope** - Zwift Click V2 only. Windows and Apple Silicon macOS are supported.
 
 ---
 
@@ -40,6 +39,11 @@ Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it
 ### From Releases
 
 Download the latest version from the [release page](https://github.com/thomaschampagne/zwiftboard/releases).
+
+On Apple Silicon macOS, download `zwiftboard-macos-arm64.zip`, unpack it, and
+run `./zwiftboard` from Terminal. Grant Bluetooth and Accessibility permissions
+in **System Settings > Privacy & Security**. The optional focus feature may
+also request Automation permission to activate MyWhoosh.
 
 ### From Scoop
 
@@ -57,17 +61,131 @@ submitted to the community [extras](https://github.com/ScoopInstaller/Extras)
 bucket — once that PR is merged, `scoop install extras/zwiftboard` works too.
 Manual downloads remain available on the [Releases](../../releases) page.
 
+## macOS + MyWhoosh (beginner setup)
+
+This section is the simplest setup for an Apple Silicon Mac (M1, M2, M3 or
+M4) and a Zwift Click V2 pair. It does not require Xcode: the release archive
+already contains the compiled program.
+
+### 1. Download and unpack zwiftboard
+
+Download `zwiftboard-macos-arm64.zip` from the
+[latest release](https://github.com/thomaschampagne/zwiftboard/releases/latest).
+Open the ZIP, then move the extracted `zwiftboard` folder somewhere permanent,
+for example `~/Applications/zwiftboard`.
+
+Open **Terminal** and go to that folder:
+
+```bash
+mkdir -p ~/Applications/zwiftboard
+cd ~/Applications/zwiftboard
+```
+
+If Finder extracted the folder in `Downloads`, move it with Finder or use:
+
+```bash
+mv ~/Downloads/zwiftboard-macos-arm64/* ~/Applications/zwiftboard/
+cd ~/Applications/zwiftboard
+chmod +x ./zwiftboard
+```
+
+### 2. Allow macOS to control the Click and MyWhoosh
+
+The first launch asks for Bluetooth access. Allow it. Then open:
+
+**System Settings > Privacy & Security > Bluetooth**
+
+and enable Bluetooth access for Terminal (or the terminal application used to
+launch zwiftboard).
+
+Enable keyboard injection here:
+
+**System Settings > Privacy & Security > Accessibility**
+
+Add and enable Terminal. If macOS lists the `zwiftboard` executable instead,
+enable that as well. Restart the program after changing these permissions.
+
+The MyWhoosh auto-focus feature may also ask for permission under:
+
+**System Settings > Privacy & Security > Automation**
+
+Allow Terminal to control **MyWhoosh Indoor Cycling App**.
+
+### 3. Close competing Bluetooth applications
+
+Quit Zwift, Zwift Companion and any other application that may already be
+connected to the Click pods. A Click V2 pod accepts only one BLE connection at
+a time. Keep both pods switched on.
+
+### 4. Start MyWhoosh with the dedicated profile
+
+The macOS profile maps:
+
+- right `PLUS` → `k` (gear down);
+- left `MIN` → `i` (gear up);
+- right `A` → Right Arrow;
+- right `Z` → Left Arrow;
+- right `Y` → `u`.
+
+Start zwiftboard with:
+
+```bash
+cd ~/Applications/zwiftboard
+./zwiftboard -p mywhoosh-macos -v -plain
+```
+
+When the log says it is scanning, press a button on each pod once to wake
+them. Wait until both pods are connected, then start or return to MyWhoosh.
+The program keeps running in the terminal; stop it with `Ctrl+C`.
+
+### 5. Create the `mywhoosh-cog` shortcut (optional)
+
+To start the program with one command in future terminal windows, add this
+alias to `~/.zshrc`:
+
+```bash
+echo "alias mywhoosh-cog='$HOME/Applications/zwiftboard/zwiftboard -p mywhoosh-macos -v -plain'" >> ~/.zshrc
+source ~/.zshrc
+```
+
+From then on, launch the complete setup with:
+
+```bash
+mywhoosh-cog
+```
+
+If you installed zwiftboard in another folder, replace the path in the
+`alias` command. The alias must point to the actual `zwiftboard` executable,
+not to the ZIP file.
+
+### Troubleshooting macOS
+
+- **`zsh: permission denied`**: run `chmod +x ./zwiftboard` from the
+  zwiftboard folder.
+- **The pods are not found**: wake both pods, verify Bluetooth permission, and
+  quit Zwift Companion and other BLE applications.
+- **The log says `focus program not found or inaccessible`**: verify that the
+  installed application is named exactly `MyWhoosh Indoor Cycling App` in
+  `/Applications`, then restart zwiftboard.
+- **The buttons are logged but MyWhoosh does not react**: enable Accessibility
+  for the terminal application and restart the terminal after changing it.
+- **The left minus button does nothing**: use `-p mywhoosh-macos`; the generic
+  profiles do not necessarily map the left pod's `MIN` button.
+
 ## Quick start
 
-1. **Download** the latest release: grab `zwiftboard.exe` from the
+1. **Download** the latest release: grab `zwiftboard.exe` on Windows or
+   `zwiftboard-macos-arm64.zip` on Apple Silicon macOS from the
    [Releases](../../releases) page. The config file is created on first run at
-   `%LocalAppData%\zwiftboard\config.yml`.
+   `%LocalAppData%\zwiftboard\config.yml` on Windows or
+   `~/Library/Application Support/zwiftboard/config.yml` on macOS.
 2. **Close Zwift / the Companion app** — each controller accepts only one BLE
    connection at a time.
-3. **Run it** and press a button on each controller while it scans to wake them — the mapped keys come from the **RIGHT** pod:
+3. **Run it** and press a button on each controller while it scans to wake them — profiles may map buttons from either pod:
 
    ```
-   zwiftboard.exe                 # startup profile: `defaultProfile:` from the config (ships as notepad)
+   zwiftboard.exe                 # Windows
+   ./zwiftboard                   # macOS; use -p mywhoosh-macos for MyWhoosh
    zwiftboard.exe -p trainerroad  # pick another profile
    zwiftboard.exe -v              # debug logging (raw frames, services)
    ```
@@ -83,7 +201,8 @@ up: a controller switched on 10 minutes later still gets picked up.
 
 ## Configuration
 
-The config lives at `%LocalAppData%\zwiftboard\config.yml` (or pass `-config`;
+The config lives at `%LocalAppData%\zwiftboard\config.yml` on Windows or
+`~/Library/Application Support/zwiftboard/config.yml` on macOS (or pass `-config`;
 an explicit path must already exist). The default file is created on first run,
 and a config from the old location next to the exe is migrated there. One file:
 `loglevel:`, an optional `defaultProfile:`, and a `profiles:` map.
@@ -136,8 +255,10 @@ the program `.exe` name (case-insensitive prefix) — so `MyWhoosh` matches
 `MyWhooshHD.exe`. On each button press the matching window is restored (if
 minimized) and brought to the foreground, then the key is tapped into it. If
 no window matches, the tap is **dropped and a warning logged** — zwiftboard
-never types into an unrelated app. Windows remembers the focused window, so
-the game stays in front for the whole ride.
+never types into an unrelated app. Windows remembers the focused window, and
+macOS activates the named application with `open -a`, so the game stays in
+front for the whole ride. On macOS, the application name must match the name
+shown in `/Applications`.
 
 ### Start a program with a profile
 
@@ -160,6 +281,15 @@ profiles:
 
 `null` (or absent) disables it. It starts once Bluetooth is up. A missing path
 logs a warning and is skipped; an already-running program is left alone.
+
+On macOS, use an application name or `.app` path:
+
+```yaml
+profiles:
+  mywhoosh-macos:
+    focusProgramNamePrefixOnClick: MyWhoosh Indoor Cycling App
+    startProgram: MyWhoosh Indoor Cycling App
+```
 
 To find a Store app's AUMID, open PowerShell and copy the **AppID** column of:
 
@@ -220,6 +350,7 @@ zwiftboard [flags]
 | --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mywhoosh`      | `+` gear down, `B` gear up, `A`/`Z` steer right/left, `Y` U-turn / minimal UI | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                                                         |
 | `mywhoosh-hd`   | same mapping as `mywhoosh`                                                    | MyWhoosh (HD build) — focuses `MyWhooshHD.exe`, auto-starts the MS Store app                                                                            |
+| `mywhoosh-macos` | PLUS → `k`, MIN → `i`, A → Right, Y → `u`, Z → Left                    | MyWhoosh on Apple Silicon macOS — uses the right PLUS and left MIN controls; focuses and starts `MyWhoosh Indoor Cycling App`                            |
 | `trainerroad`   | `A` space play/pause, `B` t mode, `Y` h heart-rate, `Z` w workout             | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts)                                     |
 | `systm`         | `A` space pause, `B` `` ` `` ERG, `Y` m mute, `Z` esc close settings          | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)                                                  |
 | `zwift`         | `+`/`B` FTP bias down/up, `A`/`Z` turn right/left, `Y` power-up               | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                                                         |
