@@ -59,19 +59,22 @@ const (
 // the profile fields (Profile/Bindings/Focus/StartProgram/ProfileIndex) are
 // updated live by ProfileMsg on a runtime switch.
 type Config struct {
-	Profile      string
-	Bindings     map[string]string // button -> key token
-	Buttons      []string          // ordered table rows (right pod)
-	Focus        string            // focusProgramNamePrefixOnClick; "" = off
-	StartProgram string            // program launched on activation; "" = none
-	NoMapping    bool              // config file missing
-	Demo         bool              // enable mock toggle keys
-	Logs         *LogBuffer        // log panel source; nil = none
-	ConfigPath   string            // shown in status messages
-	Version      string            // shown next to the title; the version stamp (e.g. "1.2.3"); "" hides it
-	OpenConfig   func() error      // opens the config file in an editor; nil = shortcut off
-	Profiles     []string          // profile names in order; nil = switching off
-	ProfileIndex int               // active index into Profiles
+	Profile  string
+	Bindings map[string]string // button -> key token
+	// LeftButtons and RightButtons are the Click V2 pods' button names, in
+	// table order: the left pod's column and the right pod's column.
+	LeftButtons  []string
+	RightButtons []string
+	Focus        string       // focusProgramNamePrefixOnClick; "" = off
+	StartProgram string       // program launched on activation; "" = none
+	NoMapping    bool         // config file missing
+	Demo         bool         // enable mock toggle keys
+	Logs         *LogBuffer   // log panel source; nil = none
+	ConfigPath   string       // shown in status messages
+	Version      string       // shown next to the title; the version stamp (e.g. "1.2.3"); "" hides it
+	OpenConfig   func() error // opens the config file in an editor; nil = shortcut off
+	Profiles     []string     // profile names in order; nil = switching off
+	ProfileIndex int          // active index into Profiles
 	// SwitchProfile requests a relative profile switch; main wires it and
 	// pushes a ProfileMsg back. nil = switching off.
 	SwitchProfile func(delta int)
@@ -82,6 +85,25 @@ type Config struct {
 	// Reload re-reads the config from disk and applies it to the active profile
 	// without a BLE reconnect (the "r" shortcut). nil = reload off.
 	Reload func()
+	// Auth is the runtime Zwift sign-in form config. AuthNone = form closed,
+	// AuthPrompt = the form owns the keyboard.
+	Auth AuthConfig
+	// RecoveryPath and RecoveryErr describe a config file that failed to load;
+	// a non-empty RecoveryPath makes the recovery dialog the first screen.
+	RecoveryPath string
+	RecoveryErr  string
+	// RecoveryStart is called on a user yes: it backs the broken file up, erases
+	// it, rebuilds the shipped default, verifies it loads and returns the display
+	// config for the restored profile. nil = no recovery dialog (and -demo).
+	RecoveryStart func(path string) (Config, bool)
+}
+
+// recoveryState is the startup config-recovery dialog inside the screen model.
+// It owns the keys until answered and is never active without RecoveryStart.
+type recoveryState struct {
+	Active bool   // the yes/no dialog is asking the user to restore the default
+	Path   string // the config file that failed to load
+	Err    string // why it failed, shown in the dialog
 }
 
 // Messages sent by main (live) or the demo handler.
@@ -128,12 +150,23 @@ type Model struct {
 	logOffset    int    // lines scrolled up from the newest; 0 = following the bottom
 	focusMissing bool   // default false: no alert until a FocusMsg says so
 	latest       string // newer release tag from UpdateMsg; "" = none/dev
+	auth         authModel
+	recovery     recoveryState // startup config-recovery prompt
 }
 
 // New returns a model with Bluetooth off, both pods not detected and no key
-// state.
+// state. A broken config file (RecoveryPath + RecoveryStart) opens on the
+// recovery dialog instead of the status screen.
 func New(cfg Config) Model {
-	return Model{cfg: cfg, keys: map[string]keyState{}}
+	m := Model{
+		cfg:  cfg,
+		keys: map[string]keyState{},
+		auth: newAuthModel(cfg.Auth),
+	}
+	if cfg.RecoveryPath != "" && cfg.RecoveryStart != nil {
+		m.recovery = recoveryState{Active: true, Path: cfg.RecoveryPath, Err: cfg.RecoveryErr}
+	}
+	return m
 }
 
 // keyState is one emulated key's state: at is the press time while down and
@@ -202,12 +235,32 @@ func (m Model) tickCmd() tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-func (m Model) Init() tea.Cmd { return m.tickCmd() }
+func (m Model) Init() tea.Cmd {
+	return m.tickCmd()
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+	case authLoginDoneMsg:
+		if !m.authGate() {
+			return m, nil
+		}
+		m.auth.busy = false
+		if msg.err != nil {
+			m.auth.err = "Sign-in failed: " + msg.err.Error()
+			return m, nil
+		}
+		m.auth.password = ""
+		m.auth.passwordCaret = 0 // the password never survives a submit/re-open
+		m.auth.state = AuthNone
+		m.auth.notice = "" // signed in: the no-token notice is no longer relevant
+		return m.setStatus("Zwift sign-in succeeded — the LEFT controller's unlock will renew on the next connect")
+	case tea.PasteMsg:
+		if m.authGate() {
+			return m.pasteAuth(msg.Content), nil
+		}
 	case openedMsg:
 		if msg.err != nil {
 			return m.setStatus("Could not open " + m.cfg.ConfigPath + ": " + msg.err.Error())
@@ -288,13 +341,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.clampLogScroll()
 		}
+	case tea.MouseClickMsg:
+		// A click inside the login form focuses the row it landed on. Only
+		// while the form owns the keyboard (AuthPrompt); when it isn't open
+		// the form isn't rendered anyway, so the click does nothing.
+		if m.auth.state == AuthPrompt {
+			if f := m.authClickField(msg.Y); f >= 0 {
+				m.auth.focus = f
+			}
+		}
 	case tea.KeyPressMsg:
+		// The startup config-recovery dialog owns the keys only while it is open
+		// (startup gate): until answered, no other shortcut fires — typing a
+		// profile name or pressing q/l/z during the dialog must not reopen it.
+		if m.recovery.Active {
+			return m.recoveryKey(msg)
+		}
+		if m.authGate() {
+			return m.updateAuth(msg)
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
 		if msg.String() == "l" {
 			m.showLogs = !m.showLogs
+			return m, nil
+		}
+		// Open the runtime sign-in form on demand. Gated on Login being
+		// wired: without a solver there is nothing to sign in with. While the
+		// form is open, updateAuth owns every key, so typing "z" can't re-open.
+		if msg.String() == "z" && m.cfg.Auth.Login != nil {
+			m.auth.state = AuthPrompt
+			m.auth.err = ""
+			m.auth.email = ""     // fresh form per open
+			m.auth.password = ""  // password never survives a submit/re-open
+			m.auth.emailCaret = 0 // caret follows the fresh (empty) field text
+			m.auth.passwordCaret = 0
+			m.auth.focus = 0
 			return m, nil
 		}
 		if m.showLogs && m.cfg.Logs != nil {
