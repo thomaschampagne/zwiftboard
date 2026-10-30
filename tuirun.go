@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
 	"zwiftboard/internal/tui"
+	"zwiftboard/internal/unlock"
 	"zwiftboard/internal/update"
 	"zwiftboard/internal/zwift"
 )
@@ -62,6 +64,77 @@ func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath str
 	}
 }
 
+// solverFor hands the unlock client to BLE only when a usable session is
+// loaded. A nil solver keeps the old empty-ack behaviour: with no sign-in,
+// nothing we can send renews the LEFT pod's unlock anyway.
+func solverFor(c *unlock.Client) ble.ChallengeSolver {
+	if c == nil || !c.Ready() {
+		return nil
+	}
+	return c
+}
+
+// loginClosure builds the Login callback: sign in with the injected login
+// function, map unlock.ErrAuth to "wrong email or password", and on success
+// call onSignedIn — main wires it to ble.EndSessionsForSide(zwift.PodLeft),
+// so the LEFT pod's live session is recycled straight away: it tears down,
+// clears its sighting, waits for a fresh advertisement, and reconnects with
+// the fresh-token solver.
+// The injected function is c.Login in production; tests inject a stub so the
+// ErrAuth mapping and the onSignedIn arming are unit-tested without the
+// network. login must be non-nil.
+func loginClosure(login func(ctx context.Context, email, password string) error, onSignedIn func()) func(email, password string) error {
+	return func(email, password string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		err := login(ctx, email, password)
+		if errors.Is(err, unlock.ErrAuth) {
+			return errors.New("wrong email or password")
+		}
+		if err == nil && onSignedIn != nil {
+			onSignedIn()
+		}
+		return err
+	}
+}
+
+// tuiAuth builds the status-screen sign-in config. There is no start-up gate:
+// the screen opens immediately and "z" opens the form when Login is wired.
+// A stored session starts silently (AuthNone, no notice) and its solver
+// answers the next challenge with the server-signed reply; no token shows the
+// honest notice; an unreadable session shows its own notice.
+// Login signs in with c.Login, maps unlock.ErrAuth to "wrong email or
+// password", and on success calls onSignedIn — main wires it to
+// ble.EndSessionsForSide(zwift.PodLeft), so the LEFT pod's live session is
+// recycled straight away: it tears down, clears its sighting, waits for a
+// fresh advertisement, and reconnects with the fresh-token solver.
+// Login is nil when c is nil: "sign-in not available" per the AuthConfig
+// contract. Never call c.Login on a nil client.
+func tuiAuth(c *unlock.Client, loadErr error, onSignedIn func()) tui.AuthConfig {
+	auth := tui.AuthConfig{}
+	if c != nil {
+		auth.Login = loginClosure(func(ctx context.Context, email, password string) error {
+			return c.Login(ctx, email, password)
+		}, onSignedIn)
+	}
+	switch {
+	case loadErr == nil:
+		// A stored session exists: nothing to show on screen. The next
+		// challenge is answered with the stored session's signed reply.
+		return auth
+	case errors.Is(loadErr, unlock.ErrNoToken):
+		// No token is not a failure: the LEFT may still be unlocked from the
+		// last sign-in. Start BLE with the empty ack instead of blocking the
+		// RIGHT pod behind a form, and point at the "z" shortcut.
+		auth.State = tui.AuthNone
+		auth.Notice = "The LEFT controller works only while its current unlock lasts (a few days)."
+	default:
+		auth.State = tui.AuthNone
+		auth.Notice = "The stored Zwift session could not be read — press z to sign in again."
+	}
+	return auth
+}
+
 // runTUI runs the screen until the user quits, then exits the process (BLE
 // sessions are process-scoped; there is no separate teardown path). start, if
 // non-nil, runs in its own goroutine with the program for sending messages.
@@ -80,8 +153,10 @@ func runTUI(tcfg tui.Config, start func(p *tea.Program)) {
 // liveFeed is the TUI counterpart of main's -plain startup: the same Enable
 // retry (every 5s while Bluetooth is off), then the same startListening. It
 // only OBSERVES: the screen reads ble.Connected / ble.SideSeenRecently and the
-// OnKey hook, and nothing in a session waits on it.
-func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.KeyMap) {
+// OnKey hook, and nothing in a session waits on it. The solver is re-read per
+// session attempt (solver() at each connect), so a runtime sign-in's fresh
+// token is in force for the next LEFT-pod connection.
+func liveFeed(p *tea.Program, state *profileState, km *ble.KeyMap, solver func() ble.ChallengeSolver) {
 	// Update check: fire once, never block or warn. A failure (offline,
 	// rate-limited, dev stamp) is simply "no update".
 	go func() {
@@ -108,7 +183,9 @@ func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.Ke
 		}
 	}
 	slog.Info("Bluetooth is on — switch on BOTH Click controllers (LEFT and RIGHT); both are connected and kept alive together")
-	launchProfile(cfg)
+	// current() not cfg: a startup config recovery may have replaced the
+	// profile while Bluetooth was still off.
+	launchProfile(state.current())
 	p.Send(tui.BTMsg(true))
 
 	// Set before any session exists (no race). Send blocks until the program
@@ -129,7 +206,7 @@ func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.Ke
 		}
 	}
 
-	startListening(km, scanFor, ble.ReconnectWindow)
+	startListening(km, scanFor, ble.ReconnectWindow, solver)
 	// The "detected" window is the reconnect window: the screen and the scan
 	// gate must agree on what "recently seen" means.
 	src := tui.Sources{

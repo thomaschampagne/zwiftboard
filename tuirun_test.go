@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"zwiftboard/internal/ble"
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
+	"zwiftboard/internal/tui"
+	"zwiftboard/internal/unlock"
 )
 
 func TestEditorCommandPerOS(t *testing.T) {
@@ -184,5 +189,124 @@ func TestLaunchCurrentNoProgramIsNoOp(t *testing.T) {
 	s := &profileState{cur: config.Config{}}
 	if err := s.launchCurrent(); err != nil {
 		t.Fatalf("empty startProgram should be a no-op, got %v", err)
+	}
+}
+
+func TestSolverForOnlyWithAStoredSession(t *testing.T) {
+	// No token: the solver stays nil so BLE keeps the old ff 04 00 behaviour.
+	// A stored session hands the client to every session, so the first
+	// challenge after sign-in gets the signed reply.
+	dir := t.TempDir()
+	c := unlock.New(unlock.NewStore(dir))
+	_ = c.Load()
+	if got := solverFor(c); got != nil {
+		t.Fatal("solverFor = non-nil without a stored session")
+	}
+
+	if err := unlock.NewStore(dir).Save(unlock.Tokens{
+		AccessToken: "access", RefreshToken: "refresh", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c = unlock.New(unlock.NewStore(dir))
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := solverFor(c); got == nil {
+		t.Fatal("solverFor = nil with a stored session")
+	}
+}
+
+func TestTuiAuthIsOnDemand(t *testing.T) {
+	dir := t.TempDir()
+	c := unlock.New(unlock.NewStore(dir))
+
+	// No token: no form at start-up, but a persistent notice points at "z".
+	auth := tuiAuth(c, unlock.ErrNoToken, func() {})
+	if auth.State != tui.AuthNone {
+		t.Fatalf("state = %v, want AuthNone", auth.State)
+	}
+	if auth.Notice == "" {
+		t.Fatal("the no-token notice must be set")
+	}
+	if auth.Login == nil {
+		t.Fatal("the runtime form still needs a login callback")
+	}
+
+	// An unreadable stored session: no form either, its own notice.
+	auth = tuiAuth(c, errors.New("zwift: session unreadable"), func() {})
+	if auth.State != tui.AuthNone {
+		t.Fatalf("state = %v, want AuthNone", auth.State)
+	}
+	if auth.Notice == "" {
+		t.Fatal("the unreadable-session notice must be set")
+	}
+
+	// A stored session: silent start, no notice, no session check.
+	if err := unlock.NewStore(dir).Save(unlock.Tokens{
+		AccessToken: "access", RefreshToken: "refresh", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c = unlock.New(unlock.NewStore(dir))
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	auth = tuiAuth(c, nil, func() {})
+	if auth.State != tui.AuthNone {
+		t.Fatalf("state = %v, want AuthNone with a stored token", auth.State)
+	}
+	if auth.Notice != "" {
+		t.Fatal("a stored token must not show a notice")
+	}
+}
+
+func TestTuiAuthNoClientMeansNoLogin(t *testing.T) {
+	// No unlock client: sign-in is not available, so Login stays nil and "z"
+	// is inert on the status screen. No panic.
+	auth := tuiAuth(nil, unlock.ErrNoToken, func() {})
+	if auth.Login != nil {
+		t.Fatal("no client must leave Login nil")
+	}
+	if auth.State != tui.AuthNone || auth.Notice == "" {
+		t.Fatalf("state = %v notice = %q", auth.State, auth.Notice)
+	}
+}
+
+func TestLoginClosureMapsErrAuthAndArmsOnSignedIn(t *testing.T) {
+	var armed int
+	onSignedIn := func() { armed++ }
+
+	// unlock.ErrAuth becomes "wrong email or password" and never arms the
+	// LEFT-pod recycle.
+	login := func(context.Context, string, string) error { return unlock.ErrAuth }
+	got := loginClosure(login, onSignedIn)
+	err := got("rider@example.com", "hunter2")
+	if err == nil || err.Error() != "wrong email or password" {
+		t.Fatalf("err = %v, want 'wrong email or password'", err)
+	}
+	if armed != 0 {
+		t.Fatalf("onSignedIn called %d times on auth failure, want 0", armed)
+	}
+
+	// Other errors pass through unchanged and never arm.
+	other := errors.New("token endpoint: HTTP 502")
+	login = func(context.Context, string, string) error { return other }
+	got = loginClosure(login, onSignedIn)
+	if err := got("u", "p"); err != other {
+		t.Fatalf("err = %v, want %v", err, other)
+	}
+	if armed != 0 {
+		t.Fatalf("onSignedIn called %d times on other error, want 0", armed)
+	}
+
+	// Success returns nil and arms the LEFT-pod recycle exactly once.
+	login = func(context.Context, string, string) error { return nil }
+	got = loginClosure(login, onSignedIn)
+	if err := got("u", "p"); err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if armed != 1 {
+		t.Fatalf("onSignedIn called %d times on success, want 1", armed)
 	}
 }
