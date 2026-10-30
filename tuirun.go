@@ -103,11 +103,6 @@ func loginClosure(login func(ctx context.Context, email, password string) error,
 // A stored session starts silently (AuthNone, no notice) and its solver
 // answers the next challenge with the server-signed reply; no token shows the
 // honest notice; an unreadable session shows its own notice.
-// Login signs in with c.Login, maps unlock.ErrAuth to "wrong email or
-// password", and on success calls onSignedIn — main wires it to
-// ble.EndSessionsForSide(zwift.PodLeft), so the LEFT pod's live session is
-// recycled straight away: it tears down, clears its sighting, waits for a
-// fresh advertisement, and reconnects with the fresh-token solver.
 // Login is nil when c is nil: "sign-in not available" per the AuthConfig
 // contract. Never call c.Login on a nil client.
 func tuiAuth(c *unlock.Client, loadErr error, onSignedIn func()) tui.AuthConfig {
