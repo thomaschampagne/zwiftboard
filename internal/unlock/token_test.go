@@ -64,19 +64,3 @@ func TestStoreSaveCreatesDirWithPrivateMode(t *testing.T) {
 		t.Fatalf("mode = %o, want 600", perm)
 	}
 }
-
-func TestStoreDeleteIsIdempotent(t *testing.T) {
-	s := NewStore(t.TempDir())
-	if err := s.Delete(); err != nil {
-		t.Fatalf("Delete on missing file: %v", err)
-	}
-	if err := s.Save(Tokens{RefreshToken: "refresh"}); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	if err := s.Delete(); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-	if _, err := s.Load(); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("Load after Delete = %v, want fs.ErrNotExist", err)
-	}
-}

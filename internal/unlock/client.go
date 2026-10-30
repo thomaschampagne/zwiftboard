@@ -38,7 +38,7 @@ var ErrNoToken = errors.New("no Zwift sign-in stored")
 
 // ErrAuth means Zwift rejected the credentials or the stored refresh token.
 // The user must sign in again; retrying is pointless.
-var ErrAuth = errors.New("Zwift sign-in rejected")
+var ErrAuth = errors.New("zwift sign-in rejected")
 
 // authErrorCodes are the only Keycloak error codes that mean "these
 // credentials/session will never work". A 403 from a proxy or a 5xx is NOT an
@@ -114,23 +114,6 @@ func (c *Client) Ready() bool {
 	return c.loaded && !c.dead && c.tokens.RefreshToken != ""
 }
 
-// Ensure renews the access token when it is missing or about to expire, so a
-// start-up check catches a dead refresh token before the pods connect.
-func (c *Client) Ensure(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.loaded {
-		return ErrNoToken
-	}
-	if c.dead {
-		return ErrAuth
-	}
-	if c.accessValidLocked() {
-		return nil
-	}
-	return c.refreshLocked(ctx)
-}
-
 func (c *Client) accessValidLocked() bool {
 	return c.tokens.AccessToken != "" && c.now().Add(refreshLeeway).Before(c.tokens.ExpiresAt)
 }
@@ -139,8 +122,6 @@ func (c *Client) accessValidLocked() bool {
 // The credentials are used for this request only: they are never stored, and
 // the request body is never logged.
 func (c *Client) Login(ctx context.Context, email, password string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	t, err := c.tokenRequest(ctx, url.Values{
 		"grant_type": {"password"},
 		"client_id":  {clientID},
@@ -150,6 +131,8 @@ func (c *Client) Login(ctx context.Context, email, password string) error {
 	if err != nil {
 		return err
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.tokens = t
 	c.loaded = true
 	c.dead = false
@@ -232,7 +215,7 @@ func (c *Client) tokenRequest(ctx context.Context, form url.Values, keepRefresh 
 		slog.Debug("zwift sign-in: token request", "grant_type", form.Get("grant_type"), "error", err)
 		return Tokens{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return Tokens{}, err
@@ -359,7 +342,7 @@ func (c *Client) authenticate(ctx context.Context, access string, challenge []by
 		slog.Debug("dlock request failed", "error", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil {
 		return nil, err
