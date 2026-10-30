@@ -12,8 +12,10 @@
 //     an idle pod is rebooted with a lone 0x18 before its ~65s watchdog strands
 //     it asleep for 30-40s (see ble.Session)
 //   - button frames: 0x23 + protobuf; field 1 = uint32 bitmap, bit==0 means pressed
-//   - LEFT needs a ~24h hardware unlock done by the Zwift app; "ff 04 00" keeps an
-//     already-unlocked device unlocked
+//   - LEFT needs a time-limited unlock granted by Zwift's servers: the pod sends a
+//     0xFF 03 challenge and the game relays a server-signed reply as
+//     ff 04 00 <reply>. ff 04 00 alone does NOT renew it (proven 2026-10-22);
+//     it is only the fallback ack that keeps an already-unlocked pod streaming
 package zwift
 
 import (
@@ -90,6 +92,15 @@ var Buttons = map[uint32]string{
 	0x00100: "MIN",  // left module, minus
 	0x01000: "PLUS", // right module, plus
 }
+
+// LeftButtons and RightButtons are the Click V2's two pods' buttons, in
+// table order. The LEFT pod owns the four arrows and MINUS; the RIGHT pod
+// owns Y Z A B and PLUS. The split is a protocol fact (it matches the bits
+// above), so it lives here and not in the UI.
+var (
+	LeftButtons  = []string{"LEFT", "UP", "RIGHT", "DOWN", "MIN"}
+	RightButtons = []string{"Y", "Z", "A", "B", "PLUS"}
+)
 
 // KnownMask is the union of all defined button bits.
 var KnownMask = func() (m uint32) {
