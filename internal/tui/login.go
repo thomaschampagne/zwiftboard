@@ -352,7 +352,7 @@ func (m Model) authContent() string {
 	}
 	b.WriteString(m.cardW(inner, cAccent, "Zwift sign-in", why) + "\n\n")
 
-	b.WriteString(m.authField("Email", strings.TrimSpace(m.auth.email), m.auth.emailCaret, m.auth.focus == 0) + "\n")
+	b.WriteString(m.authField("Email", m.auth.email, m.auth.emailCaret, m.auth.focus == 0) + "\n")
 	b.WriteString(m.authField("Password", maskPassword(m.auth.password), m.auth.passwordCaret, m.auth.focus == 1) + "\n")
 	if hint := passwordHint(m.auth.password); hint != "" && !m.auth.busy {
 		b.WriteString(sWarn.Render(hint) + "\n")
