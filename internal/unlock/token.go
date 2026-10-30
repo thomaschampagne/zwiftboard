@@ -9,8 +9,6 @@ package unlock
 
 import (
 	"encoding/json"
-	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -69,26 +67,17 @@ func (s *Store) Save(t Tokens) error {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp) // no-op after a successful rename
+	defer func() { _ = os.Remove(tmp) }() // no-op after a successful rename
 	if err := f.Chmod(0o600); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if _, err := f.Write(b); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.Path())
-}
-
-// Delete removes the stored session; already absent is fine.
-func (s *Store) Delete() error {
-	err := os.Remove(s.Path())
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	return err
 }

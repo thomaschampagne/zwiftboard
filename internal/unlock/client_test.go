@@ -29,7 +29,7 @@ func tokenServer(t *testing.T, status int, body string) (*httptest.Server, *url.
 		got = r.PostForm
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		io.WriteString(w, body)
+		_, _ = io.WriteString(w, body)
 	}))
 	t.Cleanup(ts.Close)
 	return ts, &got
@@ -37,6 +37,18 @@ func tokenServer(t *testing.T, status int, body string) (*httptest.Server, *url.
 
 func newTestClient(store *Store, tokenURL, dlockURL string, now func() time.Time) *Client {
 	return newClient(store, tokenURL, dlockURL, &http.Client{Timeout: 5 * time.Second}, now)
+}
+
+// dlockReply serves a fixed d-lock answer for tests that only exercise the
+// token side of Solve.
+func dlockReply(t *testing.T) string {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "reply")
+	}))
+	t.Cleanup(ts.Close)
+	return ts.URL
 }
 
 func TestLoadMissingToken(t *testing.T) {
@@ -146,7 +158,7 @@ func TestControlCharCount(t *testing.T) {
 	}
 }
 
-func TestEnsureRefreshesExpiredTokenAndRotatesIt(t *testing.T) {
+func TestSolveRefreshesExpiredTokenAndRotatesIt(t *testing.T) {
 	ts, form := tokenServer(t, http.StatusOK,
 		`{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
 	store := NewStore(t.TempDir())
@@ -154,12 +166,12 @@ func TestEnsureRefreshesExpiredTokenAndRotatesIt(t *testing.T) {
 	if err := store.Save(Tokens{AccessToken: "access-1", RefreshToken: "refresh-1", ExpiresAt: now.Add(-time.Minute)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	c := newTestClient(store, ts.URL, ts.URL, func() time.Time { return now })
+	c := newTestClient(store, ts.URL, dlockReply(t), func() time.Time { return now })
 	if err := c.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := c.Ensure(context.Background()); err != nil {
-		t.Fatalf("Ensure: %v", err)
+	if _, err := c.Solve(context.Background(), []byte("challenge")); err != nil {
+		t.Fatalf("Solve: %v", err)
 	}
 	if got := form.Get("grant_type"); got != "refresh_token" {
 		t.Fatalf("grant_type = %q", got)
@@ -176,7 +188,7 @@ func TestEnsureRefreshesExpiredTokenAndRotatesIt(t *testing.T) {
 	}
 }
 
-func TestEnsureSkipsRefreshWhileAccessTokenIsValid(t *testing.T) {
+func TestSolveSkipsRefreshWhileAccessTokenIsValid(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("token endpoint called although the access token is still valid")
 	}))
@@ -186,12 +198,12 @@ func TestEnsureSkipsRefreshWhileAccessTokenIsValid(t *testing.T) {
 	if err := store.Save(Tokens{AccessToken: "access", RefreshToken: "refresh", ExpiresAt: now.Add(10 * time.Minute)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	c := newTestClient(store, ts.URL, ts.URL, func() time.Time { return now })
+	c := newTestClient(store, ts.URL, dlockReply(t), func() time.Time { return now })
 	if err := c.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := c.Ensure(context.Background()); err != nil {
-		t.Fatalf("Ensure: %v", err)
+	if _, err := c.Solve(context.Background(), []byte("challenge")); err != nil {
+		t.Fatalf("Solve: %v", err)
 	}
 }
 
@@ -202,12 +214,12 @@ func TestRefreshRejectedClearsTheSession(t *testing.T) {
 	if err := store.Save(Tokens{AccessToken: "old", RefreshToken: "dead", ExpiresAt: now.Add(-time.Hour)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	c := newTestClient(store, ts.URL, ts.URL, func() time.Time { return now })
+	c := newTestClient(store, ts.URL, dlockReply(t), func() time.Time { return now })
 	if err := c.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := c.Ensure(context.Background()); !errors.Is(err, ErrAuth) {
-		t.Fatalf("Ensure = %v, want ErrAuth", err)
+	if _, err := c.Solve(context.Background(), []byte("challenge")); !errors.Is(err, ErrAuth) {
+		t.Fatalf("Solve = %v, want ErrAuth", err)
 	}
 	if c.Ready() {
 		t.Fatal("Ready = true after the refresh token was rejected")
@@ -244,7 +256,7 @@ func dlockServer(t *testing.T, challenge, reply []byte, calls *int, auth func(ca
 			status, out = auth(*calls, r.Header.Get("Authorization"))
 		}
 		w.WriteHeader(status)
-		w.Write(out)
+		_, _ = w.Write(out)
 	}))
 	t.Cleanup(ts.Close)
 	return ts
@@ -289,7 +301,7 @@ func TestSolveRefreshesOn401ThenRetries(t *testing.T) {
 	tokenCalls := 0
 	tokens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenCalls++
-		io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
+		_, _ = io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
 	}))
 	defer tokens.Close()
 
@@ -425,13 +437,13 @@ func TestTransientRefreshFailureKeepsTheSession(t *testing.T) {
 	if err := store.Save(Tokens{AccessToken: "old", RefreshToken: "refresh-1", ExpiresAt: now.Add(-time.Hour)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	c := newTestClient(store, ts.URL, ts.URL, func() time.Time { return now })
+	c := newTestClient(store, ts.URL, dlockReply(t), func() time.Time { return now })
 	if err := c.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	err := c.Ensure(context.Background())
+	_, err := c.Solve(context.Background(), []byte("challenge"))
 	if err == nil {
-		t.Fatal("Ensure should report the failed refresh")
+		t.Fatal("Solve should report the failed refresh")
 	}
 	if errors.Is(err, ErrAuth) {
 		t.Fatalf("403 mapped to ErrAuth: %v", err)
@@ -452,7 +464,7 @@ func TestSolveRefreshesOnlyOnceOnRepeated401(t *testing.T) {
 	tokenCalls := 0
 	tokens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenCalls++
-		io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
+		_, _ = io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
 	}))
 	defer tokens.Close()
 
@@ -491,7 +503,7 @@ func TestSolveRefreshesExpiredTokenBeforeTheCall(t *testing.T) {
 	tokenCalls := 0
 	tokens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenCalls++
-		io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
+		_, _ = io.WriteString(w, `{"access_token":"access-2","refresh_token":"refresh-2","expires_in":300}`)
 	}))
 	defer tokens.Close()
 
@@ -516,5 +528,35 @@ func TestSolveRefreshesExpiredTokenBeforeTheCall(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("dlock calls = %d, want 1", calls)
+	}
+}
+
+// Sign-in must not hold the client lock across the network call: a BLE
+// session asking Ready() (or solving) while the user is signing in must not
+// stall behind the token request.
+func TestLoginDoesNotBlockReadyWhileWaitingForZwift(t *testing.T) {
+	release := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"access_token":"access","refresh_token":"refresh","expires_in":300}`)
+	}))
+	defer ts.Close()
+	defer close(release)
+	c := newTestClient(NewStore(t.TempDir()), ts.URL, "", time.Now)
+
+	done := make(chan error, 1)
+	go func() { done <- c.Login(context.Background(), "rider@example.com", "secret") }()
+
+	ready := make(chan bool, 1)
+	go func() { ready <- c.Ready() }()
+	select {
+	case <-ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Ready blocked behind an in-flight Login")
+	}
+	release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatalf("Login: %v", err)
 	}
 }
