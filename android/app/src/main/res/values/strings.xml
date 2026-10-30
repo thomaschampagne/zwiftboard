@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">ZwiftBoard Android</string>
+    <string name="permission_required">Bluetooth permissions are required to scan and connect to the Click pods.</string>
+    <string name="instructions">Connect both Zwift Click V2 pods. Keep this foreground service running while MyWhoosh is open.</string>
+    <string name="start_bridge">Start background bridge</string>
+    <string name="stop_bridge">Stop bridge</string>
+    <string name="left_pod">LEFT pod</string>
+    <string name="right_pod">RIGHT pod</string>
+    <string name="mywhoosh_link">MyWhoosh Link</string>
+    <string name="not_running">not running</string>
+    <string name="scanning">Scanning</string>
+    <string name="starting">Starting</string>
+    <string name="status_line">%1$s: %2$s</string>
+    <string name="bridge_running">Bridge running</string>
+    <string name="notification_channel">ZwiftBoard controller bridge</string>
+</resources>

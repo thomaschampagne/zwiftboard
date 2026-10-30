@@ -7,13 +7,17 @@
 *.dll
 *.so
 *.dylib
-zwiftboard
+/zwiftboard
 
 # Generated Windows icon resource (see just gen-icon)
 *.syso
 
 # Local build/release artifacts (just build / release / scoop-release)
 /dist/
+/android/.gradle/
+/android/.idea/
+/android/local.properties
+/android/**/build/
 
 # Test binary, built with `go test -c`
 *.test

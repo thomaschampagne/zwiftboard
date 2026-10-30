@@ -27,6 +27,11 @@ Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it
 - **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
 - **Scope** - Zwift Click V2 only, Windows only.
 
+An experimental Android app is also available in [`android/`](android/README.md).
+It runs as a foreground BLE service and sends Click controls through an
+experimental MyWhoosh Link TCP server; Link endpoint discovery is not yet
+implemented or verified.
+
 ---
 
 ## Demo with Notepad
