@@ -202,6 +202,24 @@ func TestRecoverConfigRestoresTheShippedDefault(t *testing.T) {
 	}
 }
 
+// A recovery restores the shipped default, never a legacy copy: a stale
+// config.yaml beside the exe must not be adopted, or the broken file returns.
+func TestRecoverConfigIgnoresLegacyConfig(t *testing.T) {
+	legacy := filepath.Join(t.TempDir(), "config.yaml")
+	writeFile(t, legacy, "profiles:\n  stale:\n    A: a\n")
+	legacyConfigPaths = func() []string { return []string{legacy} }
+	t.Cleanup(func() { legacyConfigPaths = defaultLegacyConfigPaths })
+	path := filepath.Join(t.TempDir(), "config.yml")
+	writeFile(t, path, "profiles: [this is not a map")
+
+	if _, ok := recoverConfig(path); !ok {
+		t.Fatal("recoverConfig refused a broken file")
+	}
+	if got := readFile(t, path); got != string(defaultConfig) {
+		t.Fatal("recovery restored a legacy config instead of the shipped default")
+	}
+}
+
 // A recovery must refuse before erasing anything when the current file cannot
 // be read for the backup: here the config path is a directory.
 func TestRecoverConfigRefusesWhenBackupFails(t *testing.T) {
