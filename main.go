@@ -10,7 +10,9 @@
 // Click V2 is a PAIR: both pods are connected (each gets its own session and
 // keepalive). Connecting only the right pod, or merely detecting the left one,
 // does not stop the right pod's ~65s idle drop; with both connected the link
-// stays up. Only the right pod's buttons are normally mapped (Y Z A B PLUS).
+// stays up. Both pods' buttons are mappable (LEFT UP RIGHT DOWN MIN on the
+// left pod, Y Z A B PLUS on the right); the shipped profiles map the right
+// pod, the `notepad` profile maps both.
 // Startup checks Bluetooth (asks for it to be switched on and retries), then
 // asks for both controllers and reports the pair state as it changes.
 // Scanning runs in bursts until controllers appear and keeps listening for
@@ -22,11 +24,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -35,6 +39,8 @@ import (
 	"zwiftboard/internal/config"
 	"zwiftboard/internal/keys"
 	"zwiftboard/internal/tui"
+	"zwiftboard/internal/unlock"
+	"zwiftboard/internal/zwift"
 )
 
 //go:generate just gen-icon
@@ -55,7 +61,7 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "log raw frames and button events (forces log level debug)")
 	logPath := flag.String("log", "", "also write log lines to this file (.log), truncated at startup")
 	plain := flag.Bool("plain", false, "plain log output on stderr instead of the TUI status screen")
-	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b bluetooth, [ ] pods, f focus alert, 1-5 click), no Bluetooth — try the screen without hardware")
+	demo := flag.Bool("demo", false, "TUI with mock toggle keys (b bluetooth, [ ] pods, f focus alert, 1-0 click), no Bluetooth — try the screen without hardware")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -81,6 +87,12 @@ func main() {
 	if verbose {
 		level = slog.LevelDebug
 	}
+	// A broken config file is recoverable, not a crash: with a TUI and no -demo
+	// it asks the user (single confirmable yes/no) to back it up and start from
+	// the built-in default. The default config.yaml ships valid profiles, so a
+	// restore always yields a usable config. -plain and -demo have no recovery
+	// dialog: they keep failing fast (the user must fix the file themselves).
+	recoverNeeded := err != nil && !cfg.Missing
 	// Tee to the -log file when asked: same TextHandler, same level and
 	// records on both writers. Handler-internal locking keeps concurrent
 	// session goroutines from interleaving lines; writes are unbuffered, so
@@ -113,12 +125,21 @@ func main() {
 	if tuiMode {
 		errLog = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
+	// A broken config file is recoverable in the status screen: the recovery
+	// dialog backs the file up and restores the shipped default on a yes. The
+	// -plain and -demo paths have no dialog, so they still fail fast.
+	canRecover := recoverNeeded && tuiMode && !*demo
 	if err != nil {
-		errLog.Error("bad config", "error", err)
-		os.Exit(1)
+		if !canRecover {
+			errLog.Error("bad config", "error", err)
+			os.Exit(1)
+		}
+		slog.Warn("config failed to load — the status screen offers to restore the built-in default", "file", configFile, "error", err)
 	}
 	if cfg.Missing {
 		slog.Warn("no key mapping — button logging only", "file", *configPath)
+	} else if err != nil {
+		slog.Warn("config unusable — button logging only until it is fixed or restored", "file", configFile)
 	} else {
 		slog.Info("profile loaded", "profile", cfg.Profile, "bindings", len(cfg.Bindings))
 		for _, name := range config.ButtonNames() {
@@ -137,6 +158,24 @@ func main() {
 	}
 	keys.SetWindowTarget(cfg.FocusProgramNamePrefixOnClick)
 
+	// The Zwift session lives beside config.yml. A missing or rejected token
+	// only costs the LEFT pod: everything else works without it, and the TUI
+	// offers sign-in on demand via the status-screen "z" (or when the session expired).
+	var client *unlock.Client
+	var authErr error
+	if !*demo {
+		client = unlock.New(unlock.NewStore(filepath.Dir(configFile)))
+		authErr = client.Load()
+		switch {
+		case authErr == nil:
+			slog.Info("Zwift sign-in found — the LEFT controller's time-limited unlock will be renewed")
+		case errors.Is(authErr, unlock.ErrNoToken):
+			slog.Info("no Zwift sign-in yet — the LEFT controller's time-limited unlock cannot be renewed until you sign in; press z to sign in")
+		default:
+			slog.Warn("Zwift sign-in file unreadable — press z to sign in again", "error", authErr)
+		}
+	}
+
 	if tuiMode {
 		if *demo {
 			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
@@ -146,17 +185,56 @@ func main() {
 		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, km: km}
 		idx := vkIndex(cfg.Bindings)
 		state.vkIdx.Store(&idx)
+		auth := tuiAuth(client, authErr, func() {
+			// A successful sign-in renews the LEFT pod's time-limited unlock:
+			// recycle its live session so it re-challenges and gets the
+			// server-signed reply. The session tears down through its normal
+			// probe-before-disconnect teardown, clears its sighting, waits
+			// for a fresh advertisement, and reconnects with the fresh-token
+			// solver. The RIGHT pod is never ended by a sign-in.
+			ble.EndSessionsForSide(zwift.PodLeft)
+		})
 		tcfg := tuiConfig(cfg, false, logBuf, *configPath)
 		tcfg.Profiles = names
 		tcfg.ProfileIndex = state.idx
 		tcfg.SwitchProfile = state.switchBy
 		tcfg.Reload = state.reload
 		tcfg.LaunchProgram = state.launchCurrent
+		tcfg.Auth = auth
+		if canRecover {
+			// The screen opens on the recovery dialog: the broken file is named,
+			// backed up and replaced by the shipped default on a yes, left alone
+			// on a no. A yes also swaps the live key map and profile state so BLE
+			// types the restored profile's keys right away.
+			tcfg.NoMapping = true // until restored: no usable bindings
+			tcfg.RecoveryPath = configFile
+			tcfg.RecoveryErr = err.Error()
+			tcfg.RecoveryStart = func(path string) (tui.Config, bool) {
+				rebuilt, ok := recoverConfig(path)
+				if !ok {
+					return tui.Config{}, false
+				}
+				restoredNames, restoredIdx := state.reset(rebuilt)
+				next := tuiConfig(rebuilt, false, logBuf, path)
+				next.Profiles = restoredNames
+				next.ProfileIndex = restoredIdx
+				next.SwitchProfile = state.switchBy
+				next.Reload = state.reload
+				next.LaunchProgram = state.launchCurrent
+				next.Auth = auth
+				return next, true
+			}
+		}
+		// No start-up gate: the screen opens immediately and sign-in is
+		// always on-demand via "z". BLE starts right away with the current
+		// solver (nil without a stored session, the client once signed in).
 		runTUI(tcfg, func(p *tea.Program) {
 			state.mu.Lock()
 			state.prog = p
 			state.mu.Unlock()
-			liveFeed(p, cfg, state, km)
+			liveFeed(p, state, km, func() ble.ChallengeSolver {
+				return solverFor(client)
+			})
 		})
 	}
 
@@ -179,7 +257,12 @@ func main() {
 	launchProfile(cfg)
 
 	km := ble.NewKeyMap(cfg.Bindings)
-	startListening(km, scanFor, ble.ReconnectWindow)
+	if solverFor(client) == nil {
+		slog.Warn("LEFT controller unlock: no Zwift sign-in — only the RIGHT controller is guaranteed to work (press z on the TUI status screen to sign in)")
+	}
+	startListening(km, scanFor, ble.ReconnectWindow, func() ble.ChallengeSolver {
+		return solverFor(client)
+	})
 	slog.Info("running — Ctrl+C to quit")
 	select {}
 }
@@ -187,7 +270,7 @@ func main() {
 // startListening starts the scanner and one reconnecting session goroutine per
 // controller. Moved out of main verbatim so the TUI and -plain paths share the
 // exact same BLE behavior.
-func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
+func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration, solver func() ble.ChallengeSolver) {
 	// Registry of controllers we already have a session goroutine for. Each
 	// goroutine releases its own entry once its controller has been gone for
 	// registryIdleTTL (see sessionRegistry), so nothing leaks.
@@ -200,14 +283,16 @@ func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
 		if !isFirst {
 			return
 		}
-		if n == 1 {
-			// First controller. Only the RIGHT pod's buttons are mapped; a lone
-			// RIGHT pod's LED may keep blinking (advertising) — cosmetic, not a fault.
-			slog.Info("controller connected — right pod supported (Y/Z/A/B/+); a lone right pod's LED may keep blinking (cosmetic)", "controller", t.Label)
-		} else if n >= 2 {
-			// Both pods of the pair are connected — the LEFT pod is the pair's BLE
-			// anchor and must stay connected; only the RIGHT pod's buttons are mapped.
-			slog.Info("more than one controller connected — only the right pod's buttons are mapped (left pod has just to stay on)", "controllers", n)
+		// The pod side comes from the advertisement's Zwift manufacturer
+		// record, so the log names it instead of guessing from the
+		// discovery order (the first controller found is often the LEFT one).
+		if n == 1 && t.Side == zwift.PodRight {
+			// A lone RIGHT pod keeps blinking (advertising) — cosmetic, not a fault.
+			slog.Info("controller connected — a lone right pod's LED may keep blinking (cosmetic)", "controller", t.Label, "pod", t.Side.String())
+		} else {
+			// n counts the controllers with a session loop, not the ones
+			// connected right now: a loop outlives its pod by registryIdleTTL.
+			slog.Info("controller connected", "controller", t.Label, "pod", t.Side.String(), "sessions", n)
 		}
 		go func() {
 			waiting := false
@@ -218,7 +303,7 @@ func startListening(km *ble.KeyMap, scanFor, reconnect time.Duration) {
 					var err error
 					// ble.Guarded turns a panic in one controller's session into a
 					// warn + retry, so a single bad event never kills the process.
-					ble.Guarded("session "+t.Label, func() { err = ble.Session(t, km) })
+					ble.Guarded("session "+t.Label, func() { err = ble.Session(t, km, solver()) })
 					// Session blocks while connected; reset the idle clock at the
 					// drop so a long connected run never looks "unseen" here.
 					lastSeen = time.Now()
