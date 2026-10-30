@@ -102,6 +102,13 @@ func ensureConfig(path string) bool {
 			return true
 		}
 	}
+	return writeDefault(path)
+}
+
+// writeDefault writes the embedded shipped config to a missing path. It never
+// overwrites (O_EXCL) and never migrates: recovery must restore the shipped
+// default, not a legacy copy that may be the very file that broke.
+func writeDefault(path string) bool {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if !os.IsExist(err) {
@@ -173,13 +180,13 @@ func recoverConfig(configPath string) (config.Config, bool) {
 	if _, ok := backupConfig(configPath); !ok {
 		return config.Config{}, false
 	}
-	// ensureConfig only writes the default when the file is missing (O_EXCL),
-	// so the broken file must be gone first.
+	// writeDefault only writes to a missing file (O_EXCL), so the broken file
+	// must be gone first.
 	if err := os.Remove(configPath); err != nil {
 		slog.Error("cannot erase the broken config", "file", configPath, "error", err)
 		return config.Config{}, false
 	}
-	if !ensureConfig(configPath) {
+	if !writeDefault(configPath) {
 		slog.Error("cannot rebuild the built-in default — restore it from the backup", "file", configPath)
 		return config.Config{}, false
 	}
