@@ -52,6 +52,26 @@ const (
 	// the same offset on every row whatever the token length ("a" vs the
 	// longest valid token, "backspace").
 	keycapW = 9
+
+	// cellWidth is the fixed width of ONE button cell in the two-column
+	// table: the widest a row can get, so the columns line up whatever
+	// the button's state.
+	//
+	// The row is name(6) + "→ "(2) + keycap(11) + "  "(2) + status(12..14).
+	// The keycap is 11, not 9: the keycap style carries its own one-space
+	// padding on each side of the 9-cell token cell. The status cell is 12
+	// when the row is idle and 14 when it carries a label (the label style
+	// has Padding(0,1) too), so the cell is sized for the LABELLED row:
+	// 6+2+11+2+14 = 35. An unmapped row (a "—" with no keycap style) is
+	// only 31 and is padded up to the cell width.
+	//
+	// Measured with ansi.StringWidth, not guessed.
+	cellWidth = 35
+	// columnGap separates the two pod columns.
+	columnGap = 2
+	// twoColumnWidth is the inner width the side-by-side table needs:
+	// two cells of 35 plus the gap.
+	twoColumnWidth = 2*cellWidth + columnGap
 )
 
 // innerWidth is the usable width inside a card, following the terminal.
@@ -109,8 +129,17 @@ func podLine(side string, s PodState) string {
 // halts until the radio is on. Alt-screen and mouse cell-motion are View
 // fields in Bubble Tea v2 (the v1 program options are gone).
 func (m Model) View() tea.View {
+	if m.recovery.Active {
+		return m.recoveryView()
+	}
+	if m.authGate() {
+		return m.authView()
+	}
 	var b strings.Builder
 	b.WriteString(m.header() + "\n")
+	if a := m.authAlert(); a != "" {
+		b.WriteString(a + "\n")
+	}
 
 	if !m.bt {
 		body := sBad.Render("○ Bluetooth is OFF") + "\n" +
@@ -129,7 +158,7 @@ func (m Model) View() tea.View {
 
 	pods := sOK.Render("● Bluetooth: ON") + "\n" + podLine("Left", m.left) + "\n" + podLine("Right", m.right)
 	b.WriteString(m.card(cAccent, "Status", pods) + "\n")
-	b.WriteString(m.card(cAccent, "Right Click V2 · key bindings", m.table()) + "\n")
+	b.WriteString(m.card(cAccent, "Click V2 · key bindings", m.table()) + "\n")
 	b.WriteString(m.logsPanel())
 	b.WriteString(m.footer())
 	return screen(b.String())
@@ -185,33 +214,7 @@ func (m Model) table() string {
 	if m.cfg.NoMapping {
 		b.WriteString(sMuted.Render("no key mapping — button logging only"))
 	} else {
-		for _, name := range m.cfg.Buttons {
-			key, ok := m.cfg.Bindings[name]
-			// Fixed-width keycap cell (keycapW): the status column starts at
-			// the same offset whatever the token, in every phase.
-			cap := sMuted.Render("—" + strings.Repeat(" ", keycapW-1))
-			label := ""
-			var style lipgloss.Style
-			if ok {
-				tok := padRight(key, keycapW)
-				cap = sKeycap.Render(tok)
-				switch m.keyPhase(name) {
-				case PhasePressed:
-					cap = sDown.Render(tok)
-					label, style = "▶ pressed", sDown
-				case PhaseHold:
-					cap = sHold.Render(tok)
-					label, style = pulse(m.now())+" hold", sHold
-				case PhaseReleased:
-					label, style = "○ released", sReleased
-				}
-			}
-			out := padRight(label, 12)
-			if label != "" {
-				out = style.Render(padRight(label, 12))
-			}
-			b.WriteString(sBold.Render(padRight(name, 6)) + sMuted.Render("→ ") + cap + "  " + out + "\n")
-		}
+		b.WriteString(m.tableRows())
 	}
 	focus := sMuted.Render("off")
 	if m.cfg.Focus != "" {
@@ -225,6 +228,107 @@ func (m Model) table() string {
 		out += "\n" + sMuted.Render("Start program on activation: ") + sBold.Render(m.cfg.StartProgram)
 	}
 	return out
+}
+
+// buttonRow renders one button row: the name, the keycap and the status
+// label. It is the single-column table's row, moved out unchanged: the
+// right-pod-only screen must keep rendering exactly the same bytes.
+//
+// The row's width depends on the button's state — 31 cells unmapped, 33
+// idle, 35 when the status carries a label — so the two-column layout
+// pads the cell to cellWidth (the widest case).
+func (m Model) buttonRow(name string) string {
+	key, ok := m.cfg.Bindings[name]
+	// Fixed-width keycap cell (keycapW): the status column starts at
+	// the same offset whatever the token, in every phase.
+	cap := sMuted.Render("—" + strings.Repeat(" ", keycapW-1))
+	label := ""
+	var style lipgloss.Style
+	if ok {
+		tok := padRight(key, keycapW)
+		cap = sKeycap.Render(tok)
+		switch m.keyPhase(name) {
+		case PhasePressed:
+			cap = sDown.Render(tok)
+			label, style = "▶ pressed", sDown
+		case PhaseHold:
+			cap = sHold.Render(tok)
+			label, style = pulse(m.now())+" hold", sHold
+		case PhaseReleased:
+			label, style = "○ released", sReleased
+		}
+	}
+	out := padRight(label, 12)
+	if label != "" {
+		out = style.Render(padRight(label, 12))
+	}
+	return sBold.Render(padRight(name, 6)) + sMuted.Render("→ ") + cap + "  " + out
+}
+
+// mapsLeftPod reports whether the active profile maps at least one left-pod
+// button: only then does the table get a left column. A profile that does
+// not use the left pod keeps the screen it has today.
+func (m Model) mapsLeftPod() bool {
+	for _, name := range m.cfg.LeftButtons {
+		if _, ok := m.cfg.Bindings[name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// tableRows renders the button rows: the left pod's column beside the right
+// pod's when the profile maps a left-pod button and the card is wide enough,
+// the right pod's alone otherwise, and the two blocks stacked when the card
+// is too narrow for the side-by-side form (so nothing ever wraps).
+func (m Model) tableRows() string {
+	left, right := m.cfg.LeftButtons, m.cfg.RightButtons
+	if !m.mapsLeftPod() {
+		return m.rows(right)
+	}
+	if m.innerWidth() >= twoColumnWidth {
+		return m.twoColumns(left, right)
+	}
+	return m.rows(append(append([]string{}, left...), right...))
+}
+
+// rows renders one button row per name, stacked.
+func (m Model) rows(names []string) string {
+	var b strings.Builder
+	for _, name := range names {
+		b.WriteString(m.buttonRow(name) + "\n")
+	}
+	return b.String()
+}
+
+// twoColumns renders the left pod's rows beside the right pod's rows. The
+// left cell is padded to cellWidth so the columns line up whatever the token
+// length; the right cell keeps its natural width (the row's own trailing
+// spaces are the table's edge).
+func (m Model) twoColumns(left, right []string) string {
+	var b strings.Builder
+	n := len(left)
+	if len(right) > n {
+		n = len(right)
+	}
+	for i := 0; i < n; i++ {
+		var l, r string
+		if i < len(left) {
+			l = padRight(m.buttonRow(left[i]), cellWidth)
+		}
+		if i < len(right) {
+			r = m.buttonRow(right[i])
+		}
+		line := l
+		if r != "" {
+			if l != "" {
+				line += strings.Repeat(" ", columnGap)
+			}
+			line += r
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String()
 }
 
 func (m Model) logsPanel() string {
@@ -285,10 +389,13 @@ func (m Model) footer() string {
 	if m.cfg.SwitchProfile != nil && len(m.cfg.Profiles) > 1 {
 		f += sMuted.Render("  ·  ") + hint("ctrl+←/→", "switch profile")
 	}
+	if m.cfg.Auth.Login != nil {
+		f += sMuted.Render("  ·  ") + hint("z", "sign in")
+	}
 	f += sMuted.Render("  ·  ") + hint("q", "quit")
 	if m.cfg.Demo {
 		f += sMuted.Render("  ·  demo: ") + hint("b", "bluetooth") + sMuted.Render(" ") +
-			hint("[ ]", "left/right pod") + sMuted.Render(" ") + hint("1-5", "click") + sMuted.Render(" ") + hint("f", "focus alert")
+			hint("[ ]", "left/right pod") + sMuted.Render(" ") + hint("1-0", "click") + sMuted.Render(" ") + hint("f", "focus alert")
 	}
 	return status + f
 }
@@ -331,11 +438,11 @@ func (m Model) banner() string {
 	if m.left == PodConnected && m.right == PodConnected {
 		return m.cardW(m.innerWidth(), cOK, "",
 			sChipOK.Render("READY")+" "+sBold.Render("Both controllers connected")+"\n"+
-				sMuted.Render("Only the Right controller is supported as a virtual keyboard"))
+				sMuted.Render("Both pods send clicks — the left pod's arrows and minus are mappable too"))
 	}
 	return m.cardW(m.innerWidth(), cWarn, "",
 		sChipWarn.Render("WAITING")+" "+sBold.Render("Both controllers must be ON")+"\n"+
-			sMuted.Render("Only the Right one sends clicks; the Left one just has to stay on."))
+			sMuted.Render("Either pod sends clicks — keep both on so the pair stays linked"))
 }
 
 // focusAlert is shown when a focus window is configured but not running:
@@ -348,4 +455,49 @@ func (m Model) focusAlert() string {
 	return m.cardW(m.innerWidth(), cBad, "",
 		sChipBad.Render("ALERT")+" "+sBold.Render(`Focus window "`+m.cfg.Focus+`" not found`)+"\n"+
 			sMuted.Render("Key clicks are dropped until it is open."))
+}
+
+// recoveryView is the startup config-recovery dialog: the config file could
+// not produce a usable binding profile, so the screen names the file, says why,
+// and offers to back it up and start from the shipped default. Nothing is
+// erased without an explicit "y"; "n" keeps the broken file (no key mapping).
+func (m Model) recoveryView() tea.View {
+	r := m.recovery
+	body := sMuted.Render("File: ") + sBold.Render(r.Path) + "\n"
+	if r.Err != "" {
+		body += sMuted.Render("Reason: ") + sBad.Render(r.Err) + "\n"
+	}
+	body += "\n" + sMuted.Render("The shipped default has valid profiles and can replace it.") + "\n" +
+		sWarn.Render("Nothing is erased unless you say yes — a backup is kept first ("+r.Path+".bak).")
+	if m.status != "" {
+		body += "\n\n" + sWarn.Render(m.status)
+	}
+	body += "\n\n" +
+		sKeyHint.Render("y") + sMuted.Render(" back up and restore the built-in default") + "\n" +
+		sKeyHint.Render("n") + sMuted.Render(" keep the broken file (no key mapping)")
+	return screen(m.card(cBad, "Config file failed to load", body))
+}
+
+// recoveryKey routes the recovery dialog's keys. "y" runs RecoveryStart (back
+// up, restore the shipped default, verify) and swaps in the returned display
+// config so the status screen continues with valid bindings; a failed restore
+// keeps the broken file and stays on the dialog. "n"/"esc" decline: the file is
+// left alone. Ctrl+C quits. No other shortcut fires while the dialog is open.
+func (m Model) recoveryKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "y", "Y":
+		recfg, ok := m.cfg.RecoveryStart(m.recovery.Path)
+		if !ok {
+			return m.setStatus("could not restore the default — the file is left as-is (see the log)")
+		}
+		m.recovery.Active = false
+		m.cfg = recfg
+		return m.setStatus("restored the built-in config — the broken file is saved as " + m.recovery.Path + ".bak")
+	case "n", "N", "esc":
+		m.recovery.Active = false
+		return m.setStatus("kept the broken config — fix it and press r to reload, or restart to restore the default")
+	}
+	return m, nil
 }

@@ -19,10 +19,6 @@ import (
 	"zwiftboard/internal/zwift"
 )
 
-// rightButtons are the Click V2 right pod's buttons, the only ones normally
-// mapped; they form the key table's rows.
-var rightButtons = []string{"Y", "Z", "A", "B", "PLUS"}
-
 // bindingTokens flattens resolved bindings to the token map the TUI shows.
 func bindingTokens(m map[string]keys.Binding) map[string]string {
 	out := make(map[string]string, len(m))
@@ -53,7 +49,8 @@ func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath str
 	return tui.Config{
 		Profile:      cfg.Profile,
 		Bindings:     bindingTokens(cfg.Bindings),
-		Buttons:      rightButtons,
+		LeftButtons:  zwift.LeftButtons,
+		RightButtons: zwift.RightButtons,
 		Focus:        cfg.FocusProgramNamePrefixOnClick,
 		StartProgram: cfg.StartProgram,
 		NoMapping:    cfg.Missing,
