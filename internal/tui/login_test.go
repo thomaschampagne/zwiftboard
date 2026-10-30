@@ -340,8 +340,8 @@ func TestAuthViewRendersCaretAtMovedPosition(t *testing.T) {
 			emailRow = i
 		}
 	}
-	if v.Cursor.Position.Y != emailRow {
-		t.Fatalf("caret Y = %d, want field row %d (on the value, not one row below)", v.Cursor.Position.Y, emailRow)
+	if v.Cursor.Y != emailRow {
+		t.Fatalf("caret Y = %d, want field row %d (on the value, not one row below)", v.Cursor.Y, emailRow)
 	}
 
 	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
@@ -434,10 +434,9 @@ func TestCaretCursorsMoveOneCellPerArrowAtBothBoundaries(t *testing.T) {
 	// move at the last-char boundary, until the start is reached.
 	m = typeText(m, "abc")
 	steps := 3 // offsets 3 → 2 → 1 → 0 over 3 lefts (each is a real move)
-	x := valueStart + 3
 	for step := 1; step <= steps; step++ {
 		m = nextArrow(m, tea.KeyLeft)
-		x, _ = caretFocusedCell(m)
+		x, _ := caretFocusedCell(m)
 		want := valueStart + 3 - step
 		if x != want {
 			t.Fatalf("left arrow %d: cursor X = %d, want %d (one-cell-per-press off the last char)", step, x, want)
@@ -445,7 +444,7 @@ func TestCaretCursorsMoveOneCellPerArrowAtBothBoundaries(t *testing.T) {
 	}
 	// One more left clamps at the start: cursor stays on the start cell.
 	m = nextArrow(m, tea.KeyLeft)
-	x, _ = caretFocusedCell(m)
+	x, _ := caretFocusedCell(m)
 	if x != valueStart {
 		t.Fatalf("left arrow past the start moved the cursor (%d -> %d), want it clamped to %d", x, x, valueStart)
 	}
