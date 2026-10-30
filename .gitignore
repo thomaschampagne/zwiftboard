@@ -42,3 +42,9 @@ go.work.sum
 # .idea/
 # .vscode/
 zwiftboard.log
+
+# Private LEFT-unlock capture: device IDs and the server reply (never commit)
+zwiftboard-with-an-unlock.log
+
+# Zwift session token created by the TUI sign-in (never commit)
+zwift-token.json
