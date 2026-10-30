@@ -5,6 +5,39 @@
 `zwiftboard` — Go CLI that turns Zwift Click V2 controllers (BLE) into
 keyboard input on Windows. Runs on Windows only; developed cross-platform.
 
+## Rules
+
+### Core Principles
+
+- SOLID, YAGNI, DRY, simplicity first.
+- Minimal code, zero bloat.
+- Readability > cleverness.
+
+### Session Continuity
+
+- START: Read `HANDOFF.md`. Resume state instantly.
+- END: Write `HANDOFF.md` (current state, progress, precise next steps).
+
+### Version Control
+
+- Atomic conventional commits only (`feat:`, `fix:`, `refactor:`, `chore:`).
+- One logical change per commit.
+- Never commit broken tests, build failures, or dirty debug logs.
+
+### Coding & Engineering Discipline
+
+- **Fail Fast & Guard:** Validate inputs at boundaries. Guard clauses over deep nesting. Banned: empty `catch {}`.
+- **Strict Typing:** No `any`, no implicit types. Explicit returns on public APIs.
+- **Verification:** Run tests + linter before commit. Zero regression allowed.
+- **Repo Idiom:** Match existing folder structure, naming, and error handling. No unprompted architecture changes.
+- **Zero Dead Code:** Remove unused imports, commented code, temporary logs before wrap-up.
+- **Dependencies:** Prefer stdlib. Audit licenses/size before adding packages. Lockfile updated atomically.
+
+### Communication Style
+
+- Caveman style. Max token efficiency.
+- High signal, zero fluff. Direct.
+
 ## Superpowers
 
 - Superpowers skills installed. Before ANY task, check for relevant skill and invoke it. Mandatory, not optional.
@@ -16,6 +49,8 @@ keyboard input on Windows. Runs on Windows only; developed cross-platform.
 - Between tasks: `requesting-code-review`. Critical issues block.
 - Branch finished: `finishing-a-development-branch`.
 - Principles: YAGNI, DRY, simplicity first.
+- Always write an HANDOFF.md for cross session support. Read HANDOFF.md to continue from a previous session.
+- Always performing atomic conventional commits
 - If skill seem skipped, say so and invoke it.
 
 ## Commands
@@ -41,7 +76,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   `//go:embed config.yaml` (embed cannot `..` above its package dir), and
   `tuirun.go`/`defaultconfig.go` are `package main` wiring — package main
   lives where the binary lives.
-- `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup.
+- `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup, and the challenge hook (`Session` takes a `ChallengeSolver`; nil = the old `ff 04 00` ack).
   Scan/reconnect windows and the idle-reset are internal defaults now (the old
   `-scan`/`-reconnect`/`-addr`/`-ack`/`-idle-reset` flags were removed)
 - `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, no-op elsewhere)
@@ -53,12 +88,21 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   fatal), a `profiles:` map of button→key, plus the per-profile
   `focusProgramNamePrefixOnClick` and `startProgram`; returns errors (never exits)
 - `internal/zwift/` — protocol facts: GATT UUIDs, button bits, frame decode, label helpers
+- `internal/unlock/` — Zwift sign-in and the d-lock exchange: Keycloak
+  password/refresh grants (`Zwift Game Client`), the session file beside
+  `config.yml` (`zwift-token.json`, 0600), and `Solve` for the pod's `FF 03`
+  challenge. Debug logs keep the full exchange (challenge/request/response
+  hex) but never the email, password, tokens or `Authorization` header.
 - `internal/tui/` — Bubble Tea **v2** (`charm.land/bubbletea/v2`; lipgloss stays
   v1) status screen (default UI; `-plain` = logs). OBSERVATIONAL
   only: fed by `ble.Connected`/`SideSeenRecently`/`ble.OnKey`; never gate a session on it.
+  Exception: none — sign-in is on demand via the status screen's `z`
+  (email + masked password, `Esc` closes) once BLE starts with a solver; the
+  pod challenges as soon as it connects.
   Handles the profile-switch chords (`ctrl+left`/`ctrl+right`, fallbacks
   `ctrl+n`/`ctrl+p`), plus `r` reload config, `s` start the profile's program,
-  `e` edit config, `l` toggle the log panel and `q` quit.
+  `e` edit config, `l` toggle the log panel, `z` open the Zwift sign-in form
+  and `q` quit.
   `tuirun.go` (root) wires it; in TUI mode slog goes to the log file, not stderr
 
 ## Conventions
@@ -101,10 +145,11 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
 
 - WinRT returns a partial GATT service list right after connect: enumerate
   ALL services with retry and match characteristics by UUID (`connect`).
-- The Click pair MIRRORS button state: one press arrives as the same frame
-  from both units → dedup is edge-triggered per handler: only bits that
-  changed since the previous frame act, so an identical mirrored bitmap
-  changes nothing.
+- The Click pair MIRRORS button state, but ASYMMETRICALLY: the RIGHT pod's
+  buttons arrive as the same frame from both units, the LEFT pod's own
+  buttons ONLY from the left unit (seen in zwiftboard.log, 2026-10-21). Dedup
+  is edge-triggered per handler: only bits that changed since the previous
+  frame act, so an identical mirrored bitmap changes nothing.
 - A synthetic `keybd_event` down has NO OS auto-repeat: it is a single event
   and the keyboard driver does not repeat it for you. Games that poll the key
   state see the hold, but text apps (Notepad, chat) need the repeated
@@ -113,10 +158,11 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   this or held letters stop repeating in text fields.
 - The Click V2 is a two-pod PAIR, not two independent remotes: the LEFT pod is
   the pair's BLE anchor and the RIGHT pod mirrors state to it over a private RF
-  link. Both pods are connected (see BOTH PODS ARE CONNECTED); only the
-  RIGHT pod's buttons (Y Z A B PLUS) are normally mapped. A lone RIGHT pod's
-  LED keeps blinking (advertising mode) even though its frames decode fine —
-  cosmetic, not a fault.
+  link. Both pods are connected (see BOTH PODS ARE CONNECTED); both pods'
+  buttons are mappable (LEFT UP RIGHT DOWN MIN on the left pod, Y Z A B PLUS on
+  the right); the shipped profiles map the right pod, the `notepad` profile
+  maps both. A lone RIGHT pod's LED keeps blinking (advertising mode) even
+  though its frames decode fine — cosmetic, not a fault.
 - Handshake trio (`RideOn 02 03`, `00 08 00`, `00 08 10`), then a keepalive
   every 3s re-sending the raw `RideOn` opcode frame. PROVEN NOT TO HOLD A LONE
   RIGHT POD: on Windows the link still dies ~65s after the pod's LAST OWN
@@ -147,10 +193,53 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   re-advertises within seconds and the scan gate reconnects. Activity (any
   received frame) restarts the idle clock and suppresses the reset, so a
   session in use is never rebooted.
+- THE WRITE-LIVE ZOMBIE (seen on the LEFT pod, 2026-10-21 log): a pod's app
+  can die (LED sleep) while its BLE stack keeps ACK-ing our writes — the
+  stream stops, `Session` never returns, nothing logs. The scheduled `0x18`
+  reset is swallowed by it, and a rebooted pod can revive on the maintained
+  link WITHOUT notifications. So the keepalive loop recycles the session
+  when it hears NOTHING for `PostResetGrace` (15s) after the reset it sent
+  (`postResetStale`): the caller tears down and the scan gate reconnects for
+  a fresh handshake + CCCD. A single frame after the reset (the `0xFF`
+  challenge marks a revived pod) cancels the recycle. Pre-reset idle
+  silence still NEVER ends a session.
 - Button frame `0x23` + protobuf field 1 = bitmap, **0 = pressed**; bits are
   the Click V2 set in `internal/zwift.Buttons`, not the Zwift Ride layout.
+- The held state is a per-VK COUNT per handler (`Holds.own`), not a flag: two
+  different buttons of the SAME handler mapped to the SAME key (the mirrored
+  `Z` plus the left pod's own `LEFT`, both bound to `left`) must hold the key
+  until the LAST of them is released. With a flag the first release wiped it
+  and the second release found nothing to lift — the key stayed down for the
+  whole process. Every path gives back exactly what it took: `Press` counts
+  up, `Release` counts down, the `Press` rollback counts down (it must never
+  delete the whole VK), `ReleaseAll` subtracts the handler's whole count.
 - LEFT controller needs the ~24h unlock from the Zwift app (`0xFF` challenge =
-  locked; `ff 04 00` keeps an unlocked device unlocked).
+  locked; only the app's real crypto handshake GRANTS the unlock — the bare
+  `ff 04 00` just keeps an already-unlocked pod unlocked). With an expired
+  unlock the LEFT pod's button engine locks silently ~45–65s after the unlock
+  echo (2026-10-22: 11–25s after a CONFIRMED written ack, while status
+  `2A`/battery `FF 05`/heartbeat `19 10 50`/RideOn echo frames kept flowing —
+  invisible to any frame-activity clock, writes still succeed, nothing logs;
+  the lock is permanent for the session because those status frames keep the
+  idle clock fresh, so the scheduled `0x18` reset never fires and only a
+  reconnect recovers it). The `AckInterval` (15s) ladder does NOT renew the
+  unlock (disproven 2026-10-22: gaps ≤18s still lost the engine; Run A's
+  "last-ack + 30.03s" was coincidence). With a FRESH ~24h unlock from the
+  Zwift app the pod streams for the full test window (2026-10-22: 3m48s /
+  1894 frames, through an explicit 30s pause, with only ONE challenge and no
+  second `03→02` countdown). Operational rule: when the LEFT pod stops typing
+  after ~1 minute of otherwise-healthy frames, its unlock expired — zwiftboard
+  renews it on the next connect only while signed in.
+- The unlock is SERVER-SIGNED. The pod sends `FF 03 00 <payload>`; the game
+  POSTs `<payload>` to
+  `https://us-or-rly101.zwift.com/api/d-lock-service/device/authenticate`
+  with a Keycloak `Zwift Game Client` bearer token and relays the reply as
+  `ff 04 00 <reply>`. The bare `ff 04 00` does NOT renew it and is only the
+  no-token/offline fallback. Sign-in is one-time from the TUI _before the
+  LEFT pod's next connect_ (the pod challenges immediately after connect); the
+  password is never stored, only `zwift-token.json` beside `config.yml`. The full exchange
+  is logged at Debug (credentials redacted) so a future session can study
+  whether the API dependency can be dropped — no local forge is known.
 - Liveness: the keepalive write is the ONLY signal. The old LEFT-anchor silence
   watchdog (`podWatcher`) was removed — an idle pod legitimately stops streaming
   `0x23` frames, and idle silence must NEVER end a session (the controller must

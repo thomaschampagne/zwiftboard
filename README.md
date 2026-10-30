@@ -15,13 +15,14 @@ Why?! I needed to gear +/- in MyWhoosh using my Zwift Click v2 without paying fo
 
 Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it to their app. `zwiftboard` unlocks it: connect over Bluetooth, press a button, and it **types real keyboard keys**.
 
-> **Only the RIGHT pod fires keys.** The Click V2 is a pair and zwiftboard keeps
-> _both_ pods connected, but the mapped buttons all live on the RIGHT pod
-> (`Y` `Z` `A` `B` `PLUS`). The LEFT pod's arrows/minus are not used — it just
-> has to stay switched on so the pair's link stays alive.
+> **Both pods can fire keys.** The Click V2 is a pair and zwiftboard keeps
+> _both_ pods connected. The shipped profiles map the RIGHT pod's buttons
+> (`Y` `Z` `A` `B` `PLUS`); the LEFT pod's buttons (`LEFT` `UP` `RIGHT`
+> `DOWN` `MIN`) can be mapped too — the shipped `notepad` profile does, so the
+> left pod's arrows and minus are usable.
 
 - **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
-- **No tricks** - no Zwift account, no 24h controller unlock. Works out of the box.
+- **RIGHT pod needs no account** - it works out of the box. The LEFT pod's time-limited Zwift unlock is renewed for you after a one-time sign-in via the status screen's `z`: your email and password are used once and never stored, only the resulting session token sits beside `config.yml`.
 - **Free** - no paid features, no subscriptions like some others implementations.
 - **Profiles** - configurable with pre-built profiles per platform.
 - **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
@@ -64,7 +65,14 @@ Manual downloads remain available on the [Releases](../../releases) page.
    `%LocalAppData%\zwiftboard\config.yml`.
 2. **Close Zwift / the Companion app** — each controller accepts only one BLE
    connection at a time.
-3. **Run it** and press a button on each controller while it scans to wake them — the mapped keys come from the **RIGHT** pod:
+3. **Sign in when the LEFT pod needs it.** The status screen (`z`) asks for
+   your Zwift email and password so it can renew the LEFT controller's
+   time-limited unlock (the app uses Zwift's own sign-in once; nothing is
+   stored but a session token beside `config.yml`). Press `Esc` to close the
+   form — only the RIGHT controller works normally then, and the warning
+   stays on the screen. The prompt comes back on the next launch until you
+   sign in.
+4. **Run it** and press a button on each controller while it scans to wake them — the mapped keys come from the **RIGHT** pod:
 
    ```
    zwiftboard.exe                 # startup profile: `defaultProfile:` from the config (ships as notepad)
@@ -216,18 +224,20 @@ zwiftboard [flags]
 
 ### Included profiles
 
-| Profile         | Click becomes…                                                                | Source                                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mywhoosh`      | `+` gear down, `B` gear up, `A`/`Z` steer right/left, `Y` U-turn / minimal UI | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                                                         |
-| `mywhoosh-hd`   | same mapping as `mywhoosh`                                                    | MyWhoosh (HD build) — focuses `MyWhooshHD.exe`, auto-starts the MS Store app                                                                            |
-| `trainerroad`   | `A` space play/pause, `B` t mode, `Y` h heart-rate, `Z` w workout             | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts)                                     |
-| `systm`         | `A` space pause, `B` `` ` `` ERG, `Y` m mute, `Z` esc close settings          | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)                                                  |
-| `zwift`         | `+`/`B` FTP bias down/up, `A`/`Z` turn right/left, `Y` power-up               | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                                                         |
-| `trainingpeaks` | `-`/`=` resistance down/up, `A`/`Z` turn right/left, `Y` graph toggle         | [TrainingPeaks Virtual controls](https://help.trainingpeaks.com/hc/en-us/articles/31340399556877-TrainingPeaks-Virtual-Controls-and-Keyboard-Shortcuts) |
-| `biketerra`     | `S`/`W` gear down/up, `A`/`Z` menu right/left, `Y` UI toggle                  | [Biketerra virtual shifting](https://biketerra.com/help-center/virtual-shifting)                                                                        |
-| `rouvy`         | `,`/`.` gear down/up, `A`/`Z` turn right/left, `Y` hide interface             | [Rouvy remote controllers](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)                           |
-| `tacx`          | `+`/`B` difficulty down/up, `A`/`Z` next/previous screen, `Y` pause           | [Tacx keyboard shortcuts](https://support.garmin.com/en-US/?faq=aFNaNhVBpF1wKTKB40LYg7)                                                                 |
-| `notepad`       | `+ p`, `A a`, `B b`, `Y y`, `Z z`                                             | focuses `Notepad` and starts it — the shipped default                                                                                                   |
+| Profile         | Click becomes…                                                                                        | Source                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mywhoosh`      | `+` gear down, `B` gear up, `A`/`Z` steer right/left, `Y` U-turn / minimal UI                         | [MyWhoosh shortcuts](https://mywhooshinfo.com/blog/mywhoosh-keyboard-shortcuts)                                                                         |
+| `mywhoosh-hd`   | same mapping as `mywhoosh`                                                                            | MyWhoosh (HD build) — focuses `MyWhooshHD.exe`, auto-starts the MS Store app                                                                            |
+| `trainerroad`   | `A` space play/pause, `B` t mode, `Y` h heart-rate, `Z` w workout                                     | [TrainerRoad shortcuts](https://support.trainerroad.com/hc/en-us/articles/202806120-TrainerRoad-Keyboard-Shortcuts)                                     |
+| `systm`         | `A` space pause, `B` `` ` `` ERG, `Y` m mute, `Z` esc close settings                                  | [SYSTM shortcuts](https://support.wahoofitness.com/hc/en-us/articles/4402734450322-Keyboard-Shortcuts)                                                  |
+| `zwift`         | `+`/`B` FTP bias down/up, `A`/`Z` turn right/left, `Y` power-up                                       | [Zwift shortcuts](https://support.zwift.com/en_us/keyboard-shortcuts-rkGrgwd4B)                                                                         |
+| `trainingpeaks` | `-`/`=` resistance down/up, `A`/`Z` turn right/left, `Y` graph toggle                                 | [TrainingPeaks Virtual controls](https://help.trainingpeaks.com/hc/en-us/articles/31340399556877-TrainingPeaks-Virtual-Controls-and-Keyboard-Shortcuts) |
+| `biketerra`     | `S`/`W` gear down/up, `A`/`Z` menu right/left, `Y` UI toggle                                          | [Biketerra virtual shifting](https://biketerra.com/help-center/virtual-shifting)                                                                        |
+| `rouvy`         | `,`/`.` gear down/up, `A`/`Z` turn right/left, `Y` hide interface                                     | [Rouvy remote controllers](https://support.rouvy.com/hc/en-us/articles/47742964491665-Remote-controllers-and-control-mapping)                           |
+| `tacx`          | `+`/`B` difficulty down/up, `A`/`Z` next/previous screen, `Y` pause                                   | [Tacx keyboard shortcuts](https://support.garmin.com/en-US/?faq=aFNaNhVBpF1wKTKB40LYg7)                                                                 |
+| `notepad`       | `+ p`, `A a`, `B b`, `Y y`, `Z z`, plus the left pod's `LEFT l`, `UP u`, `RIGHT r`, `DOWN d`, `MIN m` | focuses `Notepad` and starts it — the shipped default                                                                                                   |
+
+App profiles (`mywhoosh`, `mywhoosh-hd`, `trainerroad`, `systm`, `zwift`, `trainingpeaks`, `biketerra`, `rouvy`, `tacx`) also map the LEFT pod's `LEFT`/`RIGHT` steering buttons (`left`/`right`), so any configured profile (not just `notepad`) can send steering keys through either of the pair's controllers. `notepad` remains the full two-pod profile: it maps every left-pod button too.
 
 ## How it works
 
@@ -272,18 +282,31 @@ zwiftboard [flags]
    in MyWhoosh needs the left/right hold). While held, the key auto-repeats
    like a real keyboard (250ms delay, ~33ms interval — a synthetic press is
    otherwise a single event, so letters would not repeat in text apps).
-   The pair mirrors every press (both units send the same frame), so dedup
-   is edge-triggered: a handler only acts on bits that changed since the
-   previous frame, and an identical mirrored bitmap changes nothing. If
+   The mirroring is asymmetric: the RIGHT pod's presses arrive on both
+   units' streams, the LEFT pod's own presses only on the left unit's.
+   Dedup is edge-triggered: a handler only acts on bits that changed since
+   the previous frame, and an identical mirrored bitmap changes nothing. If
    `focusProgramNamePrefixOnClick` is set, the configured window is brought
    to the foreground before the key goes out via Windows `keybd_event`.
 
-**Both pods connected, only the right mapped.** The Click V2 ships as two pods
+**Both pods connected, both mappable.** The Click V2 ships as two pods
 that work as a _pair_: the LEFT pod is the pair's BLE anchor and the RIGHT pod
 mirrors its state to the LEFT over a private RF link. This build connects _both_
 pods — keeping the LEFT anchor connected is what keeps the RIGHT pod's link
-alive — but maps only the RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`). Scanning
-never gives up, so a pod turned on minutes later still joins.
+alive — and both pods' buttons can be mapped. The shipped profiles map the
+RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`, the ones each profile needs);
+`notepad` also maps the LEFT pod's (`LEFT` `UP` `RIGHT` `DOWN` `MIN`).
+Scanning never gives up, so a pod turned on minutes later still joins.
+
+**The LEFT pod's time-limited Zwift unlock.** The LEFT pod's button engine only
+streams while a time-limited unlock granted by Zwift's servers is valid. The pod sends
+a `FF 03` challenge when it connects; the game app forwards it to Zwift's
+d-lock service and writes the signed reply back as `ff 04 00 <reply>`.
+zwiftboard does the same once you are signed in — the challenge, the HTTP
+request and the response are logged at debug level with credentials redacted —
+so a single sign-in keeps the LEFT pod working without opening Zwift. With no
+sign-in, or when the API is unreachable, the session falls back to the plain
+`ff 04 00` ack and the RIGHT pod is unaffected.
 
 Each controller gets its own reconnecting session goroutine (5s backoff);
 connects are serialized so they never overlap an active scan.
@@ -293,6 +316,7 @@ connects are serialized so they never overlap an active scan.
 | Symptom                                    | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Right pod drops, logs `session ended`      | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again.                                                                                                                                                                                         |
+| LEFT pod stops typing after ~1 min         | Its time-limited Zwift unlock expired. Press `z` to sign in (the form appears when no session is stored or the stored one was rejected) (it only appears when no session is stored or the stored one was rejected); the new challenge is then answered with the signed reply. With no sign-in only the RIGHT controller works.                                                                                                                                                                  |
 | Right pod's LED keeps blinking             | The pair's LEFT anchor is not connected. Switch the LEFT controller on too (both pods must be on); a lone RIGHT pod's blinking LED is cosmetic but its link drops ~65s after its last button.                                                                                                                                                                                                                                               |
 | One press holds the key down               | Normal: keys follow the button — held while pressed, released on release (steering needs the hold).                                                                                                                                                                                                                                                                                                                                         |
 | `found controller name=… addr=D4:06:0F:…`  | Normal — the advertisement may carry no name; address is what matters.                                                                                                                                                                                                                                                                                                                                                                      |
