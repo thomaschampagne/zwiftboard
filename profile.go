@@ -70,6 +70,37 @@ func (s *profileState) launchCurrent() error {
 	return launch.Launch(spec)
 }
 
+// current returns the active profile's config, under the lock (a startup
+// recovery can replace it while the live feed waits for Bluetooth).
+func (s *profileState) current() config.Config {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cur
+}
+
+// reset replaces the live state after a startup config recovery: the file now
+// holds the shipped default, so the shared KeyMap, the VK index, the profile
+// list and the focus target must match it before any session uses them. It
+// returns the new profile list and index for the screen. Never call it while
+// holding the lock.
+func (s *profileState) reset(next config.Config) ([]string, int) {
+	s.mu.Lock()
+	if list, _ := config.ProfileList(s.path); len(list) > 0 {
+		s.names = list
+	}
+	s.cur = next
+	s.idx = indexOf(s.names, next.Profile)
+	names, idx := s.names, s.idx
+	s.mu.Unlock()
+
+	ble.ReleaseAllHeld()
+	s.km.Swap(next.Bindings)
+	keys.SetWindowTarget(next.FocusProgramNamePrefixOnClick)
+	vkIdx := vkIndex(next.Bindings)
+	s.vkIdx.Store(&vkIdx)
+	return names, idx
+}
+
 // apply loads profile name from disk and applies it live: swap the shared KeyMap
 // in place (no BLE reconnect), force-release held keys, retarget focus and
 // rebuild the VK reverse index, then report the new state. launchProgram
