@@ -347,3 +347,33 @@ func TestShippedConfigProfiles(t *testing.T) {
 		t.Error("unknown profile: want error")
 	}
 }
+
+// Profiles validates every profile in one walk: the shipped file has no invalid
+// profile, and a bad profile is reported with its name and error.
+func TestProfilesReportsEveryProfile(t *testing.T) {
+	path := filepath.Join("..", "..", "config.yaml")
+	ps := Profiles(path)
+	if len(ps) == 0 {
+		t.Fatal("no profiles walked")
+	}
+	for _, p := range ps {
+		if err := p.Error(); err != nil {
+			t.Errorf("shipped profile %s: %v", p.Name(), err)
+		}
+	}
+
+	bad := filepath.Join(t.TempDir(), "bad.yaml")
+	body := "profiles:\n  good:\n    A: a\n  bad:\n    A: no-such-key\n"
+	if err := os.WriteFile(bad, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var failed []string
+	for _, p := range Profiles(bad) {
+		if p.Error() != nil {
+			failed = append(failed, p.Name())
+		}
+	}
+	if len(failed) != 1 || failed[0] != "bad" {
+		t.Fatalf("failed profiles = %v, want [bad]", failed)
+	}
+}

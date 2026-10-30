@@ -124,6 +124,56 @@ func Load(path, profile string) (Config, error) {
 	return cfg, nil
 }
 
+// Profiles walks path and validates every profile: it returns one entry per
+// profile with the profile name and an error when that profile failed Load
+// (a non-nil error means the profile is not fixable from zwiftboard and the
+// file must be fixed or restored from a backup). Only a top-level YAML parse
+// failure or a missing profile list is fatal to the walk. A missing file
+// returns an empty list (nothing to recover from).
+func Profiles(path string) []Profile {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+	data, rerr := os.ReadFile(path)
+	if rerr != nil {
+		slog.Error("cannot read config for recovery", "file", path, "error", rerr)
+		return nil
+	}
+	var d doc
+	if perr := yaml.Unmarshal(data, &d); perr != nil {
+		slog.Error("cannot parse config for recovery", "file", path, "error", perr)
+		return nil
+	}
+	if len(d.Profiles) == 0 {
+		slog.Error("config has no profiles for recovery — fix it manually", "file", path)
+		return nil
+	}
+	out := make([]Profile, 0, len(d.Profiles))
+	for name := range d.Profiles {
+		_, perr := Load(path, name)
+		out = append(out, Profile{name: name, err: perr})
+	}
+	return out
+}
+
+// Profile is one profile from Profiles: its name and a nil err when it parsed
+// cleanly. A non-nil err means the profile is not fixable from zwiftboard and
+// the file must be restored from a backup.
+type Profile struct {
+	name string
+	err  error
+}
+
+// Name is the profile name.
+func (p Profile) Name() string {
+	return p.name
+}
+
+// Error is the parse error, or nil if the profile parsed cleanly.
+func (p Profile) Error() error {
+	return p.err
+}
+
 // ProfileNames returns the profile names sorted, for messages.
 func ProfileNames(m map[string]map[string]string) []string {
 	names := make([]string, 0, len(m))

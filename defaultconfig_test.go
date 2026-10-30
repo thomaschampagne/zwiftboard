@@ -118,3 +118,101 @@ func TestEnsureConfigMigratesLegacyOnce(t *testing.T) {
 		t.Fatalf("second ensureConfig overwrote the migrated file: %q", b)
 	}
 }
+
+// writeFile fails the test if the file cannot be written.
+func writeFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestBackupConfigFirstBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	writeFile(t, path, "broken")
+	bak, ok := backupConfig(path)
+	if !ok || bak != path+".bak" {
+		t.Fatalf("bak=%q ok=%v", bak, ok)
+	}
+	if got := readFile(t, bak); got != "broken" {
+		t.Fatalf("backup = %q, want the current file", got)
+	}
+	if _, err := os.Stat(path + ".bak.1"); !os.IsNotExist(err) {
+		t.Fatal("a first backup must not rotate anything")
+	}
+}
+
+// An existing .bak may be a file the user is editing: recovery shifts the chain
+// (.bak.2 dropped, .bak.1 -> .bak.2, .bak -> .bak.1) instead of clobbering it.
+func TestBackupConfigRotatesTheChain(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	writeFile(t, path, "broken")
+	writeFile(t, path+".bak", "backup")
+	writeFile(t, path+".bak.1", "older")
+	writeFile(t, path+".bak.2", "oldest")
+
+	bak, ok := backupConfig(path)
+	if !ok {
+		t.Fatal("backupConfig failed")
+	}
+	if got := readFile(t, bak); got != "broken" {
+		t.Errorf(".bak = %q, want the current file", got)
+	}
+	if got := readFile(t, bak+".1"); got != "backup" {
+		t.Errorf(".bak.1 = %q, want the previous backup", got)
+	}
+	if got := readFile(t, bak+".2"); got != "older" {
+		t.Errorf(".bak.2 = %q, want the previous .bak.1", got)
+	}
+}
+
+// Recovery keeps the broken content in .bak, rebuilds the shipped default and
+// leaves a file that loads.
+func TestRecoverConfigRestoresTheShippedDefault(t *testing.T) {
+	legacyConfigPaths = func() []string { return nil } // the repo cwd holds a config.yaml
+	t.Cleanup(func() { legacyConfigPaths = defaultLegacyConfigPaths })
+	path := filepath.Join(t.TempDir(), "config.yml")
+	broken := "profiles: [this is not a map"
+	writeFile(t, path, broken)
+	if _, err := config.Load(path, ""); err == nil {
+		t.Fatal("the fixture must not load")
+	}
+
+	cfg, ok := recoverConfig(path)
+	if !ok {
+		t.Fatal("recoverConfig refused a broken file")
+	}
+	if cfg.Missing || len(cfg.Bindings) == 0 {
+		t.Fatalf("restored config has no bindings: missing=%v bindings=%d", cfg.Missing, len(cfg.Bindings))
+	}
+	if got := readFile(t, path+".bak"); got != broken {
+		t.Fatalf("backup = %q, want the broken file", got)
+	}
+	if _, err := config.Load(path, ""); err != nil {
+		t.Fatalf("restored file does not load: %v", err)
+	}
+}
+
+// A recovery must refuse before erasing anything when the current file cannot
+// be read for the backup: here the config path is a directory.
+func TestRecoverConfigRefusesWhenBackupFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := recoverConfig(path); ok {
+		t.Fatal("recovery must fail when the file cannot be backed up")
+	}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		t.Fatal("the unreadable path was erased before a backup")
+	}
+}
