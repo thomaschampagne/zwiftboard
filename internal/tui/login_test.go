@@ -403,7 +403,7 @@ func TestCaretFocusedCellEmptyFieldLandsInValueArea(t *testing.T) {
 	// value area, past the box border — not on the border line (which an
 	// empty-field start scan would otherwise reach) and not off into the box
 	// border on a later render. The value area starts one cell past the label:
-	// the box has one left border cell and zero left padding.
+	// the box has one left padding cell and no left border.
 	m := authForm(t, &AuthConfig{State: AuthPrompt})
 	valueStart := ansi.StringWidth(padRight("Email", 10)) + 1
 	x, y := caretFocusedCell(m)
