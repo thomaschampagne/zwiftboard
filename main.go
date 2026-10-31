@@ -141,9 +141,9 @@ func main() {
 	} else if err != nil {
 		slog.Warn("config unusable — button logging only until it is fixed or restored", "file", configFile)
 	} else {
-		slog.Info("profile loaded", "profile", cfg.Profile, "bindings", len(cfg.Single))
+		slog.Info("profile loaded", "profile", cfg.Profile, "bindings", len(cfg.Double))
 		for _, name := range config.ButtonNames() {
-			if b, ok := cfg.Single[name]; ok {
+			if b, ok := cfg.Double[name]; ok {
 				slog.Info("key mapping", "button", name, "key", b.Token)
 			}
 		}
@@ -180,10 +180,10 @@ func main() {
 		if *demo {
 			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
 		}
-		km := ble.NewKeyMap(cfg.Single)
+		km := ble.NewKeyMap(cfg.Double)
 		names, _ := config.ProfileList(*configPath)
-		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, mode: config.ModeSingle, km: km}
-		idx := vkIndex(cfg.Single)
+		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, mode: config.ModeDouble, km: km}
+		idx := vkIndex(cfg.Double)
 		state.vkIdx.Store(&idx)
 		auth := tuiAuth(client, authErr, func() {
 			// A successful sign-in renews the LEFT pod's time-limited unlock:
@@ -258,7 +258,7 @@ func main() {
 	slog.Info("Bluetooth is on — switch on BOTH Click controllers (LEFT and RIGHT); both are connected and kept alive together")
 	launchProfile(cfg)
 
-	km := ble.NewKeyMap(cfg.Single)
+	km := ble.NewKeyMap(cfg.Double)
 	if solverFor(client) == nil {
 		slog.Warn("LEFT controller unlock: no Zwift sign-in — only the RIGHT controller is guaranteed to work (press ctrl+z on the TUI status screen to sign in)")
 	}
