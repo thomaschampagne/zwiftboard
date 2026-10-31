@@ -1,6 +1,28 @@
 # HANDOFF
 
-## Current state (2026-10-31)
+## Current state (2026-10-31, shortcut Ctrl migration)
+
+Uncommitted. Footer shortcuts moved to Ctrl; bare-key bindings removed.
+`just sanity` green; golangci-lint shows only the 12 pre-existing errcheck.
+
+- All status-screen shortcuts need Ctrl: `ctrl+l` logs, `ctrl+e` edit, `ctrl+r`
+  reload, `ctrl+s` start, `ctrl+z` sign in, `ctrl+m` mode toggle, `ctrl+q` quit
+  (`ctrl+c` kept), `ctrl+←/→` profile. Bare-key bindings removed.
+- Footer labels are short and fit on one line at the 136-cell card width;
+  `wrapSegments` is the fallback for narrow terminals, so no shortcut is dropped.
+- Terminal conflicts: bubbletea runs `term.MakeRaw`, so Ctrl+Z/S/Q reach the app.
+  Ctrl+M arrives as `enter` on legacy terminals (`\r`) and as `ctrl+m` only where
+  the terminal reports modified keys (kitty / modifyOtherKeys). In a legacy
+  terminal the mode toggle does nothing; Enter never toggles it.
+- Demo keys (`b`, `f`, `[ ]`, `1-0`) are still bare; demo-only, not changed.
+
+### Next steps
+
+- Hardware/terminal check: confirm `ctrl+m` reaches the app in Windows Terminal
+  (Windows console may report it as Enter).
+- Consider a fallback key for legacy terminals if that check fails.
+
+## Previous state (2026-10-31)
 
 Branch `feat/left-controller-support-zwift-sign-in`. Per-profile controller
 modes are implemented and tested. `just sanity` green; `go test -race ./...`

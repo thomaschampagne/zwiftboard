@@ -2,7 +2,7 @@
 # Created on first run at %LocalAppData%\zwiftboard\config.yml; -config
 # overrides the path. The startup profile is -p if passed, else defaultProfile
 # below, else "mywhoosh". Per-profile changes apply live from the status screen
-# (r reload, ctrl+left/right switch); only a loglevel: change needs a restart.
+# (ctrl+r reload, ctrl+left/right switch); only a loglevel: change needs a restart.
 #
 # defaultProfile: profile loaded at startup when -p is not passed. It must name
 # a profile defined under `profiles:` below, or startup fails; -p overrides it.

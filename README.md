@@ -17,7 +17,7 @@ Zwift locks the Click V2 to its own app. `zwiftboard` frees it: connect over Blu
 
 - **Real gear shifting** - `PLUS` shifts down, and the left pod's `MIN` shifts up in double mode. Same rule in every profile.
 - **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
-- **One pod or two** - the right pod alone by default, or both pods with `m`.
+- **One pod or two** - the right pod alone by default, or both pods with `ctrl+m`.
 - **Free and open source** - no subscription, no paid tier. The right pod needs no account.
 - **Starts your app for you** - each profile can launch its cycling app once Bluetooth is up, so one double-click on `zwiftboard.exe` opens the whole setup. See [Start a program with a profile](#start-a-program-with-a-profile).
 - **Clicks land in the right window** - optionally bring your app to the front before every key, so a press never goes to the wrong window.
@@ -60,14 +60,14 @@ Manual downloads remain available on the [Releases](../../releases) page.
    `%LocalAppData%\zwiftboard\config.yml`.
 2. **Close Zwift / the Companion app** — each controller accepts only one BLE
    connection at a time.
-3. **Sign in when the LEFT pod needs it.** The status screen (`z`) asks for
+3. **Sign in when the LEFT pod needs it.** The status screen (`ctrl+z`) asks for
    your Zwift email and password so it can renew the LEFT controller's
    time-limited unlock (the app uses Zwift's own sign-in once; nothing is
    stored but a session token beside `config.yml`). Press `Esc` to close the
    form — only the RIGHT controller works normally then, and the warning
    stays on the screen. The prompt comes back on the next launch until you
    sign in.
-4. **Run it** and press a button on each controller while it scans to wake them. Single mode uses the **RIGHT** pod. Press `m` to add the LEFT pod:
+4. **Run it** and press a button on each controller while it scans to wake them. Single mode uses the **RIGHT** pod. Press `ctrl+m` to add the LEFT pod:
 
    ```
    zwiftboard.exe                 # startup profile: `defaultProfile:` from the config (ships as notepad)
@@ -144,7 +144,7 @@ Each profile has two button maps:
 - `single:` — the **right** controller only (`Y Z A B PLUS`). This is the mode at startup.
 - `double:` — **both** controllers: the left pod's `LEFT UP RIGHT DOWN MIN` plus the right pod's buttons.
 
-Press `m` on the status screen to switch between them. The mode is shown in the
+Press `ctrl+m` on the status screen to switch between them. The mode is shown in the
 header (`Mode: SINGLE` / `Mode: DOUBLE`, in its own magenta chip), and the Keys Bindings panel lists only the buttons of
 the active mode. The mode stays the same when you switch profile. A button that
 is not in the active map is ignored, so in single mode the left pod does nothing.
@@ -234,14 +234,14 @@ sequences (kitty/CSI-u); the `ctrl+n` / `ctrl+p` fallbacks work everywhere.
 
 ### Other status-screen keys
 
-- `r` — reload `config.yaml` and apply it to the current profile live (no
+- `ctrl+r` — reload `config.yaml` and apply it to the current profile live (no
   restart, no BLE reconnect; `loglevel:` still needs a restart);
-- `m` — **Toggle mode**: switch the current profile between `single` and `double`;
-- `s` — start the current profile's `startProgram` again (e.g. after you closed
+- `ctrl+m` — **Toggle mode**: switch the current profile between `single` and `double`;
+- `ctrl+s` — start the current profile's `startProgram` again (e.g. after you closed
   it); hidden when the profile has no `startProgram`;
-- `l` — show/hide the log panel (`k`/`j` or the mouse wheel scroll it);
-- `e` — open the config file in your editor;
-- `q` (or `ctrl+c`) — quit.
+- `ctrl+l` — show/hide the log panel (`k`/`j` or the mouse wheel scroll it);
+- `ctrl+e` — open the config file in your editor;
+- `ctrl+q` (or `ctrl+c`) — quit.
 
 ## Usage
 
@@ -352,7 +352,7 @@ connects are serialized so they never overlap an active scan.
 | Symptom                                    | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Right pod drops, logs `session ended`      | The link ended (a keepalive write failed — a real disconnect), so zwiftboard reconnects after 5s. Idle button silence **never** ends a session, so sitting on one virtual gear for a long time is fine — shifting still works when you press again.                                                                                                                                                                                         |
-| LEFT pod stops typing after ~1 min         | Its time-limited Zwift unlock expired. Press `z` to sign in (the form appears when no session is stored or the stored one was rejected) (it only appears when no session is stored or the stored one was rejected); the new challenge is then answered with the signed reply. With no sign-in only the RIGHT controller works.                                                                                                                                                                  |
+| LEFT pod stops typing after ~1 min         | Its time-limited Zwift unlock expired. Press `ctrl+z` to sign in (the form appears when no session is stored or the stored one was rejected) (it only appears when no session is stored or the stored one was rejected); the new challenge is then answered with the signed reply. With no sign-in only the RIGHT controller works.                                                                                                                                                                  |
 | Right pod's LED keeps blinking             | The pair's LEFT anchor is not connected. Switch the LEFT controller on too (both pods must be on); a lone RIGHT pod's blinking LED is cosmetic but its link drops ~65s after its last button.                                                                                                                                                                                                                                               |
 | One press holds the key down               | Normal: keys follow the button — held while pressed, released on release (steering needs the hold).                                                                                                                                                                                                                                                                                                                                         |
 | `found controller name=… addr=D4:06:0F:…`  | Normal — the advertisement may carry no name; address is what matters.                                                                                                                                                                                                                                                                                                                                                                      |
@@ -360,7 +360,7 @@ connects are serialized so they never overlap an active scan.
 | Keys land in the wrong window              | Set `focusProgramNamePrefixOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it.                                                                                                                                                                                                                                                                                                        |
 | App quits / stops responding after a while | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. Switching Windows Bluetooth off mid-run also survives: sessions end, scanning retries every 3s, and it reconnects when Bluetooth comes back. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
 | Nothing works with Zwift open              | Close Zwift / Companion first: one BLE connection per controller.                                                                                                                                                                                                                                                                                                                                                                           |
-| LEFT pod does nothing                      | It is off in single mode. Press `m` on the status screen to switch to DOUBLE (the header shows the mode).                                                                                                                                                                                                                                                                                                                                  |
+| LEFT pod does nothing                      | It is off in single mode. Press `ctrl+m` on the status screen to switch to DOUBLE (the header shows the mode).                                                                                                                                                                                                                                                                                                                                  |
 | Log warns "legacy flat format"             | The profile uses the old layout (buttons directly under the profile name). It still works; move its buttons under `single:` and `double:` to silence the warning (see Controller modes).                                                                                                                                                                                                                                                  |
 
 Not a HID keyboard: Zwift itself won't see the Click as a Bluetooth keyboard

@@ -96,13 +96,13 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
 - `internal/tui/` — Bubble Tea **v2** (`charm.land/bubbletea/v2`; lipgloss stays
   v1) status screen (default UI; `-plain` = logs). OBSERVATIONAL
   only: fed by `ble.Connected`/`SideSeenRecently`/`ble.OnKey`; never gate a session on it.
-  Exception: none — sign-in is on demand via the status screen's `z`
+  Exception: none — sign-in is on demand via the status screen's `ctrl+z`
   (email + masked password, `Esc` closes) once BLE starts with a solver; the
   pod challenges as soon as it connects.
   Handles the profile-switch chords (`ctrl+left`/`ctrl+right`, fallbacks
-  `ctrl+n`/`ctrl+p`), plus `r` reload config, `s` start the profile's program,
-  `e` edit config, `l` toggle the log panel, `z` open the Zwift sign-in form
-  and `q` quit.
+  `ctrl+n`/`ctrl+p`), plus `ctrl+r` reload config, `ctrl+s` start the profile's program,
+  `ctrl+e` edit config, `ctrl+l` toggle the log panel, `ctrl+z` open the Zwift sign-in form
+  and `ctrl+q` quit.
   `tuirun.go` (root) wires it; in TUI mode slog goes to the log file, not stderr
 
 ## Conventions
