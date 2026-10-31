@@ -183,7 +183,7 @@ func TestDemoPressRunsFullCycle(t *testing.T) {
 }
 
 func TestQuitKey(t *testing.T) {
-	_, cmd := New(testCfg()).Update(key("q"))
+	_, cmd := New(testCfg()).Update(ctrlKey("q"))
 	if cmd == nil {
 		t.Fatal("q should quit")
 	}
@@ -195,6 +195,11 @@ func TestQuitKey(t *testing.T) {
 func key(s string) tea.KeyPressMsg {
 	r, _ := utf8.DecodeRuneInString(s)
 	return tea.KeyPressMsg{Code: r, Text: s}
+}
+
+func ctrlKey(s string) tea.KeyPressMsg {
+	r, _ := utf8.DecodeRuneInString(s)
+	return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl}
 }
 
 func demoModel() Model {
@@ -238,11 +243,11 @@ func TestLiveIgnoresDemoKeys(t *testing.T) {
 
 func TestLogToggleWorksLiveAndDemo(t *testing.T) {
 	for _, m := range []Model{New(testCfg()), demoModel()} {
-		n, _ := m.Update(key("l"))
+		n, _ := m.Update(ctrlKey("l"))
 		if !n.(Model).showLogs {
 			t.Fatal("l should show logs")
 		}
-		n, _ = n.Update(key("l"))
+		n, _ = n.Update(ctrlKey("l"))
 		if n.(Model).showLogs {
 			t.Fatal("l again should hide logs")
 		}
@@ -250,7 +255,7 @@ func TestLogToggleWorksLiveAndDemo(t *testing.T) {
 }
 
 func TestDemoDoesNotCycleLeftOnL(t *testing.T) {
-	n, _ := demoModel().Update(key("l"))
+	n, _ := demoModel().Update(ctrlKey("l"))
 	if n.(Model).left != PodOff {
 		t.Fatal("l is the log toggle now; left pod must not change")
 	}
@@ -282,7 +287,7 @@ func TestReloadKeyRunsReloader(t *testing.T) {
 	calls := 0
 	cfg := testCfg()
 	cfg.Reload = func() { calls++ }
-	_, cmd := New(cfg).Update(key("r"))
+	_, cmd := New(cfg).Update(ctrlKey("r"))
 	if cmd == nil {
 		t.Fatal("r should return a cmd that reloads")
 	}
@@ -293,7 +298,7 @@ func TestReloadKeyRunsReloader(t *testing.T) {
 }
 
 func TestReloadKeyUnavailableIsInert(t *testing.T) {
-	_, cmd := New(testCfg()).Update(key("r"))
+	_, cmd := New(testCfg()).Update(ctrlKey("r"))
 	if cmd != nil {
 		t.Fatal("r without a reload callback must do nothing")
 	}
@@ -305,7 +310,7 @@ func TestStartProgramKeyRunsLauncher(t *testing.T) {
 	cfg.StartProgram = "MyWhooshHD.exe"
 	cfg.LaunchProgram = func() error { calls++; return nil }
 	m := New(cfg)
-	n, cmd := m.Update(key("s"))
+	n, cmd := m.Update(ctrlKey("s"))
 	if cmd == nil {
 		t.Fatal("s should return a cmd that starts the program")
 	}
@@ -323,7 +328,7 @@ func TestStartProgramKeyErrorShown(t *testing.T) {
 	cfg.StartProgram = "MyWhooshHD.exe"
 	cfg.LaunchProgram = func() error { return errors.New("not found") }
 	m := New(cfg)
-	_, cmd := m.Update(key("s"))
+	_, cmd := m.Update(ctrlKey("s"))
 	n, _ := m.Update(cmd())
 	if got := n.(Model).status; !strings.Contains(got, "not found") {
 		t.Fatalf("status = %q, want the error", got)
@@ -333,7 +338,7 @@ func TestStartProgramKeyErrorShown(t *testing.T) {
 func TestStartProgramKeyHiddenWithoutProgram(t *testing.T) {
 	cfg := testCfg()
 	cfg.LaunchProgram = func() error { return nil } // wired, but no startProgram
-	_, cmd := New(cfg).Update(key("s"))
+	_, cmd := New(cfg).Update(ctrlKey("s"))
 	if cmd != nil {
 		t.Fatal("s must be inert when the profile has no startProgram")
 	}
@@ -453,7 +458,7 @@ func openCfg(open func() error) Config {
 func TestOpenConfigKeyRunsOpener(t *testing.T) {
 	calls := 0
 	m := New(openCfg(func() error { calls++; return nil }))
-	n, cmd := m.Update(key("e"))
+	n, cmd := m.Update(ctrlKey("e"))
 	if cmd == nil {
 		t.Fatal("e should return a cmd that opens the editor")
 	}
@@ -468,7 +473,7 @@ func TestOpenConfigKeyRunsOpener(t *testing.T) {
 
 func TestOpenConfigErrorShown(t *testing.T) {
 	m := New(openCfg(func() error { return errors.New("no editor") }))
-	_, cmd := m.Update(key("e"))
+	_, cmd := m.Update(ctrlKey("e"))
 	n, _ := m.Update(cmd())
 	if got := n.(Model).status; !strings.Contains(got, "no editor") {
 		t.Fatalf("status = %q, want the error", got)
@@ -476,7 +481,7 @@ func TestOpenConfigErrorShown(t *testing.T) {
 }
 
 func TestOpenConfigUnavailableIsInert(t *testing.T) {
-	_, cmd := New(testCfg()).Update(key("e"))
+	_, cmd := New(testCfg()).Update(ctrlKey("e"))
 	if cmd != nil {
 		t.Fatal("e without an opener must do nothing")
 	}
@@ -484,7 +489,7 @@ func TestOpenConfigUnavailableIsInert(t *testing.T) {
 
 func TestStatusExpires(t *testing.T) {
 	m := New(openCfg(func() error { return nil }))
-	_, cmd := m.Update(key("e"))
+	_, cmd := m.Update(ctrlKey("e"))
 	n, _ := m.Update(cmd())
 	m = n.(Model)
 	n, _ = m.Update(statusExpireMsg{id: m.statusID})
@@ -573,12 +578,12 @@ func TestLogViewShowsScrolledWindow(t *testing.T) {
 	lacks(t, v, "line19")
 }
 
-// "m" runs the wired toggle in a command, so the render loop never blocks.
+// "ctrl+m" runs the wired toggle in a command, so the render loop never blocks.
 func TestToggleModeKeyRunsCallback(t *testing.T) {
 	calls := 0
 	cfg := testCfg()
 	cfg.ToggleMode = func() { calls++ }
-	_, cmd := New(cfg).Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	_, cmd := New(cfg).Update(ctrlKey("m"))
 	if cmd == nil {
 		t.Fatal("m should return a command")
 	}
@@ -588,9 +593,9 @@ func TestToggleModeKeyRunsCallback(t *testing.T) {
 	}
 }
 
-// Without a wired toggle "m" does nothing.
+// Without a wired toggle "ctrl+m" does nothing.
 func TestToggleModeKeyInertWithoutCallback(t *testing.T) {
-	_, cmd := New(testCfg()).Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	_, cmd := New(testCfg()).Update(ctrlKey("m"))
 	if cmd != nil {
 		t.Fatal("m without a toggle should return no command")
 	}

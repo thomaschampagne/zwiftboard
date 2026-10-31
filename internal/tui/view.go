@@ -383,35 +383,59 @@ func (m Model) footer() string {
 		status = sWarn.Render(m.status) + "\n"
 	}
 	hint := func(k, label string) string { return sKeyHint.Render(k) + sMuted.Render(" "+label) }
-	logs := hint("l", "logs")
+	logs := hint("ctrl+l", "logs")
 	if m.showLogs {
-		logs = hint("l", "hide logs")
+		logs = hint("ctrl+l", "hide logs")
 	}
-	f := logs
+	segs := []string{logs}
 	if m.cfg.OpenConfig != nil {
-		f += sMuted.Render("  ·  ") + hint("e", "edit config")
+		segs = append(segs, hint("ctrl+e", "edit"))
 	}
 	if m.cfg.Reload != nil {
-		f += sMuted.Render("  ·  ") + hint("r", "reload config")
+		segs = append(segs, hint("ctrl+r", "reload"))
 	}
 	if m.cfg.LaunchProgram != nil && m.cfg.StartProgram != "" {
-		f += sMuted.Render("  ·  ") + hint("s", "start program")
+		segs = append(segs, hint("ctrl+s", "start"))
 	}
 	if m.cfg.SwitchProfile != nil && len(m.cfg.Profiles) > 1 {
-		f += sMuted.Render("  ·  ") + hint("ctrl+←/→", "switch profile")
+		segs = append(segs, hint("ctrl+←/→", "switch profile"))
 	}
 	if m.cfg.Auth.Login != nil {
-		f += sMuted.Render("  ·  ") + hint("z", "sign in")
+		segs = append(segs, hint("ctrl+z", "sign in"))
 	}
 	if m.cfg.ToggleMode != nil {
-		f += sMuted.Render("  ·  ") + hint(toggleModeKey, "Toggle mode")
+		segs = append(segs, hint(toggleModeKey, "mode"))
 	}
-	f += sMuted.Render("  ·  ") + hint("q", "quit")
+	segs = append(segs, hint("ctrl+q", "quit"))
 	if m.cfg.Demo {
-		f += sMuted.Render("  ·  demo: ") + hint("b", "bluetooth") + sMuted.Render(" ") +
-			hint("[ ]", "left/right pod") + sMuted.Render(" ") + hint("1-0", "click") + sMuted.Render(" ") + hint("f", "focus alert")
+		segs = append(segs, sMuted.Render("demo: ")+hint("b", "bluetooth")+sMuted.Render(" ")+
+			hint("[ ]", "left/right pod")+sMuted.Render(" ")+hint("1-0", "click")+sMuted.Render(" ")+hint("f", "focus alert"))
 	}
-	return status + f
+	return status + wrapSegments(segs, m.innerWidth())
+}
+
+// wrapSegments joins the footer hints with a separator and starts a new line
+// rather than overflowing width, so every shortcut stays visible on narrow cards.
+func wrapSegments(segs []string, width int) string {
+	const sep = " · "
+	sepW := ansi.StringWidth(sep)
+	var b strings.Builder
+	line, lineW := "", 0
+	for _, s := range segs {
+		w := ansi.StringWidth(s)
+		switch {
+		case line == "":
+			line, lineW = s, w
+		case lineW+sepW+w <= width:
+			line += sMuted.Render(sep) + s
+			lineW += sepW + w
+		default:
+			b.WriteString(line + "\n")
+			line, lineW = s, w
+		}
+	}
+	b.WriteString(line)
+	return b.String()
 }
 
 // padRight pads s with spaces to n display cells (not bytes): labels carry
@@ -511,7 +535,7 @@ func (m Model) recoveryKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.setStatus("restored the built-in config — the broken file is saved as " + m.recovery.Path + ".bak")
 	case "n", "N", "esc":
 		m.recovery.Active = false
-		return m.setStatus("kept the broken config — fix it and press r to reload, or restart to restore the default")
+		return m.setStatus("kept the broken config — fix it and press ctrl+r to reload, or restart to restore the default")
 	}
 	return m, nil
 }

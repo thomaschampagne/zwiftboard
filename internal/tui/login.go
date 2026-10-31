@@ -10,7 +10,7 @@ import (
 )
 
 // AuthState is the runtime sign-in form state. The form opens on demand
-// (status-screen "z") instead of blocking start-up; AuthNone means no form is
+// (status-screen "ctrl+z") instead of blocking start-up; AuthNone means no form is
 // open, AuthPrompt shows the email/password form.
 type AuthState int
 
@@ -247,7 +247,7 @@ func (m Model) submitAuth() (tea.Model, tea.Cmd) {
 }
 
 // authView is the runtime sign-in form: the reason, the two fields. It opens
-// on demand from the status screen ("z"), not at start-up.
+// on demand from the status screen ("ctrl+z"), not at start-up.
 func (m Model) authView() tea.View {
 	v := screen(m.authContent())
 	// Nano/TextEdit/Vim caret: the classic blinking block cursor drawn over
@@ -488,5 +488,5 @@ func (m Model) authAlert() string {
 	return m.cardW(m.innerWidth(), cWarn, "",
 		sChipWarn.Render("NO SIGN-IN")+" "+sBold.Render("LEFT unlock not renewable")+"\n"+
 			sMuted.Render(m.auth.notice)+"\n"+
-			sMuted.Render("Press z to sign in to renew it; the RIGHT controller always works."))
+			sMuted.Render("Press ctrl+z to sign in to renew it; the RIGHT controller always works."))
 }

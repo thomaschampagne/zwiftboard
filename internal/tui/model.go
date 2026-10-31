@@ -13,7 +13,7 @@ import (
 )
 
 // toggleModeKey switches the active profile between single and double mode.
-const toggleModeKey = "m"
+const toggleModeKey = "ctrl+m"
 
 // KeyStateMsg reports one emulated key's transition: Down true on press,
 // false on release. The mirrored pair fires it twice; Update dedups.
@@ -376,7 +376,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		// The startup config-recovery dialog owns the keys only while it is open
 		// (startup gate): until answered, no other shortcut fires — typing a
-		// profile name or pressing q/l/z during the dialog must not reopen it.
+		// profile name or pressing ctrl+q/ctrl+l/ctrl+z during the dialog must not reopen it.
 		if m.recovery.Active {
 			return m.recoveryKey(msg)
 		}
@@ -384,17 +384,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateAuth(msg)
 		}
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "ctrl+q", "ctrl+c":
 			return m, tea.Quit
 		}
-		if msg.String() == "l" {
+		if msg.String() == "ctrl+l" {
 			m.showLogs = !m.showLogs
 			return m, nil
 		}
 		// Open the runtime sign-in form on demand. Gated on Login being
 		// wired: without a solver there is nothing to sign in with. While the
 		// form is open, updateAuth owns every key, so typing "z" can't re-open.
-		if msg.String() == "z" && m.cfg.Auth.Login != nil {
+		if msg.String() == "ctrl+z" && m.cfg.Auth.Login != nil {
 			m.auth.state = AuthPrompt
 			m.auth.err = ""
 			m.auth.email = ""     // fresh form per open
@@ -417,18 +417,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if msg.String() == "e" && m.cfg.OpenConfig != nil {
+		if msg.String() == "ctrl+e" && m.cfg.OpenConfig != nil {
 			open := m.cfg.OpenConfig
 			return m, func() tea.Msg { return openedMsg{err: open()} }
 		}
 		// Manually (re)start the profile's program (e.g. the user closed it).
 		// Gated on StartProgram too: a profile without one has nothing to start.
-		if msg.String() == "s" && m.cfg.LaunchProgram != nil && m.cfg.StartProgram != "" {
+		if msg.String() == "ctrl+s" && m.cfg.LaunchProgram != nil && m.cfg.StartProgram != "" {
 			launch := m.cfg.LaunchProgram
 			return m, func() tea.Msg { return launchedMsg{err: launch()} }
 		}
 		// Re-read config.yaml and apply it to the current profile live.
-		if msg.String() == "r" && m.cfg.Reload != nil {
+		if msg.String() == "ctrl+r" && m.cfg.Reload != nil {
 			reload := m.cfg.Reload
 			return m, func() tea.Msg { reload(); return nil }
 		}

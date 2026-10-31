@@ -70,7 +70,7 @@ func TestAuthFormSuccessClearsPasswordAndSetsStatus(t *testing.T) {
 
 func TestStatusScreenZOpensAuthForm(t *testing.T) {
 	m := authForm(t, &AuthConfig{State: AuthNone, Login: func(string, string) error { return nil }})
-	next, _ := m.Update(key("z"))
+	next, _ := m.Update(ctrlKey("z"))
 	m = next.(Model)
 	if m.auth.state != AuthPrompt {
 		t.Fatalf("state = %v, want AuthPrompt", m.auth.state)
@@ -79,7 +79,7 @@ func TestStatusScreenZOpensAuthForm(t *testing.T) {
 
 func TestZInertWithoutLogin(t *testing.T) {
 	m := authForm(t, &AuthConfig{State: AuthNone})
-	next, _ := m.Update(key("z"))
+	next, _ := m.Update(ctrlKey("z"))
 	if next.(Model).auth.state != AuthNone {
 		t.Fatal("'z' must be inert when sign-in is not wired")
 	}
@@ -121,12 +121,12 @@ func TestAuthNoticeIsVisibleAndDoesNotGate(t *testing.T) {
 		t.Fatal("a no-token notice must not own the keyboard")
 	}
 	has(t, m.View(), "NO SIGN-IN", "LEFT unlock not renewable", "a few days",
-		"Press z to sign in", "the RIGHT controller always works")
+		"Press ctrl+z to sign in", "the RIGHT controller always works")
 }
 
 func TestAuthNoticeKeepsStatusShortcuts(t *testing.T) {
 	m := authForm(t, &AuthConfig{State: AuthNone, Notice: "notice"})
-	_, cmd := m.Update(key("q"))
+	_, cmd := m.Update(ctrlKey("q"))
 	if cmd == nil {
 		t.Fatal("q should still quit from the status screen")
 	}

@@ -100,7 +100,7 @@ func loginClosure(login func(ctx context.Context, email, password string) error,
 }
 
 // tuiAuth builds the status-screen sign-in config. There is no start-up gate:
-// the screen opens immediately and "z" opens the form when Login is wired.
+// the screen opens immediately and "ctrl+z" opens the form when Login is wired.
 // A stored session starts silently (AuthNone, no notice) and its solver
 // answers the next challenge with the server-signed reply; no token shows the
 // honest notice; an unreadable session shows its own notice.
@@ -121,12 +121,12 @@ func tuiAuth(c *unlock.Client, loadErr error, onSignedIn func()) tui.AuthConfig 
 	case errors.Is(loadErr, unlock.ErrNoToken):
 		// No token is not a failure: the LEFT may still be unlocked from the
 		// last sign-in. Start BLE with the empty ack instead of blocking the
-		// RIGHT pod behind a form, and point at the "z" shortcut.
+		// RIGHT pod behind a form, and point at the "ctrl+z" shortcut.
 		auth.State = tui.AuthNone
 		auth.Notice = "The LEFT controller works only while its current unlock lasts (a few days)."
 	default:
 		auth.State = tui.AuthNone
-		auth.Notice = "The stored Zwift session could not be read — press z to sign in again."
+		auth.Notice = "The stored Zwift session could not be read — press ctrl+z to sign in again."
 	}
 	return auth
 }
