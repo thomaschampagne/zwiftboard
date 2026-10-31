@@ -28,20 +28,17 @@ var (
 	cDotRight  = lipgloss.Color("42")
 	cDotBottom = lipgloss.Color("201")
 
-	sTitle  = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	sMuted  = lipgloss.NewStyle().Foreground(cMuted)
-	sOK     = lipgloss.NewStyle().Foreground(cOK)
-	sWarn   = lipgloss.NewStyle().Foreground(cWarn)
-	sBad    = lipgloss.NewStyle().Foreground(cBad)
-	sBold   = lipgloss.NewStyle().Bold(true)
-	sKeycap = lipgloss.NewStyle().Background(cCap).Padding(0, 1)
-	sDown   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
-	sHold   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
-	sChip   = lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(cAccent).Padding(0, 1)
-	// sModeChip marks the controller mode in the header, in the magenta of the
-	// logo's bottom dot so it stands apart from the blue profile chip.
-	sModeChip = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cDotBottom).Padding(0, 1)
-	sKeyHint  = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	sTitle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	sMuted   = lipgloss.NewStyle().Foreground(cMuted)
+	sOK      = lipgloss.NewStyle().Foreground(cOK)
+	sWarn    = lipgloss.NewStyle().Foreground(cWarn)
+	sBad     = lipgloss.NewStyle().Foreground(cBad)
+	sBold    = lipgloss.NewStyle().Bold(true)
+	sKeycap  = lipgloss.NewStyle().Background(cCap).Padding(0, 1)
+	sDown    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
+	sHold    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
+	sChip    = lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(cAccent).Padding(0, 1)
+	sKeyHint = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	// sReleased gets the same Padding(0,1) as sDown/sHold so "○ released"
 	// fills the same 12-column status cell as the other two states.
 	sReleased = lipgloss.NewStyle().Foreground(cMuted).Padding(0, 1)
@@ -192,14 +189,19 @@ func podLogo() string {
 
 func (m Model) header() string {
 	title := sTitle.Render("zwiftboard")
-	if m.cfg.Mode != "" {
-		title += "  " + sModeChip.Render("Mode: "+strings.ToUpper(string(m.cfg.Mode)))
-	}
 
 	profile := m.cfg.Profile
 	if profile != "" && len(m.cfg.Profiles) > 1 {
 		// Show the position so a switch is obvious even when names are similar.
 		profile += " (" + strconv.Itoa(m.cfg.ProfileIndex+1) + "/" + strconv.Itoa(len(m.cfg.Profiles)) + ")"
+	}
+	// The mode and the profile share one chip, so the header reads as one unit.
+	chip := ""
+	if m.cfg.Mode != "" {
+		chip = "Mode: " + strings.ToUpper(string(m.cfg.Mode))
+	}
+	if profile != "" {
+		chip = strings.TrimSpace(chip + "  " + profile)
 	}
 	version := m.cfg.Version
 	update := ""
@@ -207,14 +209,14 @@ func (m Model) header() string {
 		update = sWarn.Render(" → version " + m.latest + " available")
 	}
 
-	// Show both profile and version
-	if profile != "" && version != "" {
-		title += "  " + sChip.Render(profile) + sMuted.Render(" [version "+version) + update + sMuted.Render("]")
+	// Show both chip and version
+	if chip != "" && version != "" {
+		title += "  " + sChip.Render(chip) + sMuted.Render(" [version "+version) + update + sMuted.Render("]")
 	} else if version != "" {
 		title += sMuted.Render(" version ") + sMuted.Render("[version "+version) + update + sMuted.Render("]")
-	} else if profile != "" {
-		// Show only profile if no version
-		title += "  " + sChip.Render(profile)
+	} else if chip != "" {
+		// Show only the chip if no version
+		title += "  " + sChip.Render(chip)
 	}
 
 	return podLogo() + " " + title
