@@ -6,8 +6,8 @@ Uncommitted. Footer shortcuts moved to Ctrl; bare-key bindings removed.
 `just sanity` green; golangci-lint shows only the 12 pre-existing errcheck.
 
 - All status-screen shortcuts need Ctrl: `ctrl+l` logs, `ctrl+e` edit, `ctrl+r`
-  reload, `ctrl+s` start, `ctrl+z` sign in, `ctrl+m` mode toggle, `ctrl+q` quit
-  (`ctrl+c` kept), `ctrl+←/→` profile. Bare-key bindings removed.
+  reload, `ctrl+s` start, `ctrl+z` sign in, `ctrl+m` mode toggle, `ctrl+c` quit
+  , `ctrl+←/→` profile. Bare-key bindings removed.
 - Footer labels are short and fit on one line at the 136-cell card width;
   `wrapSegments` is the fallback for narrow terminals, so no shortcut is dropped.
 - Terminal conflicts: bubbletea runs `term.MakeRaw`, so Ctrl+Z/S/Q reach the app.

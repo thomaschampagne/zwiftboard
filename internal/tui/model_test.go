@@ -183,12 +183,12 @@ func TestDemoPressRunsFullCycle(t *testing.T) {
 }
 
 func TestQuitKey(t *testing.T) {
-	_, cmd := New(testCfg()).Update(ctrlKey("q"))
+	_, cmd := New(testCfg()).Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
-		t.Fatal("q should quit")
+		t.Fatal("ctrl+c should quit")
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Fatal("q cmd should produce QuitMsg")
+		t.Fatal("ctrl+c cmd should produce QuitMsg")
 	}
 }
 

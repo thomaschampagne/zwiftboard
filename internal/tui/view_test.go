@@ -558,5 +558,5 @@ func TestViewFooterFitsCardWidth(t *testing.T) {
 		}
 	}
 	has(t, m.View(), "ctrl+l logs", "ctrl+e edit", "ctrl+r reload", "ctrl+s start",
-		"ctrl+←/→ switch profile", "ctrl+z sign in", "ctrl+q quit")
+		"ctrl+←/→ switch profile", "ctrl+z sign in", "ctrl+c quit")
 }

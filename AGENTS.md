@@ -102,7 +102,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   Handles the profile-switch chords (`ctrl+left`/`ctrl+right`, fallbacks
   `ctrl+n`/`ctrl+p`), plus `ctrl+r` reload config, `ctrl+s` start the profile's program,
   `ctrl+e` edit config, `ctrl+l` toggle the log panel, `ctrl+z` open the Zwift sign-in form
-  and `ctrl+q` quit.
+  and `ctrl+c` quit.
   `tuirun.go` (root) wires it; in TUI mode slog goes to the log file, not stderr
 
 ## Conventions

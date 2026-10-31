@@ -126,12 +126,12 @@ func TestAuthNoticeIsVisibleAndDoesNotGate(t *testing.T) {
 
 func TestAuthNoticeKeepsStatusShortcuts(t *testing.T) {
 	m := authForm(t, &AuthConfig{State: AuthNone, Notice: "notice"})
-	_, cmd := m.Update(ctrlKey("q"))
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
-		t.Fatal("q should still quit from the status screen")
+		t.Fatal("ctrl+c should still quit from the status screen")
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Fatal("q should produce QuitMsg")
+		t.Fatal("ctrl+c should produce QuitMsg")
 	}
 }
 
