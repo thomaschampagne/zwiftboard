@@ -202,7 +202,7 @@ func (m Model) header() string {
 		title += "  " + sModeChip.Render("Mode: "+strings.ToUpper(string(m.cfg.Mode)))
 	}
 	if profile != "" {
-		profile = "Profil: " + profile
+		profile = "Profile: " + profile
 	}
 	version := m.cfg.Version
 	update := ""
