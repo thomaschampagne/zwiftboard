@@ -145,7 +145,7 @@ Each profile has two button maps:
 - `double:` — **both** controllers: the left pod's `LEFT UP RIGHT DOWN MIN` plus the right pod's buttons.
 
 Press `m` on the status screen to switch between them. The mode is shown in the
-header (`SINGLE` / `DOUBLE`), and the Keys Bindings panel lists only the buttons of
+header (`Mode: SINGLE` / `Mode: DOUBLE`, in the profile chip), and the Keys Bindings panel lists only the buttons of
 the active mode. The mode stays the same when you switch profile. A button that
 is not in the active map is ignored, so in single mode the left pod does nothing.
 
