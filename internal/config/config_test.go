@@ -36,7 +36,7 @@ func TestLoadProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := cfg.Single
+	m := cfg.Double
 	if len(m) != 3 {
 		t.Fatalf("got %d bindings, want 3", len(m))
 	}
@@ -65,8 +65,8 @@ func TestLoadDefaultProfile(t *testing.T) {
 	if cfg.Profile != DefaultProfile {
 		t.Errorf("profile = %q, want %q", cfg.Profile, DefaultProfile)
 	}
-	if len(cfg.Single) != 3 {
-		t.Fatalf("default profile: got %d bindings, want 3", len(cfg.Single))
+	if len(cfg.Double) != 3 {
+		t.Fatalf("default profile: got %d bindings, want 3", len(cfg.Double))
 	}
 }
 
@@ -415,11 +415,14 @@ func TestLoadLegacyFlatFormatIsSingle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Single) != 3 || cfg.Single["LEFT"].Token != "left" {
-		t.Errorf("legacy single = %+v, want the flat mapping", cfg.Single)
+	if len(cfg.Single) != 2 || cfg.Single["PLUS"].Token != "pageup" {
+		t.Errorf("legacy single = %+v, want the right-pod buttons only", cfg.Single)
 	}
-	if len(cfg.Double) != len(cfg.Single) || cfg.Double["PLUS"].Token != "pageup" {
-		t.Errorf("legacy double = %+v, want a copy of single", cfg.Double)
+	if _, ok := cfg.Single["LEFT"]; ok {
+		t.Errorf("legacy single must not drive the left pod: %+v", cfg.Single)
+	}
+	if len(cfg.Double) != 3 || cfg.Double["LEFT"].Token != "left" || cfg.Double["PLUS"].Token != "pageup" {
+		t.Errorf("legacy double = %+v, want the full flat mapping", cfg.Double)
 	}
 }
 

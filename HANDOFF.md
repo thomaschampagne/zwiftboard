@@ -11,8 +11,8 @@ findings that already exist on the branch.
 
 - **YAML** — each profile has `single:` (right pod only) and `double:` (both
   pods). Per-profile `focusProgramNamePrefixOnClick` / `startProgram` stay at
-  profile level. Legacy flat profiles load as `single` (a copy becomes
-  `double`) and log a warning. A left-pod button under `single:` is an error.
+  profile level. Legacy flat profiles load as `single` (right-pod buttons only; all buttons
+  in `double`) and log a warning. A left-pod button under `single:` is an error.
   Config files over 1 MiB are refused.
 - **Mode** — `config.Mode` (`single`/`double`), default `single`, set on the
   shared `profileState` (`profile.go`). The `m` key (`toggleModeKey` in
