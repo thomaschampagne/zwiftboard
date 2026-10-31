@@ -46,7 +46,7 @@ var (
 
 const (
 	minWidth     = 40
-	maxWidth     = 120 // cards (was 100; widened for the shortcut hints in the footer)
+	maxWidth     = 140 // cards (was 120; the full footer of shortcuts is 135 cells wide)
 	maxLogWidth  = 320 // the log panel may use the whole terminal (double the old 160 cap)
 	defaultWidth = 80  // before the first WindowSizeMsg
 	logLines     = 10

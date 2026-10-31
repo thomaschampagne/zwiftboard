@@ -533,3 +533,22 @@ func TestViewFooterToggleModeHint(t *testing.T) {
 	has(t, on(cfg, PodConnected, PodConnected).View(), "m Toggle mode")
 	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "Toggle mode")
 }
+
+// The full footer (every shortcut wired) fits inside the widest card, so it
+// never wraps past the panels.
+func TestViewFooterFitsCardWidth(t *testing.T) {
+	cfg := doubleCfg()
+	cfg.OpenConfig = func() error { return nil }
+	cfg.Reload = func() {}
+	cfg.LaunchProgram = func() error { return nil }
+	cfg.StartProgram = "x.exe"
+	cfg.SwitchProfile = func(int) {}
+	cfg.Profiles = []string{"a", "b"}
+	cfg.Auth.Login = func(string, string) error { return nil }
+	cfg.ToggleMode = func() {}
+	m := on(cfg, PodConnected, PodConnected)
+	m.width = 300
+	if w := ansi.StringWidth(m.footer()); w > m.innerWidth() {
+		t.Fatalf("footer is %d cells, card inner width is %d", w, m.innerWidth())
+	}
+}
