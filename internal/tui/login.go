@@ -294,8 +294,8 @@ func caretFocusedCell(m Model) (int, int) {
 	// directly (not by scanning the rendered field): an EMPTY field has no value
 	// rune to stop a scan at, so scanning would walk to the box border and place
 	// the caret outside the field — surviving only after typing. The value area
-	// starts one display cell past the label, since the box has one left border
-	// cell and zero left padding.
+	// starts one display cell past the label, since the box has one left padding
+	// cell and no left border (the field box only draws a bottom rule).
 	valueStart := ansi.StringWidth(padRight(label, 10)) + 1
 	n := utf8.RuneCountInString(value)
 	// The cursor column is the field's caret OFFSET column (clamped to the
