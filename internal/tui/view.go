@@ -406,7 +406,7 @@ func (m Model) footer() string {
 	if m.cfg.ToggleMode != nil {
 		segs = append(segs, hint(toggleModeKey, "mode"))
 	}
-	segs = append(segs, hint("ctrl+q", "quit"))
+	segs = append(segs, hint("ctrl+c", "quit"))
 	if m.cfg.Demo {
 		segs = append(segs, sMuted.Render("demo: ")+hint("b", "bluetooth")+sMuted.Render(" ")+
 			hint("[ ]", "left/right pod")+sMuted.Render(" ")+hint("1-0", "click")+sMuted.Render(" ")+hint("f", "focus alert"))

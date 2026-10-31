@@ -376,7 +376,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		// The startup config-recovery dialog owns the keys only while it is open
 		// (startup gate): until answered, no other shortcut fires — typing a
-		// profile name or pressing ctrl+q/ctrl+l/ctrl+z during the dialog must not reopen it.
+		// profile name or pressing ctrl+l/ctrl+z during the dialog must not reopen it.
 		if m.recovery.Active {
 			return m.recoveryKey(msg)
 		}
@@ -384,7 +384,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateAuth(msg)
 		}
 		switch msg.String() {
-		case "ctrl+q", "ctrl+c":
+		case "ctrl+c":
 			return m, tea.Quit
 		}
 		if msg.String() == "ctrl+l" {

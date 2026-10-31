@@ -241,7 +241,7 @@ sequences (kitty/CSI-u); the `ctrl+n` / `ctrl+p` fallbacks work everywhere.
   it); hidden when the profile has no `startProgram`;
 - `ctrl+l` — show/hide the log panel (`k`/`j` or the mouse wheel scroll it);
 - `ctrl+e` — open the config file in your editor;
-- `ctrl+q` (or `ctrl+c`) — quit.
+- `ctrl+c` — quit.
 
 ## Usage
 
