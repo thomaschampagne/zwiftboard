@@ -153,7 +153,7 @@ is not in the active map is ignored, so in single mode the left pod does nothing
 
 Both maps are required in every profile. A profile written in the old format (its
 buttons directly under the profile name, with no `single:`/`double:`) still loads:
-it is treated as `single`, zwiftboard logs a warning, and `double` is a copy of it.
+it is read as `single` with only its right-pod buttons, the left-pod buttons go to `double`, zwiftboard logs a warning, and `double` holds every button.
 To migrate, move the buttons under `single:` and add a `double:` map. A left-pod
 button under `single:` is an error.
 

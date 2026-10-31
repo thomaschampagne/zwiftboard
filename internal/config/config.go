@@ -135,7 +135,7 @@ func Load(path, profile string) (Config, error) {
 		return cfg, err
 	}
 	if raw.legacy {
-		slog.Warn("profile uses the legacy flat format; treated as single — move its buttons under `single:` and add `double:`", "profile", profile, "file", path)
+		slog.Warn("profile uses the legacy flat format; its left-pod buttons work in double only — move its buttons under `single:` and `double:`", "profile", profile, "file", path)
 	}
 	// Value comes in as "" for focusProgramNamePrefixOnClick: null; trim so a
 	// padded value still disables via "".
@@ -144,11 +144,7 @@ func Load(path, profile string) (Config, error) {
 	// disables via "".
 	cfg.StartProgram = strings.TrimSpace(raw.options[startProgramKey])
 
-	singleValid := rightButtons
-	if raw.legacy {
-		singleValid = knownButtons
-	}
-	if cfg.Single, err = resolveBindings(path, profile, raw.single, singleValid); err != nil {
+	if cfg.Single, err = resolveBindings(path, profile, raw.single, rightButtons); err != nil {
 		return cfg, err
 	}
 	if cfg.Double, err = resolveBindings(path, profile, raw.double, knownButtons); err != nil {
@@ -163,13 +159,14 @@ type rawProfile struct {
 	single  map[string]string
 	double  map[string]string
 	options map[string]string
-	legacy  bool // flat block: its buttons are both single and double
+	legacy  bool // flat block: single keeps the right-pod buttons, double all of them
 }
 
 // splitProfile reads one profile block. A block with neither single: nor
-// double: is the legacy flat format and becomes single (and a copy as double,
-// so the profile stays usable in double mode). A block with one of the two
-// must carry both, and only the per-profile options may sit beside them.
+// double: is the legacy flat format: its right-pod buttons become single and
+// every button becomes double, the same split the migration makes. A block with
+// one of the two must carry both, and only the per-profile options may sit
+// beside them.
 func splitProfile(path, profile string, node *yaml.Node) (rawProfile, error) {
 	var block map[string]yaml.Node
 	if err := node.Decode(&block); err != nil {
@@ -189,7 +186,7 @@ func splitProfile(path, profile string, node *yaml.Node) (rawProfile, error) {
 				delete(flat, opt)
 			}
 		}
-		return rawProfile{single: flat, double: flat, options: options, legacy: true}, nil
+		return rawProfile{single: rightOnly(flat), double: flat, options: options, legacy: true}, nil
 	}
 
 	for _, need := range []Mode{ModeSingle, ModeDouble} {
@@ -236,6 +233,18 @@ func decodeMode(path, profile string, block map[string]yaml.Node, mode Mode, dst
 		return fmt.Errorf("%s: profile %s: %s is empty — map at least one button", path, profile, mode)
 	}
 	return nil
+}
+
+// rightOnly keeps the right-pod buttons of a flat legacy map. Unknown names are
+// left for double to reject, so they still fail the load.
+func rightOnly(flat map[string]string) map[string]string {
+	out := map[string]string{}
+	for btn, token := range flat {
+		if rightButtons[strings.ToUpper(strings.TrimSpace(btn))] {
+			out[btn] = token
+		}
+	}
+	return out
 }
 
 // resolveBindings turns one raw button map into key bindings. valid is the set
