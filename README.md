@@ -1,7 +1,7 @@
 <div align="center">
   <img src="res/icon/zwiftboard-256.png" width="110" alt="zwiftboard icon">
   <h1>zwiftboard</h1>
-  <p><strong>Your Zwift Click V2 controller as a Bluetooth keyboard.</strong></p>
+  <p><strong>Your Zwift Click V2 becomes a keyboard for any cycling app on Windows.</strong></p>
   <p>
     <a href="https://github.com/thomaschampagne/zwiftboard/actions/workflows/ci.yml"><img src="https://github.com/thomaschampagne/zwiftboard/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/thomaschampagne/zwiftboard/releases/latest"><img src="https://img.shields.io/github/v/release/thomaschampagne/zwiftboard?sort=semver" alt="Latest release"></a>
@@ -11,22 +11,16 @@
   </p>
 </div>
 
-Why?! I needed to gear +/- in MyWhoosh using my Zwift Click v2 without paying for any other workaround software. Simple as that!
+**Shift gears, steer and pause from your Click V2, in the cycling app you already use.**
 
-Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it to their app. `zwiftboard` unlocks it: connect over Bluetooth, press a button, and it **types real keyboard keys**.
+Zwift locks the Click V2 to its own app. `zwiftboard` frees it: connect over Bluetooth, press a button, and it **types the keys your app already understands**. Gear up, gear down, steer, pause, change view.
 
-> **Both pods can fire keys.** The Click V2 is a pair and zwiftboard keeps
-> _both_ pods connected. The shipped profiles map the RIGHT pod's buttons
-> (`Y` `Z` `A` `B` `PLUS`) in single mode. The LEFT pod's buttons (`LEFT` `UP`
-> `RIGHT` `DOWN` `MIN`) join them in double mode, toggled with `m`; the shipped
-> `notepad` profile maps both pods in double mode.
-
-- **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
-- **RIGHT pod needs no account** - it works out of the box. The LEFT pod's time-limited Zwift unlock is renewed for you after a one-time sign-in via the status screen's `z`: your email and password are used once and never stored, only the resulting session token sits beside `config.yml`.
-- **Free** - no paid features, no subscriptions like some others implementations.
-- **Profiles** - configurable with pre-built profiles per platform.
-- **Program Auto-Focus (Optional)** - `zwiftboard` can bring the program to the foreground before every keypress, so clicks land in the configured program, not the wrong window.
-- **Scope** - Zwift Click V2 only, Windows only.
+- **Real gear shifting** - `PLUS` shifts down, and the left pod's `MIN` shifts up in double mode. Same rule in every profile.
+- **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
+- **One pod or two** - the right pod alone by default, or both pods with `m`.
+- **Free and open source** - no subscription, no paid tier. The right pod needs no account.
+- **Clicks land in the right window** - optionally bring your app to the front before every key, so a press never goes to the wrong window.
+- **Windows, Zwift Click V2** - the pair this tool is built for.
 
 ---
 
@@ -72,7 +66,7 @@ Manual downloads remain available on the [Releases](../../releases) page.
    form — only the RIGHT controller works normally then, and the warning
    stays on the screen. The prompt comes back on the next launch until you
    sign in.
-4. **Run it** and press a button on each controller while it scans to wake them — the mapped keys come from the **RIGHT** pod:
+4. **Run it** and press a button on each controller while it scans to wake them. Single mode uses the **RIGHT** pod. Press `m` to add the LEFT pod:
 
    ```
    zwiftboard.exe                 # startup profile: `defaultProfile:` from the config (ships as notepad)
@@ -103,9 +97,9 @@ defaultProfile: notepad # profile used when -p is not passed; must exist
 profiles:
   mywhoosh: # pick with -p mywhoosh
     single: # right controller only (the startup mode)
-      PLUS: k # gear down
+      PLUS: i # gear down
       A: right # steer right
-      B: i # gear up
+      B: k # gear up
       Y: u # U-turn / minimal UI
       Z: left # steer left
     double: # both controllers (press m to switch)
@@ -113,9 +107,10 @@ profiles:
       RIGHT: right # left controller: steer right
       UP: up # left controller: arrow up
       DOWN: down # left controller: arrow down
-      PLUS: k
+      MIN: k # left controller: gear up
+      PLUS: i
       A: right
-      B: i
+      B: k
       Y: u
       Z: left
 
@@ -276,7 +271,7 @@ zwiftboard [flags]
 | `tacx`          | `+`/`B` difficulty down/up, `A`/`Z` next/previous screen, `Y` pause                                   | [Tacx keyboard shortcuts](https://support.garmin.com/en-US/?faq=aFNaNhVBpF1wKTKB40LYg7)                                                                 |
 | `notepad`       | `+ p`, `A a`, `B b`, `Y y`, `Z z`, plus the left pod's `LEFT l`, `UP u`, `RIGHT r`, `DOWN d`, `MIN m` | focuses `Notepad` and starts it — the shipped default                                                                                                   |
 
-App profiles (`mywhoosh`, `mywhoosh-hd`, `trainerroad`, `systm`, `zwift`, `trainingpeaks`, `biketerra`, `rouvy`, `tacx`) also map the LEFT pod's `LEFT`/`RIGHT` steering buttons (`left`/`right`) under `double:`, so press `m` to let the left controller steer. In single mode they keep only the right controller's buttons. `notepad` remains the full two-pod profile: its `double:` map includes every left-pod button too.
+Every shipped profile has a `double:` map that adds the LEFT pod's arrows (`LEFT UP RIGHT DOWN`) and its `MIN` shift-up key. In single mode the profile keeps only the right pod's buttons. `notepad` maps all five left-pod buttons.
 
 ## How it works
 
@@ -332,9 +327,8 @@ App profiles (`mywhoosh`, `mywhoosh-hd`, `trainerroad`, `systm`, `zwift`, `train
 that work as a _pair_: the LEFT pod is the pair's BLE anchor and the RIGHT pod
 mirrors its state to the LEFT over a private RF link. This build connects _both_
 pods — keeping the LEFT anchor connected is what keeps the RIGHT pod's link
-alive — and both pods' buttons can be mapped. The shipped profiles map the
-RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`, the ones each profile needs);
-`notepad` also maps the LEFT pod's (`LEFT` `UP` `RIGHT` `DOWN` `MIN`).
+alive. Single mode maps the RIGHT pod's buttons (`Y` `Z` `A` `B` `PLUS`);
+double mode adds the LEFT pod's (`LEFT` `UP` `RIGHT` `DOWN` `MIN`).
 Scanning never gives up, so a pod turned on minutes later still joins.
 
 **The LEFT pod's time-limited Zwift unlock.** The LEFT pod's button engine only
@@ -363,6 +357,8 @@ connects are serialized so they never overlap an active scan.
 | Keys land in the wrong window              | Set `focusProgramNamePrefixOnClick:` to the game's window title or `.exe` — zwiftboard brings it to the front and taps only into it.                                                                                                                                                                                                                                                                                                        |
 | App quits / stops responding after a while | zwiftboard never exits on a runtime fault — a glitchy BLE event logs `recovered from panic` (a `WARN` with stack) and the session retry / scan loop keeps it alive. Switching Windows Bluetooth off mid-run also survives: sessions end, scanning retries every 3s, and it reconnects when Bluetooth comes back. If buttons go silent instead, check the `session ended` lines: that is a lost connection recovering after 5s, not a crash. |
 | Nothing works with Zwift open              | Close Zwift / Companion first: one BLE connection per controller.                                                                                                                                                                                                                                                                                                                                                                           |
+| LEFT pod does nothing                      | It is off in single mode. Press `m` on the status screen to switch to DOUBLE (the header shows the mode).                                                                                                                                                                                                                                                                                                                                  |
+| Log warns "legacy flat format"             | The profile uses the old layout (buttons directly under the profile name). It still works; move its buttons under `single:` and `double:` to silence the warning (see Controller modes).                                                                                                                                                                                                                                                  |
 
 Not a HID keyboard: Zwift itself won't see the Click as a Bluetooth keyboard
 here — only the Windows foreground app receives the simulated keys.
