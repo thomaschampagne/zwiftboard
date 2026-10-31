@@ -20,3 +20,39 @@ jobs:
       - uses: extractions/setup-just@v4
       - name: quality guards
         run: just ci
+
+  macos:
+    name: macOS (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: extractions/setup-just@v4
+      - run: just ci-macos
+      - name: Verify executable and Bluetooth usage description
+        run: |
+          ./dist/zwiftboard -version
+          python3 scripts/check-macos-metadata.py dist/zwiftboard
+
+  windows:
+    name: Windows native tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Test and vet native Windows code
+        shell: bash
+        run: |
+          go test -race ./...
+          go vet ./...
+          CGO_ENABLED=0 go build -o dist/zwiftboard.exe .

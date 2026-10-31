@@ -1,9 +1,9 @@
-// Zwift Click V2 BLE listener for Windows (WinRT via tinygo.org/x/bluetooth).
+// Zwift Click V2 BLE listener for Windows and macOS via tinygo.org/x/bluetooth.
 //
 //	go run . [-v] [-config path] [-p mywhoosh] [-log zwiftboard.log]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
-// keyboard keys (Windows keybd_event). Log level comes from config.yaml
+// keyboard keys (Windows keybd_event or macOS Quartz). Log level comes from config.yaml
 // (loglevel: debug|info|warn|error); -v forces debug.
 //
 // Click V2 is a pair of devices (LEFT: arrows + minus, RIGHT: Y/Z/A/B + plus).
@@ -27,6 +27,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -48,7 +50,7 @@ var version = "dev"
 var scanFor = 10 * time.Second
 
 func main() {
-	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: %LocalAppData%\\zwiftboard\\config.yml, created from the built-in default if missing; an explicit path must already exist)")
+	configPath := flag.String("config", defaultConfigPath(), "YAML file with key mapping profiles (default: "+defaultConfigPath()+", created if missing; an explicit path must already exist)")
 	var profile string
 	flag.StringVar(&profile, "p", "", "config profile to use (default: defaultProfile from the config, else mywhoosh)")
 	var verbose bool
@@ -136,6 +138,22 @@ func main() {
 		slog.Info("start program configured", "program", cfg.StartProgram)
 	}
 	keys.SetWindowTarget(cfg.FocusProgramNamePrefixOnClick)
+	if !*demo {
+		keys.Initialize()
+		// Bubble Tea handles signals and restores terminal modes before returning
+		// from runTUI. Plain mode has no event loop, so it needs its own handler.
+		if *plain {
+			signals := make(chan os.Signal, 1)
+			signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+			defer signal.Stop(signals)
+			go func() {
+				<-signals
+				keys.Shutdown()
+				os.Exit(0)
+			}()
+		}
+		defer keys.Shutdown()
+	}
 
 	if tuiMode {
 		if *demo {
@@ -166,7 +184,7 @@ func main() {
 	for enabled := false; !enabled; {
 		ble.Guarded("enable BLE adapter", func() {
 			if err := ble.Enable(); err != nil {
-				slog.Error("Bluetooth is OFF or unavailable — turn it ON (Windows: Settings > Bluetooth & devices); retrying in 5s", "error", err)
+				slog.Error(ble.BluetoothHelp(), "error", err)
 			} else {
 				enabled = true
 			}

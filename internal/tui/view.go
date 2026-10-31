@@ -113,8 +113,12 @@ func (m Model) View() tea.View {
 	b.WriteString(m.header() + "\n")
 
 	if !m.bt {
+		help := m.cfg.BluetoothHelp
+		if help == "" {
+			help = "Please turn Bluetooth ON (Windows: Settings > Bluetooth & devices)"
+		}
 		body := sBad.Render("○ Bluetooth is OFF") + "\n" +
-			sWarn.Render("Please turn Bluetooth ON") + sMuted.Render(" (Windows: Settings > Bluetooth & devices)") + "\n" +
+			sWarn.Render(help) + "\n" +
 			sMuted.Render("Waiting for it — this screen updates by itself.")
 		b.WriteString(m.card(cBad, "Bluetooth", body) + "\n")
 		b.WriteString(m.logsPanel())
@@ -342,6 +346,10 @@ func (m Model) banner() string {
 // keys.Down drops every click in that case, so the user must know why nothing
 // happens.
 func (m Model) focusAlert() string {
+	if m.cfg.InputWarning != "" {
+		return m.cardW(m.innerWidth(), cBad, "", sChipBad.Render("INPUT BLOCKED")+" "+m.cfg.InputWarning)
+	}
+
 	if m.cfg.Focus == "" || !m.focusMissing {
 		return ""
 	}

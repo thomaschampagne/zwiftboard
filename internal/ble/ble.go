@@ -66,7 +66,8 @@ var (
 	// ~65s after its last OWN transmission (a button frame) no matter what —
 	// every payload variant was observed failing identically on Windows. The
 	// keepalive's real job is liveness: a successful write proves the session is
-	// up, a failed one detects the disconnect, and reconnect is scan-gated
+	// up on Windows; macOS checks native connection state before writing.
+	// A failed write/state check detects disconnect, and reconnect is scan-gated
 	// (main.go waits for the pod to advertise again).
 	handshakeStart = append(append([]byte(nil), rideOn...), 0x02, 0x03)
 )
@@ -194,6 +195,8 @@ func setScanHealthy(ok bool) { scanBroken.Store(!ok) }
 
 // ScanHealthy reports whether the most recent scan burst ran cleanly. True
 // until a burst fails, so a fresh start never claims Bluetooth is off.
+// TinyGo v0.16.0 on macOS does not report radio-off/denied errors from Scan;
+// this is scan-call health, not a reliable macOS radio-state indicator.
 func ScanHealthy() bool { return !scanBroken.Load() }
 
 // scanBurst runs one burst of scanFn and returns the freshly discovered
@@ -379,7 +382,8 @@ func Session(t Target, km *KeyMap) error {
 		return err
 	}
 	defer func() {
-		// Probe with a keepalive write, not service discovery: on a dead session
+		// Windows probes with a keepalive write; macOS cancels directly.
+		// Never probe with service discovery: on a dead Windows session
 		// (BT off) DiscoverServices itself AVs on the freed COM object (0xc0000005,
 		// same family as the Disconnect crash — observed during the podwatch run),
 		// while writes fail gracefully. So probe with the same write the keepalive
@@ -387,7 +391,7 @@ func Session(t Target, km *KeyMap) error {
 		// failure on a LIVE device just defers the release of the controller's
 		// single connection slot to the device's own sleep timeout (~56s) — losing
 		// the slot for a minute beats an unrecoverable crash.
-		endSession("session "+t.Label, func() error {
+		teardownSession("session "+t.Label, func() error {
 			if syncRx == nil {
 				return errors.New("no sync-rx characteristic to probe")
 			}
@@ -395,12 +399,19 @@ func Session(t Target, km *KeyMap) error {
 			return err
 		}, func() { _ = dev.Disconnect() })
 	}()
-	// A session ends when a keepalive write fails (a real disconnect) — release
+	writes := newSessionWriter(func() error { return sessionAlive(dev) }, func(b []byte) (int, error) { return writeChar(syncRx, b) })
+	defer writes.Close()
+	// A session ends when a keepalive write or native state check fails — release
 	// the keys still held so a dropped controller can't leave them stuck down.
 	// The held count is shared with the other pod's session, so a key that
 	// sibling still sees pressed stays down until that sibling's own release.
 	hk := holdKeys(keys.Down, keys.Up)
 	defer hk.ReleaseAll()
+	var notifications notificationGate
+	// Defers run in reverse: stop/drain notification delivery, release keys,
+	// close the writer, then cancel the native connection. No late frame can
+	// acquire a new held-key reservation after the final release.
+	defer notifications.Close()
 
 	// Activation sequence (verified on Click V2 hardware).
 	activation := [][]byte{
@@ -413,11 +424,8 @@ func Session(t Target, km *KeyMap) error {
 	// (not sync-tx): a short ff 04 00 ack keeps an already-unlocked pod's button
 	// stream from going silent.
 	challengeRearm := func() {
-		if !SendAck {
-			return
-		}
-		if _, err := writeChar(syncRx, ackSeq); err != nil {
-			slog.Debug("challenge re-arm write failed", "controller", t.Label, "error", err)
+		if SendAck {
+			writes.Ack()
 		}
 	}
 
@@ -427,7 +435,7 @@ func Session(t Target, km *KeyMap) error {
 	// Notification callbacks run on the BLE stack's goroutine while the
 	// keepalive loop reads it below, so the access is atomic (see activityClock).
 	activity := newActivityClock()
-	if err := async.EnableNotifications(asyncNotify(t.Label, challengeRearm, activity.touch, handler)); err != nil {
+	if err := async.EnableNotifications(notifications.Wrap(asyncNotify(t.Label, challengeRearm, activity.touch, handler))); err != nil {
 		return fmt.Errorf("subscribe async: %w", err)
 	}
 
@@ -436,7 +444,7 @@ func Session(t Target, km *KeyMap) error {
 	// flag is atomic.
 	var acked atomic.Bool
 	if syncTx != nil {
-		err := syncTx.EnableNotifications(func(b []byte) {
+		err := syncTx.EnableNotifications(notifications.Wrap(func(b []byte) {
 			defer recoverLog("sync-tx frame " + t.Label)
 			slog.Debug("sync-tx", "controller", t.Label, "frame", fmt.Sprintf("% X", b))
 			if len(b) == 0 {
@@ -448,21 +456,16 @@ func Session(t Target, km *KeyMap) error {
 			// handled by asyncNotify above.
 			if b[0] == 'R' && acked.CompareAndSwap(false, true) {
 				slog.Info("unlocked (RideOn echoed)", "controller", t.Label)
-				if SendAck {
-					go func() {
-						defer recoverLog("ack write " + t.Label)
-						_, _ = writeChar(syncRx, ackSeq)
-					}()
-				}
+				challengeRearm()
 			}
-		})
+		}))
 		if err != nil {
 			slog.Warn("sync-tx subscribe failed (non-fatal)", "controller", t.Label, "error", err)
 		}
 	}
 
 	for _, m := range activation {
-		if _, err := writeChar(syncRx, m); err != nil {
+		if _, err := writes.Write(m); err != nil {
 			return fmt.Errorf("handshake: %w", err)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -477,7 +480,8 @@ func Session(t Target, km *KeyMap) error {
 	// "RideOn"+02 03, 00 08 10, 00 08 00, with and without jitter) fails
 	// identically on Windows. The write is kept as the LIVENESS probe: Idle
 	// button silence is normal (0x23 frames only stream on presses), so the
-	// only trustworthy disconnect signal is a failed keepalive write, and that
+	// Windows disconnect signal is a failed keepalive write; on macOS the
+	// native peripheral state is checked first. That
 	// is why the session is not ended on frame silence.
 	//
 	// After IdleReset of silence the tick sends a single pod RESET (0x18)
@@ -492,12 +496,12 @@ func Session(t Target, km *KeyMap) error {
 		if keepaliveTick(resetSent, activity.last(), time.Now()) {
 			resetSent = true
 			slog.Debug("idle — sending pod reset (0x18) to reboot before the ~65s sleep watchdog", "controller", t.Label, "idle", IdleReset)
-			if _, err := writeChar(syncRx, resetPod); err != nil {
+			if _, err := writes.Write(resetPod); err != nil {
 				return fmt.Errorf("reset: %w", err)
 			}
 			continue
 		}
-		if _, err := writeChar(syncRx, rideOn); err != nil {
+		if _, err := writes.Write(rideOn); err != nil {
 			return fmt.Errorf("disconnected: %w", err)
 		}
 	}
@@ -549,7 +553,11 @@ func connect(t Target) (dev bluetooth.Device, async, syncRx, syncTx *bluetooth.D
 	if err != nil {
 		return
 	}
-	// fail tears the fresh connection down through endSession's probe: on a
+	if err = validateConnectedDevice(dev, t.Addr); err != nil {
+		return
+	}
+	// fail uses platform teardown. macOS always cancels, even without discovered
+	// characteristics. Windows uses endSession's probe: on a
 	// live device the probe (a keepalive write) succeeds and Disconnect frees
 	// the controller's single connection slot; when BT died mid-connect the
 	// write fails and Disconnect — which would AV on the freed session — is
@@ -562,15 +570,11 @@ func connect(t Target) (dev bluetooth.Device, async, syncRx, syncTx *bluetooth.D
 		if probe == nil {
 			probe = async
 		}
-		if probe != nil {
-			endSession("connect "+t.Label,
-				func() error {
-					_, we := writeChar(probe, keep)
-					return we
-				}, func() { _ = dev.Disconnect() })
-		} else {
-			slog.Debug("no characteristic available to probe — skipping disconnect (slot releases on the device's own link timeout)", "controller", t.Label)
-		}
+		teardownSession("connect "+t.Label,
+			func() error {
+				_, we := writeChar(probe, keep)
+				return we
+			}, func() { _ = dev.Disconnect() })
 		err = e
 	}
 

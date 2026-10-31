@@ -50,18 +50,24 @@ func nextProfileIndex(n, idx, delta int) int {
 
 // tuiConfig turns the loaded config into what the status screen displays.
 func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath string) tui.Config {
+	warning := ""
+	if !demo {
+		warning = keys.InputWarning()
+	}
 	return tui.Config{
-		Profile:      cfg.Profile,
-		Bindings:     bindingTokens(cfg.Bindings),
-		Buttons:      rightButtons,
-		Focus:        cfg.FocusProgramNamePrefixOnClick,
-		StartProgram: cfg.StartProgram,
-		NoMapping:    cfg.Missing,
-		Demo:         demo,
-		Logs:         logs,
-		ConfigPath:   filepath.Base(configPath),
-		Version:      version,
-		OpenConfig:   openConfigFile(configPath),
+		BluetoothHelp: ble.BluetoothHelp(),
+		InputWarning:  warning,
+		Profile:       cfg.Profile,
+		Bindings:      bindingTokens(cfg.Bindings),
+		Buttons:       rightButtons,
+		Focus:         cfg.FocusProgramNamePrefixOnClick,
+		StartProgram:  cfg.StartProgram,
+		NoMapping:     cfg.Missing,
+		Demo:          demo,
+		Logs:          logs,
+		ConfigPath:    filepath.Base(configPath),
+		Version:       version,
+		OpenConfig:    openConfigFile(configPath),
 	}
 }
 
@@ -73,7 +79,9 @@ func runTUI(tcfg tui.Config, start func(p *tea.Program)) {
 	if start != nil {
 		go start(p)
 	}
-	if _, err := p.Run(); err != nil {
+	_, err := p.Run()
+	keys.Shutdown()
+	if err != nil {
 		slog.Error("tui", "error", err)
 		os.Exit(1)
 	}
@@ -101,7 +109,7 @@ func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.Ke
 	for enabled := false; !enabled; {
 		ble.Guarded("enable BLE adapter", func() {
 			if err := ble.Enable(); err != nil {
-				slog.Error("Bluetooth is OFF or unavailable — turn it ON (Windows: Settings > Bluetooth & devices); retrying in 5s", "error", err)
+				slog.Error(ble.BluetoothHelp(), "error", err)
 			} else {
 				enabled = true
 			}
@@ -136,9 +144,10 @@ func liveFeed(p *tea.Program, cfg config.Config, state *profileState, km *ble.Ke
 	// The "detected" window is the reconnect window: the screen and the scan
 	// gate must agree on what "recently seen" means.
 	src := tui.Sources{
-		BT:        ble.ScanHealthy,
-		Connected: ble.Connected,
-		Seen:      func(p zwift.Pod) bool { return ble.SideSeenRecently(p, ble.ReconnectWindow) },
+		InputWarning: keys.InputWarning,
+		BT:           ble.ScanHealthy,
+		Connected:    ble.Connected,
+		Seen:         func(p zwift.Pod) bool { return ble.SideSeenRecently(p, ble.ReconnectWindow) },
 	}
 	// Wired unconditionally: a runtime switch can turn focus on, so the alert
 	// must be able to appear for the rest of the session. EnumWindows + process

@@ -62,6 +62,15 @@ loglevel: info
 # PLUS = gear down (k), B = gear up (i).
 profiles:
 
+  # Foreground-only keyboard demo, also the first-run default on macOS.
+  # Open TextEdit (or another target app) yourself and give it focus.
+  keyboard:
+    PLUS: p
+    A: a
+    B: b
+    Y: y
+    Z: z
+
   # Start notepad
   notepad:
     PLUS: p

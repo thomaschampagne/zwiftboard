@@ -32,10 +32,11 @@ func PodStates(connected, seen func(zwift.Pod) bool) PodMsg {
 // target configured). Seen binds its sighting window at the call site so the
 // TUI shares ble.ReconnectWindow.
 type Sources struct {
-	BT        func() bool // ble.ScanHealthy: a failing scan burst = radio switched off
-	Connected func(zwift.Pod) bool
-	Seen      func(zwift.Pod) bool
-	Focus     func() bool // configured focus window exists
+	InputWarning func() string
+	BT           func() bool // ble.ScanHealthy: a failing scan burst = radio switched off
+	Connected    func(zwift.Pod) bool
+	Seen         func(zwift.Pod) bool
+	Focus        func() bool // configured focus window exists
 }
 
 // Poll sends Bluetooth, pod and focus-window state immediately and then
@@ -44,14 +45,21 @@ func Poll(ctx context.Context, send func(tea.Msg), every time.Duration, src Sour
 	t := time.NewTicker(every)
 	defer t.Stop()
 	var (
-		last   *PodMsg
-		lastBT *bool
-		lastF  *bool
+		last        *PodMsg
+		lastBT      *bool
+		lastF       *bool
+		lastWarning *string
 	)
 	for {
 		if bt := src.BT(); lastBT == nil || *lastBT != bt {
 			lastBT = &bt
 			send(BTMsg(bt))
+		}
+		if src.InputWarning != nil {
+			if warning := src.InputWarning(); lastWarning == nil || *lastWarning != warning {
+				lastWarning = &warning
+				send(InputWarningMsg(warning))
+			}
 		}
 		if src.Focus != nil {
 			if f := src.Focus(); lastF == nil || *lastF != f {
