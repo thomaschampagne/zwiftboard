@@ -151,6 +151,11 @@ header (`SINGLE` / `DOUBLE`), and the Keys Bindings panel lists only the buttons
 the active mode. The mode stays the same when you switch profile. A button that
 is not in the active map is ignored, so in single mode the left pod does nothing.
 
+In double mode the gear keys follow one rule in every program that has a gear
+key: the right pod's `PLUS` shifts down (easier), and the left pod's `MIN` shifts
+up (harder). Programs without a keyboard gear key use their closest effort or
+resistance key, listed in `config.yaml`.
+
 Both maps are required in every profile. A profile written in the old format (its
 buttons directly under the profile name, with no `single:`/`double:`) still loads:
 it is read as `single` with only its right-pod buttons, the left-pod buttons go to `double`, zwiftboard logs a warning, and `double` holds every button.
