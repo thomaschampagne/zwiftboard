@@ -1,40 +1,65 @@
+# HANDOFF
 
----
+## Current state (2026-10-31)
 
-## Follow-on: review pass vs `dev` (2026-10-30)
+Branch `feat/left-controller-support-zwift-sign-in`. Per-profile controller
+modes are implemented and tested. `just sanity` green; `go test -race ./...`
+green; Windows cross-build green; golangci-lint reports the same 12 errcheck
+findings that already exist on the branch.
 
-Senior Go / UX / security review of `feat/left-controller-support-zwift-sign-in`
-against `dev`. Fixed:
+### What changed
 
-- **Recovery restored a stale legacy config.** `recoverConfig` ran
-  `ensureConfig`, which migrates `config.yaml` beside the exe first. A stale
-  copy came back, failed validation, and recovery aborted. Recovery now calls
-  `writeDefault` (no migration). Test: `TestRecoverConfigIgnoresLegacyConfig`.
-- **Sign-in blocked BLE.** `Client.Login` held the client mutex across the
-  Zwift HTTP call (up to 20s), stalling `Ready()`/`Solve`. The request now runs
-  outside the lock; only the result is published under it. Test:
-  `TestLoginDoesNotBlockReadyWhileWaitingForZwift`. `Solve`/refresh keep the lock
-  on purpose: concurrent Keycloak refreshes with a rotating refresh token could
-  kill the session.
-- **Dead code.** Removed `Client.Ensure` and `Store.Delete` (no production
-  callers). Their refresh tests now drive `Solve`.
-- **Lint.** Fixed the 13 new golangci-lint findings in branch-touched code
-  (unchecked `Close`/`Remove`/`Write`, capitalised error string, ineffassign,
-  staticcheck). The 12 remaining findings already exist on `dev`.
-- **Caret drift.** The email field rendered trimmed while the caret counted
-  untrimmed runes; it now renders exactly as typed.
+- **YAML** — each profile has `single:` (right pod only) and `double:` (both
+  pods). Per-profile `focusProgramNamePrefixOnClick` / `startProgram` stay at
+  profile level. Legacy flat profiles load as `single` (a copy becomes
+  `double`) and log a warning. A left-pod button under `single:` is an error.
+  Config files over 1 MiB are refused.
+- **Mode** — `config.Mode` (`single`/`double`), default `single`, set on the
+  shared `profileState` (`profile.go`). The `m` key (`toggleModeKey` in
+  `internal/tui/model.go`) toggles it; the KeyMap swaps to the other map and
+  held keys are released. The mode survives profile switches.
+- **TUI** — header shows `SINGLE`/`DOUBLE` in the green chip; footer shows
+  `m Toggle mode`; the Keys Bindings panel lists the right pod only in single
+  mode, and both controllers under `Left controller` / `Right controller`
+  headings in double mode.
+- **Shipped `config.yaml`** — every profile migrated: `single` = right-pod
+  buttons, `double` = left + right. No left-pod entries are missing, so no
+  "still to define" comments were needed.
+- **Docs** — README "Controller modes" section, `m` in the key list, updated
+  example.
 
-Open (not changed, needs a decision):
+### Review findings (fixed)
 
-1. **Debug logs contain the server reply.** `dlock response` logs the full
-   23-byte body in hex (and the challenge). AGENTS.md allows this for
-   diagnosis, but the reply may be a usable token (see the 2026-10-26 notes).
-   Decide: keep at Debug only, or log length + a short hash.
-2. **Lifetime copy conflict.** `login.go`, `tuirun.go` and their tests say the
-   unlock "lasts a few days"; AGENTS.md says "~24h". Confirm the real lifetime
-   (Experiment A) before changing either.
-3. **Replay experiments in this file** (Experiment C) describe a bypass; keep
-   them research-only, as already stated above.
+- Removed an unneeded `copyMap` (the legacy `double` shares the read-only map).
+- Replaced the `mapsLeftPod` heuristic with an explicit mode. Single mode no
+  longer shows the left column just because a left button is bound.
+- Header test: staticcheck De Morgan nit fixed.
 
-Verification: `just ci` green; `go test -race -count=1 ./...` green;
-`golangci-lint run` 12 issues, all pre-existing on `dev`.
+### Open, not changed
+
+1. **Legacy warning fires on every load** (each switch / reload). Harmless, but
+   noisy for legacy users until they migrate.
+2. **Toggling releases held keys** and has no confirmation. Deliberate: the
+   status line says `Mode: …`, and the held rows clear.
+3. **Header title** keeps the existing lowercase `zwiftboard` (spec said
+   `Zwiftboard`); left as-is to avoid changing existing output.
+4. **Debug logs contain the server reply** (see previous notes below).
+5. **Lifetime copy conflict**: `login.go`/`tuirun.go` say "a few days", AGENTS.md
+   says "~24h". Confirm before changing.
+6. **Not verified on hardware**: mode switching with real BLE traffic
+   (`ble.ReleaseAllHeld` + `KeyMap.Swap` are unit-level only).
+
+### Next steps
+
+- Hardware check: press `m` while a left-pod button is held; confirm no key sticks.
+- Decide on open item 1 (legacy warning frequency) and item 5 (lifetime copy).
+
+### Earlier notes (review against `dev`, 2026-10-30)
+
+- Recovery now calls `writeDefault` (no legacy migration), test
+  `TestRecoverConfigIgnoresLegacyConfig`.
+- `Client.Login` no longer holds the mutex across the Zwift HTTP call; test
+  `TestLoginDoesNotBlockReadyWhileWaitingForZwift`.
+- Debug logs of `dlock response` include the full reply in hex. Decide: keep at
+  Debug only, or log length + hash.
+- Replay experiments (Experiment C) are research-only.
