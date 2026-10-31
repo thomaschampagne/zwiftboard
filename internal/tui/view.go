@@ -8,6 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"zwiftboard/internal/config"
 )
 
 // Palette. ANSI-256 numbers so it degrades on 256-colour terminals.
@@ -69,6 +71,9 @@ const (
 	cellWidth = 35
 	// columnGap separates the two pod columns.
 	columnGap = 2
+	// leftHeading and rightHeading label the two controller columns in double mode.
+	leftHeading  = "Left controller"
+	rightHeading = "Right controller"
 	// twoColumnWidth is the inner width the side-by-side table needs:
 	// two cells of 35 plus the gap.
 	twoColumnWidth = 2*cellWidth + columnGap
@@ -184,6 +189,9 @@ func podLogo() string {
 
 func (m Model) header() string {
 	title := sTitle.Render("zwiftboard")
+	if m.cfg.Mode != "" {
+		title += "  " + sChipOK.Render(strings.ToUpper(string(m.cfg.Mode)))
+	}
 
 	profile := m.cfg.Profile
 	if profile != "" && len(m.cfg.Profiles) > 1 {
@@ -265,31 +273,19 @@ func (m Model) buttonRow(name string) string {
 	return sBold.Render(padRight(name, 6)) + sMuted.Render("→ ") + cap + "  " + out
 }
 
-// mapsLeftPod reports whether the active profile maps at least one left-pod
-// button: only then does the table get a left column. A profile that does
-// not use the left pod keeps the screen it has today.
-func (m Model) mapsLeftPod() bool {
-	for _, name := range m.cfg.LeftButtons {
-		if _, ok := m.cfg.Bindings[name]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-// tableRows renders the button rows: the left pod's column beside the right
-// pod's when the profile maps a left-pod button and the card is wide enough,
-// the right pod's alone otherwise, and the two blocks stacked when the card
-// is too narrow for the side-by-side form (so nothing ever wraps).
+// tableRows renders the button rows for the active mode. Single mode shows the
+// right pod alone, as before. Double mode shows both controllers under their own
+// headings: side by side when the card is wide enough, stacked otherwise, so
+// nothing wraps.
 func (m Model) tableRows() string {
 	left, right := m.cfg.LeftButtons, m.cfg.RightButtons
-	if !m.mapsLeftPod() {
+	if m.cfg.Mode != config.ModeDouble {
 		return m.rows(right)
 	}
 	if m.innerWidth() >= twoColumnWidth {
 		return m.twoColumns(left, right)
 	}
-	return m.rows(append(append([]string{}, left...), right...))
+	return sBold.Render(leftHeading) + "\n" + m.rows(left) + sBold.Render(rightHeading) + "\n" + m.rows(right)
 }
 
 // rows renders one button row per name, stacked.
@@ -301,12 +297,13 @@ func (m Model) rows(names []string) string {
 	return b.String()
 }
 
-// twoColumns renders the left pod's rows beside the right pod's rows. The
-// left cell is padded to cellWidth so the columns line up whatever the token
-// length; the right cell keeps its natural width (the row's own trailing
-// spaces are the table's edge).
+// twoColumns renders the left pod's rows beside the right pod's rows, each
+// under its heading. The left cell is padded to cellWidth so the columns line
+// up whatever the token length; the right cell keeps its natural width (the
+// row's own trailing spaces are the table's edge).
 func (m Model) twoColumns(left, right []string) string {
 	var b strings.Builder
+	b.WriteString(padRight(sBold.Render(leftHeading), cellWidth) + strings.Repeat(" ", columnGap) + sBold.Render(rightHeading) + "\n")
 	n := len(left)
 	if len(right) > n {
 		n = len(right)
@@ -329,6 +326,14 @@ func (m Model) twoColumns(left, right []string) string {
 		b.WriteString(line + "\n")
 	}
 	return b.String()
+}
+
+// modeLabel names a controller mode for the screen.
+func modeLabel(mode config.Mode) string {
+	if mode == config.ModeDouble {
+		return "double (left and right controllers)"
+	}
+	return "single (right controller)"
 }
 
 func (m Model) logsPanel() string {
@@ -391,6 +396,9 @@ func (m Model) footer() string {
 	}
 	if m.cfg.Auth.Login != nil {
 		f += sMuted.Render("  ·  ") + hint("z", "sign in")
+	}
+	if m.cfg.ToggleMode != nil {
+		f += sMuted.Render("  ·  ") + hint(toggleModeKey, "Toggle mode")
 	}
 	f += sMuted.Render("  ·  ") + hint("q", "quit")
 	if m.cfg.Demo {

@@ -98,7 +98,7 @@ func TestNotepadProfileMapsBothPods(t *testing.T) {
 		"PLUS": "p", "A": "a", "B": "b", "Y": "y", "Z": "z",
 	}
 	for _, btn := range append(append([]string{}, zwift.LeftButtons...), zwift.RightButtons...) {
-		bind, ok := cfg.Bindings[btn]
+		bind, ok := cfg.Double[btn]
 		if !ok {
 			t.Errorf("profile notepad: missing binding for %s", btn)
 			continue
@@ -120,7 +120,7 @@ func TestNewProfilesMapEveryButton(t *testing.T) {
 			continue
 		}
 		for _, btn := range []string{"PLUS", "A", "B", "Y", "Z"} {
-			if _, ok := cfg.Bindings[btn]; !ok {
+			if _, ok := cfg.Single[btn]; !ok {
 				t.Errorf("profile %s: missing binding for %s", name, btn)
 			}
 		}
@@ -150,7 +150,7 @@ func TestAppProfilesMapBothPods(t *testing.T) {
 			{"RIGHT", "right"},
 			{"DOWN", "down"},
 		} {
-			bind, ok := cfg.Bindings[want.btn]
+			bind, ok := cfg.Double[want.btn]
 			if !ok {
 				t.Errorf("profile %s: missing binding for %s", name, want.btn)
 				continue
@@ -184,13 +184,40 @@ func TestAppProfilesMapBothPods(t *testing.T) {
 			wantRight = map[string]string{"PLUS": "down", "A": "right", "B": "up", "Y": "space", "Z": "left"}
 		}
 		for btn, want := range wantRight {
-			bind, ok := cfg.Bindings[btn]
+			bind, ok := cfg.Single[btn]
 			if !ok {
 				t.Errorf("profile %s: missing right-pod binding for %s", name, btn)
 				continue
 			}
 			if bind.Token != want {
 				t.Errorf("profile %s: %s is bound to %q, want %q", name, btn, bind.Token, want)
+			}
+		}
+	}
+}
+
+// Every shipped profile splits cleanly: single holds only right-pod buttons,
+// and double keeps all of them so the right pod works in both modes.
+func TestShippedProfilesSplitIntoModes(t *testing.T) {
+	path := writeDefaultConfig(t)
+	names, err := config.ProfileList(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		cfg, err := config.Load(path, name)
+		if err != nil {
+			t.Errorf("profile %s: %v", name, err)
+			continue
+		}
+		for _, btn := range zwift.LeftButtons {
+			if _, ok := cfg.Single[btn]; ok {
+				t.Errorf("profile %s: single maps left-pod button %s", name, btn)
+			}
+		}
+		for btn := range cfg.Single {
+			if _, ok := cfg.Double[btn]; !ok {
+				t.Errorf("profile %s: %s is in single but not double", name, btn)
 			}
 		}
 	}

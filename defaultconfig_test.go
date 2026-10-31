@@ -191,8 +191,8 @@ func TestRecoverConfigRestoresTheShippedDefault(t *testing.T) {
 	if !ok {
 		t.Fatal("recoverConfig refused a broken file")
 	}
-	if cfg.Missing || len(cfg.Bindings) == 0 {
-		t.Fatalf("restored config has no bindings: missing=%v bindings=%d", cfg.Missing, len(cfg.Bindings))
+	if cfg.Missing || len(cfg.Single) == 0 {
+		t.Fatalf("restored config has no bindings: missing=%v bindings=%d", cfg.Missing, len(cfg.Single))
 	}
 	if got := readFile(t, path+".bak"); got != broken {
 		t.Fatalf("backup = %q, want the broken file", got)

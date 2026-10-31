@@ -8,7 +8,12 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"zwiftboard/internal/config"
 )
+
+// toggleModeKey switches the active profile between single and double mode.
+const toggleModeKey = "m"
 
 // KeyStateMsg reports one emulated key's transition: Down true on press,
 // false on release. The mirrored pair fires it twice; Update dedups.
@@ -59,7 +64,9 @@ const (
 // the profile fields (Profile/Bindings/Focus/StartProgram/ProfileIndex) are
 // updated live by ProfileMsg on a runtime switch.
 type Config struct {
-	Profile  string
+	Profile string
+	// Mode is the active controller mode; Bindings holds that mode's map.
+	Mode     config.Mode
 	Bindings map[string]string // button -> key token
 	// LeftButtons and RightButtons are the Click V2 pods' button names, in
 	// table order: the left pod's column and the right pod's column.
@@ -78,6 +85,9 @@ type Config struct {
 	// SwitchProfile requests a relative profile switch; main wires it and
 	// pushes a ProfileMsg back. nil = switching off.
 	SwitchProfile func(delta int)
+	// ToggleMode flips single/double for the active profile (the "m" shortcut);
+	// main wires it and pushes a ModeMsg back. nil = toggling off.
+	ToggleMode func()
 	// LaunchProgram starts the active profile's startProgram on demand (the "s"
 	// shortcut), so a program the user closed can be reopened. nil = not wired;
 	// the shortcut is also hidden while StartProgram is "".
@@ -120,6 +130,7 @@ type (
 	// set when the same profile was re-read from disk, so the screen can say so.
 	ProfileMsg struct {
 		Name         string
+		Mode         config.Mode
 		Bindings     map[string]string
 		Focus        string
 		StartProgram string
@@ -127,6 +138,11 @@ type (
 		Index        int
 		Err          string
 		Reload       bool
+	}
+	// ModeMsg reports the controller mode after a toggle, with the active map.
+	ModeMsg struct {
+		Mode     config.Mode
+		Bindings map[string]string
 	}
 	// openedMsg is the result of the editor launch.
 	openedMsg struct{ err error }
@@ -294,6 +310,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.setStatus(msg.Err)
 		}
 		m.cfg.Profile = msg.Name
+		m.cfg.Mode = msg.Mode
 		m.cfg.Bindings = msg.Bindings
 		m.cfg.Focus = msg.Focus
 		m.cfg.StartProgram = msg.StartProgram
@@ -306,6 +323,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Reload {
 			return m.setStatus("Reloaded profile " + msg.Name + ".")
 		}
+	case ModeMsg:
+		m.cfg.Mode = msg.Mode
+		m.cfg.Bindings = msg.Bindings
+		// Toggling releases every held key: clear the rows so none stays lit.
+		m.keys = map[string]keyState{}
+		return m.setStatus("Mode: " + modeLabel(msg.Mode) + ".")
 	case KeyStateMsg:
 		if _, mapped := m.cfg.Bindings[msg.Button]; !mapped {
 			return m, nil
@@ -409,9 +432,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			reload := m.cfg.Reload
 			return m, func() tea.Msg { reload(); return nil }
 		}
-		// Profile switch runs in the returned Cmd, never inline: the callback
-		// may do work, and the render loop must not block. Arrow keys are not
-		// matched by the demo handler, so a plain arrow stays inert there.
+		// Toggle and profile switch run in the returned Cmd, never inline: the
+		// callbacks may do work, and the render loop must not block. Arrow keys
+		// are not matched by the demo handler, so a plain arrow stays inert there.
+		if m.cfg.ToggleMode != nil && msg.String() == toggleModeKey {
+			toggle := m.cfg.ToggleMode
+			return m, func() tea.Msg { toggle(); return nil }
+		}
 		if m.cfg.SwitchProfile != nil {
 			switchProfile := m.cfg.SwitchProfile
 			switch msg.String() {
