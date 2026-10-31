@@ -141,9 +141,9 @@ func main() {
 	} else if err != nil {
 		slog.Warn("config unusable — button logging only until it is fixed or restored", "file", configFile)
 	} else {
-		slog.Info("profile loaded", "profile", cfg.Profile, "bindings", len(cfg.Bindings))
+		slog.Info("profile loaded", "profile", cfg.Profile, "bindings", len(cfg.Single))
 		for _, name := range config.ButtonNames() {
-			if b, ok := cfg.Bindings[name]; ok {
+			if b, ok := cfg.Single[name]; ok {
 				slog.Info("key mapping", "button", name, "key", b.Token)
 			}
 		}
@@ -180,10 +180,10 @@ func main() {
 		if *demo {
 			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
 		}
-		km := ble.NewKeyMap(cfg.Bindings)
+		km := ble.NewKeyMap(cfg.Single)
 		names, _ := config.ProfileList(*configPath)
-		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, km: km}
-		idx := vkIndex(cfg.Bindings)
+		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, mode: config.ModeSingle, km: km}
+		idx := vkIndex(cfg.Single)
 		state.vkIdx.Store(&idx)
 		auth := tuiAuth(client, authErr, func() {
 			// A successful sign-in renews the LEFT pod's time-limited unlock:
@@ -198,6 +198,7 @@ func main() {
 		tcfg.Profiles = names
 		tcfg.ProfileIndex = state.idx
 		tcfg.SwitchProfile = state.switchBy
+		tcfg.ToggleMode = state.toggleMode
 		tcfg.Reload = state.reload
 		tcfg.LaunchProgram = state.launchCurrent
 		tcfg.Auth = auth
@@ -219,6 +220,7 @@ func main() {
 				next.Profiles = restoredNames
 				next.ProfileIndex = restoredIdx
 				next.SwitchProfile = state.switchBy
+				next.ToggleMode = state.toggleMode
 				next.Reload = state.reload
 				next.LaunchProgram = state.launchCurrent
 				next.Auth = auth
@@ -256,7 +258,7 @@ func main() {
 	slog.Info("Bluetooth is on — switch on BOTH Click controllers (LEFT and RIGHT); both are connected and kept alive together")
 	launchProfile(cfg)
 
-	km := ble.NewKeyMap(cfg.Bindings)
+	km := ble.NewKeyMap(cfg.Single)
 	if solverFor(client) == nil {
 		slog.Warn("LEFT controller unlock: no Zwift sign-in — only the RIGHT controller is guaranteed to work (press z on the TUI status screen to sign in)")
 	}

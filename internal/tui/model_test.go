@@ -10,11 +10,14 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+
+	"zwiftboard/internal/config"
 )
 
 func testCfg() Config {
 	return Config{
 		Profile:      "test",
+		Mode:         config.ModeSingle,
 		LeftButtons:  []string{"LEFT", "UP", "RIGHT", "DOWN", "MIN"},
 		RightButtons: []string{"Y", "Z", "A", "B", "PLUS"},
 		Bindings:     map[string]string{"A": "a", "B": "b", "PLUS": "+"},
@@ -568,4 +571,57 @@ func TestLogViewShowsScrolledWindow(t *testing.T) {
 	v = m.View()
 	has(t, v, "line18")
 	lacks(t, v, "line19")
+}
+
+// "m" runs the wired toggle in a command, so the render loop never blocks.
+func TestToggleModeKeyRunsCallback(t *testing.T) {
+	calls := 0
+	cfg := testCfg()
+	cfg.ToggleMode = func() { calls++ }
+	_, cmd := New(cfg).Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	if cmd == nil {
+		t.Fatal("m should return a command")
+	}
+	cmd()
+	if calls != 1 {
+		t.Fatalf("toggle ran %d times, want 1", calls)
+	}
+}
+
+// Without a wired toggle "m" does nothing.
+func TestToggleModeKeyInertWithoutCallback(t *testing.T) {
+	_, cmd := New(testCfg()).Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	if cmd != nil {
+		t.Fatal("m without a toggle should return no command")
+	}
+}
+
+// ModeMsg switches the header, the bindings and the status line live, and
+// clears the held-key rows the toggle released.
+func TestModeMsgUpdatesHeaderBindingsAndStatus(t *testing.T) {
+	m := New(testCfg())
+	m.keys = map[string]keyState{"A": {down: true}}
+	bindings := map[string]string{"LEFT": "l", "A": "a"}
+	next, _ := m.Update(ModeMsg{Mode: config.ModeDouble, Bindings: bindings})
+	mm := next.(Model)
+	if mm.cfg.Mode != config.ModeDouble || !reflect.DeepEqual(mm.cfg.Bindings, bindings) {
+		t.Fatalf("mode/bindings not applied: %v %v", mm.cfg.Mode, mm.cfg.Bindings)
+	}
+	if !strings.Contains(mm.header(), "DOUBLE") {
+		t.Errorf("header does not show DOUBLE: %q", mm.header())
+	}
+	if !strings.Contains(mm.status, "double") {
+		t.Errorf("status = %q, want the new mode", mm.status)
+	}
+	if len(mm.keys) != 0 {
+		t.Errorf("held-key rows survived the toggle: %v", mm.keys)
+	}
+}
+
+// A profile switch carries the mode it was applied in.
+func TestProfileMsgCarriesMode(t *testing.T) {
+	next, _ := New(testCfg()).Update(ProfileMsg{Name: "b", Mode: config.ModeDouble, Bindings: map[string]string{"A": "a"}})
+	if got := next.(Model).cfg.Mode; got != config.ModeDouble {
+		t.Fatalf("mode = %q, want double", got)
+	}
 }

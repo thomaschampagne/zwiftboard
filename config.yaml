@@ -54,85 +54,120 @@ loglevel: info
 # Apps checked and excluded: FulGaz (no in-ride keys), Strappo (Apple-only, no
 # Windows build, no keyboard shortcuts), BKOOL (undocumented).
 #
-# BOTH PODS CONNECTED, BOTH PODS MAPPABLE: the Click V2 is a pair and zwiftboard
-# keeps BOTH pods connected — the LEFT pod is the pair's BLE anchor and letting
-# it drop drops the RIGHT pod's link too. Both pods' buttons can be mapped
-# below: the LEFT pod has LEFT UP RIGHT DOWN MIN, the RIGHT pod has Y Z A B
-# PLUS. The app profiles map the LEFT pod's LEFT/UP/RIGHT/DOWN buttons to their
-# basic keys (left/up/right/down), so both controllers can drive the app's
-# steering/navigation; notepad maps both pods fully (the left-pod hardware-test
-# profile). Gear shift lives on the right pod: PLUS = gear down (k), B = gear
-# up (i).
+# BOTH PODS CONNECTED: the Click V2 is a pair and zwiftboard keeps BOTH pods
+# connected — the LEFT pod is the pair's BLE anchor and letting it drop drops
+# the RIGHT pod's link too. Both pods' buttons are mappable: the LEFT pod has
+# LEFT UP RIGHT DOWN MIN, the RIGHT pod has Y Z A B PLUS.
+#
+# MODES (per profile): each profile has two button maps.
+#   single: the RIGHT controller only (Y Z A B PLUS). Default at startup.
+#   double: BOTH controllers (LEFT UP RIGHT DOWN MIN and Y Z A B PLUS).
+# Press m in the status screen to toggle between them. A button that is not in
+# the active map is ignored, so in single mode the LEFT pod does nothing.
+# Gear shift lives on the right pod: PLUS = gear down (k), B = gear up (i).
 profiles:
 
   # Start notepad. Both pods are mapped: the left pod's arrows and minus
   # type l u r d m, the right pod's buttons type a b y z p.
   notepad:
-    LEFT: l           # left pod: arrow left
-    UP: u             # left pod: arrow up
-    RIGHT: r          # left pod: arrow right
-    DOWN: d           # left pod: arrow down
-    MIN: m            # left pod: minus
-    PLUS: p
-    A: a
-    B: b
-    Y: y
-    Z: z
+    single:
+      PLUS: p
+      A: a
+      B: b
+      Y: y
+      Z: z
+    double:
+      LEFT: l           # left pod: arrow left
+      UP: u             # left pod: arrow up
+      RIGHT: r          # left pod: arrow right
+      DOWN: d           # left pod: arrow down
+      MIN: m            # left pod: minus
+      PLUS: p
+      A: a
+      B: b
+      Y: y
+      Z: z
     focusProgramNamePrefixOnClick: "Notepad"
     startProgram: "notepad.exe"
 
   # MyWhoosh: K = gear down (PLUS), I = gear up (B), u = U-turn / minimal UI
   # (Y), right / left steering (A / Z).
   mywhoosh-hd:
-    LEFT: left         # left pod: steer left (both controllers can drive it)
-    RIGHT: right       # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: k            # shift down (easier gear)
-    A: right
-    B: i         # shift up (harder gear)
-    Y: u            # U-turn / minimal UI toggle
-    Z: left
+    single:
+      PLUS: k            # shift down (easier gear)
+      A: right
+      B: i         # shift up (harder gear)
+      Y: u            # U-turn / minimal UI toggle
+      Z: left
+    double:
+      LEFT: left         # left pod: steer left
+      RIGHT: right       # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: k            # shift down (easier gear)
+      A: right
+      B: i         # shift up (harder gear)
+      Y: u            # U-turn / minimal UI toggle
+      Z: left
     focusProgramNamePrefixOnClick: "MyWhooshHD"   # try MyWhoosh to always land in the game
     startProgram: "MyWhooshTechnologyService.MyWhoosh_eps1123pz0kt0!MYWHOOSH" # MS Store App Id (retrieved with powershell cmd: "Get-StartApps | Where-Object Name -like '*whoosh*'")
 
   mywhoosh:
-    LEFT: left         # left pod: steer left (both controllers can drive it)
-    RIGHT: right       # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: k            # shift down (easier gear)
-    A: right
-    B: i         # shift up (harder gear)
-    Y: u            # U-turn / minimal UI toggle
-    Z: left
+    single:
+      PLUS: k            # shift down (easier gear)
+      A: right
+      B: i         # shift up (harder gear)
+      Y: u            # U-turn / minimal UI toggle
+      Z: left
+    double:
+      LEFT: left         # left pod: steer left
+      RIGHT: right       # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: k            # shift down (easier gear)
+      A: right
+      B: i         # shift up (harder gear)
+      Y: u            # U-turn / minimal UI toggle
+      Z: left
     focusProgramNamePrefixOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
     startProgram: "MyWhooshTechnologyService.MyWhoosh_eps1123pz0kt0!MYWHOOSH" # verified MS Store App Id (retrieved with powershell cmd: "Get-StartApps | Where-Object Name -like '*whoosh*'")
 
   # TrainerRoad workout player: (intensity/resistance arrows were on the left pod.)
   trainerroad:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    A: space        # play / pause
-    B: t            # cycle trainer mode (ERG/Resistance/Level)
-    Y: h            # heart-rate graph
-    Z: w            # workout text
+    single:
+      A: space        # play / pause
+      B: t            # cycle trainer mode (ERG/Resistance/Level)
+      Y: h            # heart-rate graph
+      Z: w            # workout text
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      A: space        # play / pause
+      B: t            # cycle trainer mode (ERG/Resistance/Level)
+      Y: h            # heart-rate graph
+      Z: w            # workout text
     focusProgramNamePrefixOnClick: null
 
   # Wahoo SYSTM workout player: ` toggles ERG, digits pick levels 0-9
   # (add e.g. PLUS: 5 for your usual level — none mapped by default).
   # (Intensity up/down arrows were on the left pod.)
   systm:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    A: space        # pause / play
-    B: "`"          # ERG mode toggle
-    Y: m            # mute
-    Z: esc          # close settings menu
+    single:
+      A: space        # pause / play
+      B: "`"          # ERG mode toggle
+      Y: m            # mute
+      Z: esc          # close settings menu
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      A: space        # pause / play
+      B: "`"          # ERG mode toggle
+      Y: m            # mute
+      Z: esc          # close settings menu
     focusProgramNamePrefixOnClick: null
     startProgram: null
 
@@ -140,69 +175,104 @@ profiles:
   # bias (the closest thing to shifting), Y mirrors the Zwift Play's Y
   # power-up button, arrows turn at junctions.
   zwift:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: pagedown   # workout FTP bias down (easier)
-    A: right         # turn right at a junction
-    B: pageup        # workout FTP bias up (harder)
-    Y: space         # activate a power-up
-    Z: left          # turn left at a junction
+    single:
+      PLUS: pagedown   # workout FTP bias down (easier)
+      A: right         # turn right at a junction
+      B: pageup        # workout FTP bias up (harder)
+      Y: space         # activate a power-up
+      Z: left          # turn left at a junction
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: pagedown   # workout FTP bias down (easier)
+      A: right         # turn right at a junction
+      B: pageup        # workout FTP bias up (harder)
+      Y: space         # activate a power-up
+      Z: left          # turn left at a junction
     focusProgramNamePrefixOnClick: "ZwiftApp"   # Zwift's .exe name
 
   # TrainingPeaks Virtual: +/- adjusts base trainer resistance (and workout
   # difficulty), arrows turn, G toggles the power/HR/cadence graph.
   trainingpeaks:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: "-"        # decrease base trainer resistance (easier)
-    A: right         # turn right / tack right
-    B: "="           # increase base trainer resistance (harder)
-    Y: g             # toggle power/HR/cadence graph
-    Z: left          # turn left / tack left
+    single:
+      PLUS: "-"        # decrease base trainer resistance (easier)
+      A: right         # turn right / tack right
+      B: "="           # increase base trainer resistance (harder)
+      Y: g             # toggle power/HR/cadence graph
+      Z: left          # turn left / tack left
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: "-"        # decrease base trainer resistance (easier)
+      A: right         # turn right / tack right
+      B: "="           # increase base trainer resistance (harder)
+      Y: g             # toggle power/HR/cadence graph
+      Z: left          # turn left / tack left
     focusProgramNamePrefixOnClick: null
 
   # Biketerra: W/S shift the virtual drivetrain (official virtual-shifting
   # help), arrows navigate the menu, U toggles the UI.
   biketerra:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: s          # shift to an easier gear
-    A: right         # menu / steer right
-    B: w             # shift to a harder gear
-    Y: u             # toggle the UI
-    Z: left          # menu / steer left
+    single:
+      PLUS: s          # shift to an easier gear
+      A: right         # menu / steer right
+      B: w             # shift to a harder gear
+      Y: u             # toggle the UI
+      Z: left          # menu / steer left
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: s          # shift to an easier gear
+      A: right         # menu / steer right
+      B: w             # shift to a harder gear
+      Y: u             # toggle the UI
+      Z: left          # menu / steer left
     focusProgramNamePrefixOnClick: null   # browser or native app window
 
   # Rouvy: comma/period are the desktop keyboard's default shift keys.
   rouvy:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: ","        # shift down
-    A: right         # turn right at a junction
-    B: "."           # shift up
-    Y: h             # hide interface
-    Z: left          # turn left at a junction
+    single:
+      PLUS: ","        # shift down
+      A: right         # turn right at a junction
+      B: "."           # shift up
+      Y: h             # hide interface
+      Z: left          # turn left at a junction
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: ","        # shift down
+      A: right         # turn right at a junction
+      B: "."           # shift up
+      Y: h             # hide interface
+      Z: left          # turn left at a junction
     focusProgramNamePrefixOnClick: null
 
   # Tacx Training (MS Store): the app's own Settings -> Keyboard Shortcuts
   # screen: arrows change difficulty/views, space pauses. Esc ("Quit
   # Training") is deliberately NOT mapped — one press would end the session.
   tacx:
-    LEFT: left       # left pod: steer left (both controllers can drive it)
-    RIGHT: right     # left pod: steer right (both controllers can drive it)
-    UP: up              # left pod: arrow up (up key)
-    DOWN: down          # left pod: arrow down (down key)
-    PLUS: down       # decrease difficulty
-    A: right         # next training view
-    B: up            # increase difficulty
-    Y: space         # pause / resume training
-    Z: left          # previous training view
+    single:
+      PLUS: down       # decrease difficulty
+      A: right         # next training view
+      B: up            # increase difficulty
+      Y: space         # pause / resume training
+      Z: left          # previous training view
+    double:
+      LEFT: left       # left pod: steer left
+      RIGHT: right     # left pod: steer right
+      UP: up              # left pod: arrow up (up key)
+      DOWN: down          # left pod: arrow down (down key)
+      PLUS: down       # decrease difficulty
+      A: right         # next training view
+      B: up            # increase difficulty
+      Y: space         # pause / resume training
+      Z: left          # previous training view
     focusProgramNamePrefixOnClick: "Tacx"   # window title or TacxTraining.exe

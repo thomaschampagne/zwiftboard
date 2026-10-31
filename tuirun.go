@@ -50,7 +50,8 @@ func nextProfileIndex(n, idx, delta int) int {
 func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath string) tui.Config {
 	return tui.Config{
 		Profile:      cfg.Profile,
-		Bindings:     bindingTokens(cfg.Bindings),
+		Mode:         config.ModeSingle,
+		Bindings:     bindingTokens(cfg.Single),
 		LeftButtons:  zwift.LeftButtons,
 		RightButtons: zwift.RightButtons,
 		Focus:        cfg.FocusProgramNamePrefixOnClick,

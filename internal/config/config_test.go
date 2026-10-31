@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"zwiftboard/internal/keys"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -34,7 +36,7 @@ func TestLoadProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := cfg.Bindings
+	m := cfg.Single
 	if len(m) != 3 {
 		t.Fatalf("got %d bindings, want 3", len(m))
 	}
@@ -49,8 +51,8 @@ func TestLoadProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Bindings) != 1 || cfg.Bindings["A"].VK != 0x41 {
-		t.Errorf("zwift profile wrong: %+v", cfg.Bindings)
+	if len(cfg.Single) != 1 || cfg.Single["A"].VK != 0x41 {
+		t.Errorf("zwift profile wrong: %+v", cfg.Single)
 	}
 }
 
@@ -63,8 +65,8 @@ func TestLoadDefaultProfile(t *testing.T) {
 	if cfg.Profile != DefaultProfile {
 		t.Errorf("profile = %q, want %q", cfg.Profile, DefaultProfile)
 	}
-	if len(cfg.Bindings) != 3 {
-		t.Fatalf("default profile: got %d bindings, want 3", len(cfg.Bindings))
+	if len(cfg.Single) != 3 {
+		t.Fatalf("default profile: got %d bindings, want 3", len(cfg.Single))
 	}
 }
 
@@ -84,8 +86,8 @@ profiles:
 	if cfg.Profile != "zwift" {
 		t.Errorf("profile = %q, want zwift (from defaultProfile)", cfg.Profile)
 	}
-	if _, ok := cfg.Bindings["B"]; !ok {
-		t.Errorf("bindings did not come from zwift: %+v", cfg.Bindings)
+	if _, ok := cfg.Single["B"]; !ok {
+		t.Errorf("bindings did not come from zwift: %+v", cfg.Single)
 	}
 }
 
@@ -231,7 +233,7 @@ profiles:
 	if cfg.StartProgram != `C:\games\MyWhooshHD.exe` {
 		t.Fatalf("got %q", cfg.StartProgram)
 	}
-	if _, ok := cfg.Bindings["STARTPROGRAM"]; ok {
+	if _, ok := cfg.Single["STARTPROGRAM"]; ok {
 		t.Fatal("startProgram treated as a button")
 	}
 }
@@ -284,7 +286,7 @@ func TestLoadMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing file must not error: %v", err)
 	}
-	if !cfg.Missing || cfg.Bindings != nil {
+	if !cfg.Missing || cfg.Single != nil {
 		t.Errorf("want Missing with nil bindings, got %+v", cfg)
 	}
 }
@@ -325,7 +327,7 @@ func TestShippedConfigDefaultProfileResolves(t *testing.T) {
 	if cfg.Profile != "notepad" {
 		t.Errorf("profile = %q, want notepad (shipped defaultProfile)", cfg.Profile)
 	}
-	if len(cfg.Bindings) == 0 {
+	if len(cfg.Single) == 0 {
 		t.Error("shipped default profile has no bindings")
 	}
 }
@@ -339,7 +341,7 @@ func TestShippedConfigProfiles(t *testing.T) {
 			t.Errorf("profile %s: %v", p, err)
 			continue
 		}
-		if len(cfg.Bindings) == 0 {
+		if len(cfg.Single) == 0 {
 			t.Errorf("profile %s: no bindings", p)
 		}
 	}
@@ -375,5 +377,117 @@ func TestProfilesReportsEveryProfile(t *testing.T) {
 	}
 	if len(failed) != 1 || failed[0] != "bad" {
 		t.Fatalf("failed profiles = %v, want [bad]", failed)
+	}
+}
+
+const modesYAML = `
+profiles:
+  notepad:
+    single:
+      A: a
+    double:
+      LEFT: l
+      A: a
+    focusProgramNamePrefixOnClick: Notepad
+    startProgram: notepad.exe
+`
+
+func TestLoadSingleAndDoubleFormat(t *testing.T) {
+	cfg, err := Load(writeConfig(t, modesYAML), "notepad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Single) != 1 || cfg.Single["A"].Token != "a" {
+		t.Errorf("single = %+v, want only A", cfg.Single)
+	}
+	if len(cfg.Double) != 2 || cfg.Double["LEFT"].Token != "l" {
+		t.Errorf("double = %+v, want LEFT and A", cfg.Double)
+	}
+	if cfg.FocusProgramNamePrefixOnClick != "Notepad" || cfg.StartProgram != "notepad.exe" {
+		t.Errorf("profile options not read beside single/double: %+v", cfg)
+	}
+}
+
+// A flat profile is the legacy format: it loads as single unchanged, and double
+// is a copy so the profile still works after a toggle.
+func TestLoadLegacyFlatFormatIsSingle(t *testing.T) {
+	cfg, err := Load(writeConfig(t, profilesYAML), "mywhoosh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Single) != 3 || cfg.Single["LEFT"].Token != "left" {
+		t.Errorf("legacy single = %+v, want the flat mapping", cfg.Single)
+	}
+	if len(cfg.Double) != len(cfg.Single) || cfg.Double["PLUS"].Token != "pageup" {
+		t.Errorf("legacy double = %+v, want a copy of single", cfg.Double)
+	}
+}
+
+func TestLoadLegacyFlatFormatKeepsProfileOptions(t *testing.T) {
+	cfg, err := Load(writeConfig(t, "profiles:\n  a:\n    A: a\n    startProgram: x.exe\n"), "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.StartProgram != "x.exe" || len(cfg.Single) != 1 {
+		t.Errorf("legacy options lost: %+v", cfg)
+	}
+}
+
+func TestLoadSingleRejectsLeftButton(t *testing.T) {
+	body := "profiles:\n  a:\n    single:\n      LEFT: left\n    double:\n      LEFT: left\n"
+	_, err := Load(writeConfig(t, body), "a")
+	if err == nil || !strings.Contains(err.Error(), "left-controller button") {
+		t.Fatalf("err = %v, want a left-controller error", err)
+	}
+}
+
+func TestLoadNewFormatNeedsBothModes(t *testing.T) {
+	cases := map[string]string{
+		"missing double": "profiles:\n  a:\n    single:\n      A: a\n",
+		"missing single": "profiles:\n  a:\n    double:\n      A: a\n",
+		"null double":    "profiles:\n  a:\n    single:\n      A: a\n    double:\n",
+		"scalar single":  "profiles:\n  a:\n    single: A\n    double:\n      A: a\n",
+		"unknown key":    "profiles:\n  a:\n    single:\n      A: a\n    double:\n      A: a\n    dobule: {}\n",
+		"bad button":     "profiles:\n  a:\n    single:\n      NOPE: a\n    double:\n      A: a\n",
+		"bad token":      "profiles:\n  a:\n    single:\n      A: notakey\n    double:\n      A: a\n",
+		"bad option":     "profiles:\n  a:\n    single:\n      A: a\n    double:\n      A: a\n    startProgram: [x]\n",
+	}
+	for name, body := range cases {
+		if _, err := Load(writeConfig(t, body), "a"); err == nil {
+			t.Errorf("%s: Load succeeded, want an error", name)
+		}
+	}
+}
+
+func TestLoadMissingDoubleNamesTheMode(t *testing.T) {
+	_, err := Load(writeConfig(t, "profiles:\n  a:\n    single:\n      A: a\n"), "a")
+	if err == nil || !strings.Contains(err.Error(), "missing double") {
+		t.Fatalf("err = %v, want a message naming double", err)
+	}
+}
+
+func TestLoadRejectsOversizedFile(t *testing.T) {
+	path := writeConfig(t, strings.Repeat("#", maxConfigBytes+1))
+	if _, err := Load(path, "a"); err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("err = %v, want a size error", err)
+	}
+}
+
+func TestModeToggle(t *testing.T) {
+	if got := ModeSingle.Toggle(); got != ModeDouble {
+		t.Errorf("single toggles to %q, want double", got)
+	}
+	if got := ModeDouble.Toggle(); got != ModeSingle {
+		t.Errorf("double toggles to %q, want single", got)
+	}
+}
+
+func TestMappingSelectsTheModeMap(t *testing.T) {
+	cfg := Config{Single: map[string]keys.Binding{"A": {Token: "a"}}, Double: map[string]keys.Binding{"LEFT": {Token: "l"}}}
+	if _, ok := cfg.Mapping(ModeSingle)["A"]; !ok {
+		t.Error("single mode should use the single map")
+	}
+	if _, ok := cfg.Mapping(ModeDouble)["LEFT"]; !ok {
+		t.Error("double mode should use the double map")
 	}
 }

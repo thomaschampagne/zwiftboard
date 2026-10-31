@@ -150,7 +150,7 @@ func TestSwitchByErrorKeepsState(t *testing.T) {
 func TestReloadAppliesEditsWithSingleProfile(t *testing.T) {
 	path := writeProfileConfig(t, "profiles:\n  a:\n    A: space\n")
 	km := ble.NewKeyMap(map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}})
-	cur := config.Config{Profile: "a", Bindings: map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}}}
+	cur := config.Config{Profile: "a", Single: map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}}}
 	s := &profileState{path: path, names: []string{"a"}, idx: 0, cur: cur, km: km}
 	s.vkIdx.Store(&map[uint16][]string{})
 
@@ -171,7 +171,7 @@ func TestReloadAppliesEditsWithSingleProfile(t *testing.T) {
 func TestReloadErrorKeepsState(t *testing.T) {
 	path := writeProfileConfig(t, "profiles:\n  a:\n    A: space\n")
 	km := ble.NewKeyMap(map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}})
-	cur := config.Config{Profile: "a", Bindings: map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}}}
+	cur := config.Config{Profile: "a", Single: map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}}}
 	s := &profileState{path: path, names: []string{"a"}, idx: 0, cur: cur, km: km}
 	s.vkIdx.Store(&map[uint16][]string{})
 	if err := os.WriteFile(path, []byte("::not: yaml: ["), 0o644); err != nil {
