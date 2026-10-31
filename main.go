@@ -160,7 +160,7 @@ func main() {
 
 	// The Zwift session lives beside config.yml. A missing or rejected token
 	// only costs the LEFT pod: everything else works without it, and the TUI
-	// offers sign-in on demand via the status-screen "z" (or when the session expired).
+	// offers sign-in on demand via the status-screen "ctrl+z" (or when the session expired).
 	var client *unlock.Client
 	var authErr error
 	if !*demo {
@@ -170,9 +170,9 @@ func main() {
 		case authErr == nil:
 			slog.Info("Zwift sign-in found — the LEFT controller's time-limited unlock will be renewed")
 		case errors.Is(authErr, unlock.ErrNoToken):
-			slog.Info("no Zwift sign-in yet — the LEFT controller's time-limited unlock cannot be renewed until you sign in; press z to sign in")
+			slog.Info("no Zwift sign-in yet — the LEFT controller's time-limited unlock cannot be renewed until you sign in; press ctrl+z to sign in")
 		default:
-			slog.Warn("Zwift sign-in file unreadable — press z to sign in again", "error", authErr)
+			slog.Warn("Zwift sign-in file unreadable — press ctrl+z to sign in again", "error", authErr)
 		}
 	}
 
@@ -228,7 +228,7 @@ func main() {
 			}
 		}
 		// No start-up gate: the screen opens immediately and sign-in is
-		// always on-demand via "z". BLE starts right away with the current
+		// always on-demand via "ctrl+z". BLE starts right away with the current
 		// solver (nil without a stored session, the client once signed in).
 		runTUI(tcfg, func(p *tea.Program) {
 			state.mu.Lock()
@@ -260,7 +260,7 @@ func main() {
 
 	km := ble.NewKeyMap(cfg.Single)
 	if solverFor(client) == nil {
-		slog.Warn("LEFT controller unlock: no Zwift sign-in — only the RIGHT controller is guaranteed to work (press z on the TUI status screen to sign in)")
+		slog.Warn("LEFT controller unlock: no Zwift sign-in — only the RIGHT controller is guaranteed to work (press ctrl+z on the TUI status screen to sign in)")
 	}
 	startListening(km, scanFor, ble.ReconnectWindow, func() ble.ChallengeSolver {
 		return solverFor(client)

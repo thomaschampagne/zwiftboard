@@ -154,7 +154,7 @@ func TestViewLogPanel(t *testing.T) {
 	cfg.Logs = logs
 	m := on(cfg, PodConnected, PodConnected)
 	lacks(t, m.View(), "hello-from-slog")
-	has(t, m.View(), "l logs")
+	has(t, m.View(), "ctrl+l logs")
 	m.showLogs = true
 	has(t, m.View(), "hello-from-slog", "Logs")
 }
@@ -208,8 +208,8 @@ func TestViewLogPanelWiderThanCards(t *testing.T) {
 }
 
 func TestViewFooterOpenConfigHint(t *testing.T) {
-	has(t, on(openCfg(func() error { return nil }), PodConnected, PodConnected).View(), "e edit config")
-	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "edit config")
+	has(t, on(openCfg(func() error { return nil }), PodConnected, PodConnected).View(), "ctrl+e edit")
+	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "edit")
 }
 
 func TestViewFooterProfileSwitchHint(t *testing.T) {
@@ -233,23 +233,23 @@ func TestViewFooterActionHints(t *testing.T) {
 	cfg.LaunchProgram = func() error { return nil }
 	cfg.StartProgram = "MyWhooshHD.exe"
 	v := on(cfg, PodConnected, PodConnected).View()
-	has(t, v, "r reload config", "s start program")
+	has(t, v, "ctrl+r reload", "ctrl+s start")
 
 	// The reload hint is hidden without the callback, the start hint without a
 	// program on the active profile.
-	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "reload config", "start program")
+	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "ctrl+r reload", "ctrl+s start")
 	cfg.StartProgram = ""
-	lacks(t, on(cfg, PodConnected, PodConnected).View(), "start program")
+	lacks(t, on(cfg, PodConnected, PodConnected).View(), "ctrl+s start")
 }
 
 func TestViewFooterSignInHint(t *testing.T) {
-	// A wired login advertises the "z" sign-in shortcut in the footer.
+	// A wired login advertises the "ctrl+z" sign-in shortcut in the footer.
 	auth := testCfg()
 	auth.Auth = AuthConfig{Login: func(string, string) error { return nil }}
-	has(t, on(auth, PodConnected, PodConnected).View(), "z sign in")
+	has(t, on(auth, PodConnected, PodConnected).View(), "ctrl+z sign in")
 
 	// No login wired (demo): the shortcut is inert, so the footer hides it.
-	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "z sign in")
+	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "ctrl+z sign in")
 }
 
 // The header carries the four-dot pod mark in front of the title, all on one
@@ -526,16 +526,16 @@ func TestViewHeaderShowsModeBetweenTitleAndProfile(t *testing.T) {
 	}
 }
 
-// The footer advertises "m" only when toggling is wired.
+// The footer advertises "ctrl+m" only when toggling is wired.
 func TestViewFooterToggleModeHint(t *testing.T) {
 	cfg := testCfg()
 	cfg.ToggleMode = func() {}
-	has(t, on(cfg, PodConnected, PodConnected).View(), "m Toggle mode")
-	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "Toggle mode")
+	has(t, on(cfg, PodConnected, PodConnected).View(), "ctrl+m mode")
+	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "ctrl+m mode")
 }
 
-// The full footer (every shortcut wired) fits inside the widest card, so it
-// never wraps past the panels.
+// The full footer (every shortcut wired) wraps inside the card width, so no
+// line runs past the panels and no shortcut is dropped.
 func TestViewFooterFitsCardWidth(t *testing.T) {
 	cfg := doubleCfg()
 	cfg.OpenConfig = func() error { return nil }
@@ -548,7 +548,15 @@ func TestViewFooterFitsCardWidth(t *testing.T) {
 	cfg.ToggleMode = func() {}
 	m := on(cfg, PodConnected, PodConnected)
 	m.width = 300
-	if w := ansi.StringWidth(m.footer()); w > m.innerWidth() {
-		t.Fatalf("footer is %d cells, card inner width is %d", w, m.innerWidth())
+	footer := m.footer()
+	if strings.Contains(footer, "\n") {
+		t.Fatalf("full footer should stay on one line at %d cells:\n%s", m.innerWidth(), footer)
 	}
+	for _, line := range strings.Split(footer, "\n") {
+		if w := ansi.StringWidth(line); w > m.innerWidth() {
+			t.Fatalf("footer line is %d cells, card inner width is %d", w, m.innerWidth())
+		}
+	}
+	has(t, m.View(), "ctrl+l logs", "ctrl+e edit", "ctrl+r reload", "ctrl+s start",
+		"ctrl+←/→ switch profile", "ctrl+z sign in", "ctrl+q quit")
 }
