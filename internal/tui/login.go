@@ -97,6 +97,10 @@ func (m Model) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.authMoveCaret(m.auth.focus, -1)
 	case "right":
 		m.authMoveCaret(m.auth.focus, 1)
+	case "home":
+		m.authJumpCaret(m.auth.focus, false)
+	case "end":
+		m.authJumpCaret(m.auth.focus, true)
 	case "backspace":
 		m.authDeleteBefore(m.auth.focus)
 	case "delete":
@@ -202,6 +206,16 @@ func (m *Model) authMoveCaret(f int, delta int) {
 	}
 	if delta > 0 && caret < n {
 		caret++
+	}
+	m.authSetField(f, text, caret)
+}
+
+// authJumpCaret moves the caret of field f to its start, or past its last rune.
+func (m *Model) authJumpCaret(f int, toEnd bool) {
+	text, _ := m.authCaretField(f)
+	caret := 0
+	if toEnd {
+		caret = utf8.RuneCountInString(text)
 	}
 	m.authSetField(f, text, caret)
 }

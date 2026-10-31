@@ -415,6 +415,29 @@ func TestCaretFocusedCellEmptyFieldLandsInValueArea(t *testing.T) {
 	}
 }
 
+func TestAuthHomeEndMoveCaretToFieldBounds(t *testing.T) {
+	m := authForm(t, &AuthConfig{State: AuthPrompt})
+	m = typeText(m, "abc")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+	m = next.(Model)
+	if m.auth.emailCaret != 0 {
+		t.Fatalf("home caret = %d, want 0", m.auth.emailCaret)
+	}
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
+	m = next.(Model)
+	if m.auth.emailCaret != 3 {
+		t.Fatalf("end caret = %d, want 3", m.auth.emailCaret)
+	}
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m = next.(Model)
+	m = typeText(m, "xy")
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+	m = next.(Model)
+	if m.auth.passwordCaret != 0 || m.auth.emailCaret != 3 {
+		t.Fatalf("home must move only the focused field: password=%d email=%d", m.auth.passwordCaret, m.auth.emailCaret)
+	}
+}
+
 func TestCaretCursorsMoveOneCellPerArrowAtBothBoundaries(t *testing.T) {
 	// Each arrow press must shift the block cursor exactly one cell at BOTH
 	// boundaries: the old under-index clamp mapped offset n-1 and n onto the
