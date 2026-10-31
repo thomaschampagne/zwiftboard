@@ -19,6 +19,7 @@ Zwift locks the Click V2 to its own app. `zwiftboard` frees it: connect over Blu
 - **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
 - **One pod or two** - the right pod alone by default, or both pods with `m`.
 - **Free and open source** - no subscription, no paid tier. The right pod needs no account.
+- **Starts your app for you** - each profile can launch its cycling app once Bluetooth is up, so one double-click on `zwiftboard.exe` opens the whole setup. See [Start a program with a profile](#start-a-program-with-a-profile).
 - **Clicks land in the right window** - optionally bring your app to the front before every key, so a press never goes to the wrong window.
 - **Windows, Zwift Click V2** - the pair this tool is built for.
 
@@ -79,6 +80,8 @@ Manual downloads remain available on the [Releases](../../releases) page.
    time=... level=INFO msg="key mapping" button=PLUS key=k
    time=... level=INFO msg=button controller=zwift/86:04 button=PLUS state=pressed key=k
    ```
+
+If the profile sets `startProgram`, zwiftboard also launches that app once Bluetooth is up (see [Start a program with a profile](#start-a-program-with-a-profile)).
 
 Press a button during a scan burst to wake a controller. Scanning never gives
 up: a controller switched on 10 minutes later still gets picked up.
