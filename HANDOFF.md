@@ -36,7 +36,7 @@ findings that already exist on the branch.
   profile level. Legacy flat profiles load as `single` (right-pod buttons only; all buttons
   in `double`) and log a warning. A left-pod button under `single:` is an error.
   Config files over 1 MiB are refused.
-- **Mode** — `config.Mode` (`single`/`double`), default `single`, set on the
+- **Mode** — `config.Mode` (`single`/`double`), default `double` (startup), set on the
   shared `profileState` (`profile.go`). The `m` key (`toggleModeKey` in
   `internal/tui/model.go`) toggles it; the KeyMap swaps to the other map and
   held keys are released. The mode survives profile switches.
