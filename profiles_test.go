@@ -167,7 +167,7 @@ func TestAppProfilesMapBothPods(t *testing.T) {
 		var wantRight map[string]string
 		switch name {
 		case "mywhoosh", "mywhoosh-hd":
-			wantRight = map[string]string{"PLUS": "k", "A": "right", "B": "i", "Y": "u", "Z": "left"}
+			wantRight = map[string]string{"PLUS": "i", "A": "right", "B": "k", "Y": "u", "Z": "left"}
 		case "trainerroad":
 			wantRight = map[string]string{"A": "space", "B": "t", "Y": "h", "Z": "w"}
 		case "systm":
@@ -219,6 +219,39 @@ func TestShippedProfilesSplitIntoModes(t *testing.T) {
 			if _, ok := cfg.Double[btn]; !ok {
 				t.Errorf("profile %s: %s is in single but not double", name, btn)
 			}
+		}
+	}
+}
+
+// shiftKeys is the double-mode shift pair per profile: PLUS shifts down (easier)
+// and the left pod's MIN shifts up (harder). Programs with no keyboard gear key
+// use the closest documented effort or resistance key, noted per entry.
+var shiftKeys = map[string][2]string{
+	"mywhoosh":      {"i", "k"},             // MyWhoosh: I shifts down, K shifts up
+	"mywhoosh-hd":   {"i", "k"},             // same keys as mywhoosh
+	"biketerra":     {"s", "w"},             // Biketerra: W/S shift; direction per the GearPad guide
+	"rouvy":         {",", "."},             // Rouvy: comma shifts down, period shifts up
+	"trainingpeaks": {"-", "="},             // TrainingPeaks Virtual: - and = change base resistance
+	"zwift":         {"pagedown", "pageup"}, // Zwift has no keyboard gear key: workout FTP bias
+	"tacx":          {"down", "up"},         // Tacx: difficulty, no keyboard gear key on routes
+	"trainerroad":   {"left", "right"},      // TrainerRoad: resistance level arrows
+}
+
+// TestDoubleModeShiftKeys: in double mode PLUS shifts down and MIN shifts up
+// in every program that has a gear (or stand-in) key.
+func TestDoubleModeShiftKeys(t *testing.T) {
+	path := writeDefaultConfig(t)
+	for name, want := range shiftKeys {
+		cfg, err := config.Load(path, name)
+		if err != nil {
+			t.Errorf("profile %s: %v", name, err)
+			continue
+		}
+		if got := cfg.Double["PLUS"].Token; got != want[0] {
+			t.Errorf("profile %s: PLUS (shift down) = %q, want %q", name, got, want[0])
+		}
+		if got := cfg.Double["MIN"].Token; got != want[1] {
+			t.Errorf("profile %s: MIN (shift up) = %q, want %q", name, got, want[1])
 		}
 	}
 }
