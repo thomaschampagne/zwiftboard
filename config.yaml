@@ -60,9 +60,9 @@ loglevel: info
 # LEFT UP RIGHT DOWN MIN, the RIGHT pod has Y Z A B PLUS.
 #
 # MODES (per profile): each profile has two button maps.
-#   single: the RIGHT controller only (Y Z A B PLUS). Default at startup.
-#   double: BOTH controllers (LEFT UP RIGHT DOWN MIN and Y Z A B PLUS).
-# Press m in the status screen to toggle between them. A button that is not in
+#   single: the RIGHT controller only (Y Z A B PLUS).
+#   double: BOTH controllers (LEFT UP RIGHT DOWN MIN and Y Z A B PLUS). Default at startup.
+# Press ctrl+m in the status screen to toggle between them. A button that is not in
 # the active map is ignored, so in single mode the LEFT pod does nothing.
 # Gear shift: PLUS = shift down; B (right pod) and MIN (left pod) = shift up.
 profiles:

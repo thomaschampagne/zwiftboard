@@ -67,7 +67,7 @@ Manual downloads remain available on the [Releases](../../releases) page.
    form — only the RIGHT controller works normally then, and the warning
    stays on the screen. The prompt comes back on the next launch until you
    sign in.
-4. **Run it** and press a button on each controller while it scans to wake them. Single mode uses the **RIGHT** pod. Press `ctrl+m` to add the LEFT pod:
+4. **Run it** and press a button on each controller while it scans to wake them. Double mode (both pods) is the startup mode; press `ctrl+m` to switch to single mode (RIGHT pod only):
 
    ```
    zwiftboard.exe                 # startup profile: `defaultProfile:` from the config (ships as notepad)
@@ -99,7 +99,7 @@ defaultProfile: notepad # profile used when -p is not passed; must exist
 
 profiles:
   mywhoosh: # pick with -p mywhoosh
-    single: # right controller only (the startup mode)
+    single: # right controller only
       PLUS: i # gear down
       A: right # steer right
       B: k # gear up
@@ -141,7 +141,7 @@ exception: it must already exist and is a fatal error if it doesn't.
 
 Each profile has two button maps:
 
-- `single:` — the **right** controller only (`Y Z A B PLUS`). This is the mode at startup.
+- `single:` — the **right** controller only (`Y Z A B PLUS`).
 - `double:` — **both** controllers: the left pod's `LEFT UP RIGHT DOWN MIN` plus the right pod's buttons.
 
 Press `ctrl+m` on the status screen to switch between them. The mode is shown in the
