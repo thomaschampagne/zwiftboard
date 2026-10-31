@@ -17,9 +17,9 @@ Zwift Click V2 is an inexpensive wireless BLE controller pair but Zwift locks it
 
 > **Both pods can fire keys.** The Click V2 is a pair and zwiftboard keeps
 > _both_ pods connected. The shipped profiles map the RIGHT pod's buttons
-> (`Y` `Z` `A` `B` `PLUS`); the LEFT pod's buttons (`LEFT` `UP` `RIGHT`
-> `DOWN` `MIN`) can be mapped too — the shipped `notepad` profile does, so the
-> left pod's arrows and minus are usable.
+> (`Y` `Z` `A` `B` `PLUS`) in single mode. The LEFT pod's buttons (`LEFT` `UP`
+> `RIGHT` `DOWN` `MIN`) join them in double mode, toggled with `m`; the shipped
+> `notepad` profile maps both pods in double mode.
 
 - **Any program works** - MyWhoosh (with shifting, steering, cameras, ...), Zwift, TrainingPeaks Virtual, Biketerra, Rouvy, Tacx Training, TrainerRoad, Wahoo SYSTM, or any executable you can map.
 - **RIGHT pod needs no account** - it works out of the box. The LEFT pod's time-limited Zwift unlock is renewed for you after a one-time sign-in via the status screen's `z`: your email and password are used once and never stored, only the resulting session token sits beside `config.yml`.
@@ -102,16 +102,31 @@ defaultProfile: notepad # profile used when -p is not passed; must exist
 
 profiles:
   mywhoosh: # pick with -p mywhoosh
-    PLUS: k # gear down
-    A: right # steer right
-    B: i # gear up
-    Y: u # U-turn / minimal UI
-    Z: left # steer left
+    single: # right controller only (the startup mode)
+      PLUS: k # gear down
+      A: right # steer right
+      B: i # gear up
+      Y: u # U-turn / minimal UI
+      Z: left # steer left
+    double: # both controllers (press m to switch)
+      LEFT: left # left controller: steer left
+      RIGHT: right # left controller: steer right
+      UP: up # left controller: arrow up
+      DOWN: down # left controller: arrow down
+      PLUS: k
+      A: right
+      B: i
+      Y: u
+      Z: left
 
   my-zwift-setup: # add your own — any name works
-    focusProgramNamePrefixOnClick: ZwiftApp
-    A: space
-    B: esc
+    focusProgramNamePrefixOnClick: ZwiftApp # per profile, beside single/double
+    single:
+      A: space
+      B: esc
+    double:
+      A: space
+      B: esc
 ```
 
 **Key tokens:** `a-z`, `0-9`, `f1`–`f12`, named keys
@@ -123,6 +138,24 @@ above).
 If the default config can't be created or read, zwiftboard still runs and logs
 every press — you just don't get keystrokes. An explicit `-config` is the
 exception: it must already exist and is a fatal error if it doesn't.
+
+### Controller modes
+
+Each profile has two button maps:
+
+- `single:` — the **right** controller only (`Y Z A B PLUS`). This is the mode at startup.
+- `double:` — **both** controllers: the left pod's `LEFT UP RIGHT DOWN MIN` plus the right pod's buttons.
+
+Press `m` on the status screen to switch between them. The mode is shown in the
+header (`SINGLE` / `DOUBLE`), and the Keys Bindings panel lists only the buttons of
+the active mode. The mode stays the same when you switch profile. A button that
+is not in the active map is ignored, so in single mode the left pod does nothing.
+
+Both maps are required in every profile. A profile written in the old format (its
+buttons directly under the profile name, with no `single:`/`double:`) still loads:
+it is treated as `single`, zwiftboard logs a warning, and `double` is a copy of it.
+To migrate, move the buttons under `single:` and add a `double:` map. A left-pod
+button under `single:` is an error.
 
 ### Focus a program on click
 
@@ -200,6 +233,7 @@ sequences (kitty/CSI-u); the `ctrl+n` / `ctrl+p` fallbacks work everywhere.
 
 - `r` — reload `config.yaml` and apply it to the current profile live (no
   restart, no BLE reconnect; `loglevel:` still needs a restart);
+- `m` — **Toggle mode**: switch the current profile between `single` and `double`;
 - `s` — start the current profile's `startProgram` again (e.g. after you closed
   it); hidden when the profile has no `startProgram`;
 - `l` — show/hide the log panel (`k`/`j` or the mouse wheel scroll it);
@@ -237,7 +271,7 @@ zwiftboard [flags]
 | `tacx`          | `+`/`B` difficulty down/up, `A`/`Z` next/previous screen, `Y` pause                                   | [Tacx keyboard shortcuts](https://support.garmin.com/en-US/?faq=aFNaNhVBpF1wKTKB40LYg7)                                                                 |
 | `notepad`       | `+ p`, `A a`, `B b`, `Y y`, `Z z`, plus the left pod's `LEFT l`, `UP u`, `RIGHT r`, `DOWN d`, `MIN m` | focuses `Notepad` and starts it — the shipped default                                                                                                   |
 
-App profiles (`mywhoosh`, `mywhoosh-hd`, `trainerroad`, `systm`, `zwift`, `trainingpeaks`, `biketerra`, `rouvy`, `tacx`) also map the LEFT pod's `LEFT`/`RIGHT` steering buttons (`left`/`right`), so any configured profile (not just `notepad`) can send steering keys through either of the pair's controllers. `notepad` remains the full two-pod profile: it maps every left-pod button too.
+App profiles (`mywhoosh`, `mywhoosh-hd`, `trainerroad`, `systm`, `zwift`, `trainingpeaks`, `biketerra`, `rouvy`, `tacx`) also map the LEFT pod's `LEFT`/`RIGHT` steering buttons (`left`/`right`) under `double:`, so press `m` to let the left controller steer. In single mode they keep only the right controller's buttons. `notepad` remains the full two-pod profile: its `double:` map includes every left-pod button too.
 
 ## How it works
 
