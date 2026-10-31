@@ -522,7 +522,7 @@ func TestViewHeaderShowsModeBetweenTitleAndProfile(t *testing.T) {
 	h := on(cfg, PodConnected, PodConnected).header()
 	title, mode, profile := strings.Index(h, "zwiftboard"), strings.Index(h, "DOUBLE"), strings.Index(h, "MyProfile")
 	if title < 0 || mode < 0 || profile < 0 || title >= mode || mode >= profile {
-		t.Fatalf("header want zwiftboard, DOUBLE, MyProfile in order: %q", h)
+		t.Fatalf("header want zwiftboard, Mode: DOUBLE, MyProfile in order: %q", h)
 	}
 }
 

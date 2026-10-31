@@ -28,17 +28,20 @@ var (
 	cDotRight  = lipgloss.Color("42")
 	cDotBottom = lipgloss.Color("201")
 
-	sTitle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	sMuted   = lipgloss.NewStyle().Foreground(cMuted)
-	sOK      = lipgloss.NewStyle().Foreground(cOK)
-	sWarn    = lipgloss.NewStyle().Foreground(cWarn)
-	sBad     = lipgloss.NewStyle().Foreground(cBad)
-	sBold    = lipgloss.NewStyle().Bold(true)
-	sKeycap  = lipgloss.NewStyle().Background(cCap).Padding(0, 1)
-	sDown    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
-	sHold    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
-	sChip    = lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(cAccent).Padding(0, 1)
-	sKeyHint = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	sTitle  = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	sMuted  = lipgloss.NewStyle().Foreground(cMuted)
+	sOK     = lipgloss.NewStyle().Foreground(cOK)
+	sWarn   = lipgloss.NewStyle().Foreground(cWarn)
+	sBad    = lipgloss.NewStyle().Foreground(cBad)
+	sBold   = lipgloss.NewStyle().Bold(true)
+	sKeycap = lipgloss.NewStyle().Background(cCap).Padding(0, 1)
+	sDown   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cOK).Padding(0, 1)
+	sHold   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cWarn).Padding(0, 1)
+	sChip   = lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(cAccent).Padding(0, 1)
+	// sModeChip marks the controller mode in the header, in the magenta of the
+	// logo's bottom dot so it stands apart from the blue profile chip.
+	sModeChip = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("16")).Background(cDotBottom).Padding(0, 1)
+	sKeyHint  = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	// sReleased gets the same Padding(0,1) as sDown/sHold so "○ released"
 	// fills the same 12-column status cell as the other two states.
 	sReleased = lipgloss.NewStyle().Foreground(cMuted).Padding(0, 1)
@@ -190,7 +193,7 @@ func podLogo() string {
 func (m Model) header() string {
 	title := sTitle.Render("zwiftboard")
 	if m.cfg.Mode != "" {
-		title += "  " + sChipOK.Render(strings.ToUpper(string(m.cfg.Mode)))
+		title += "  " + sModeChip.Render("Mode: "+strings.ToUpper(string(m.cfg.Mode)))
 	}
 
 	profile := m.cfg.Profile

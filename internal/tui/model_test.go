@@ -607,8 +607,8 @@ func TestModeMsgUpdatesHeaderBindingsAndStatus(t *testing.T) {
 	if mm.cfg.Mode != config.ModeDouble || !reflect.DeepEqual(mm.cfg.Bindings, bindings) {
 		t.Fatalf("mode/bindings not applied: %v %v", mm.cfg.Mode, mm.cfg.Bindings)
 	}
-	if !strings.Contains(mm.header(), "DOUBLE") {
-		t.Errorf("header does not show DOUBLE: %q", mm.header())
+	if !strings.Contains(mm.header(), "Mode: DOUBLE") {
+		t.Errorf("header does not show Mode: DOUBLE: %q", mm.header())
 	}
 	if !strings.Contains(mm.status, "double") {
 		t.Errorf("status = %q, want the new mode", mm.status)
