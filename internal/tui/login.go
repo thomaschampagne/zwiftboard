@@ -7,6 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"zwiftboard/internal/config"
 )
 
 // AuthState is the runtime sign-in form state. The form opens on demand
@@ -494,8 +496,14 @@ func maskPassword(s string) string {
 
 // authAlert is the persistent status-screen notice for a no-token start: the
 // RIGHT pod is unaffected, the LEFT pod's button engine will stop once its
-// unlock expires.
+// unlock expires. It is shown only in double mode: there both controllers must
+// keep working and a no-sign-in start works fine until the LEFT unlock dies, so
+// the warning is useful. In single mode the RIGHT alone carries the load, so it
+// stays off.
 func (m Model) authAlert() string {
+	if m.cfg.Mode != config.ModeDouble {
+		return ""
+	}
 	if m.auth.notice == "" {
 		return ""
 	}

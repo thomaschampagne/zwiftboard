@@ -7,6 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"zwiftboard/internal/config"
 )
 
 // authForm builds a model whose sign-in config is cfg (runtime form: no
@@ -112,16 +114,38 @@ func TestAuthSignInSuccessShowsStatusAndClearsNotice(t *testing.T) {
 	}
 }
 
-func TestAuthNoticeIsVisibleAndDoesNotGate(t *testing.T) {
+// No-sign-in is a single-mode card: the RIGHT alone carries the load, so it is
+// off there and ctrl+c must still quit over it.
+func TestAuthNoticeIsOffInSingleMode(t *testing.T) {
 	m := authForm(t, &AuthConfig{
 		State:  AuthNone,
 		Notice: "The LEFT controller works only while its current unlock lasts (a few days).",
 	})
-	if m.authGate() {
-		t.Fatal("a no-token notice must not own the keyboard")
+	lacks(t, m.View(), "NO SIGN-IN", "the nag card stays off in single mode")
+	if a := m.authAlert(); a != "" {
+		t.Fatalf("authAlert = %q, want empty in single mode", a)
 	}
+	if _, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd == nil {
+		t.Fatal("ctrl+c must still quit with the nag card")
+	}
+}
+
+// in double mode the card is the one thing a no-token start shows.
+func TestAuthNoticeVisibleInDoubleMode(t *testing.T) {
+	m := authForm(t, &AuthConfig{
+		State:  AuthNone,
+		Notice: "The LEFT controller works only while its current unlock lasts (a few days).",
+	})
+	m.cfg.Mode = config.ModeDouble
 	has(t, m.View(), "NO SIGN-IN", "LEFT unlock not renewable", "a few days",
 		"Press ctrl+z to sign in", "the RIGHT controller always works")
+	if m.authAlert() == "" {
+		t.Fatal("double mode must show the nag card")
+	}
+	// The card never gates the screen.
+	if m.authGate() {
+		t.Fatal("the card must not own the keyboard")
+	}
 }
 
 func TestAuthNoticeKeepsStatusShortcuts(t *testing.T) {
