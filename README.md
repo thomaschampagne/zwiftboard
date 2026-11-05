@@ -11,16 +11,16 @@
   </p>
 </div>
 
-**Shift gears, steer and pause from your Click V2, in the cycling app you already use.**
+**Make your Zwift Click V2 act as a computer keyboard to shift gears & steer in any cycling apps.**
 
 Zwift locks the Click V2 to its own app. `zwiftboard` frees it: connect over Bluetooth, press a button, and it **types the keys your app already understands**. Gear up, gear down, steer, pause, change view.
 
-- **Real gear shifting** - `PLUS` shifts down, and the left pod's `MIN` shifts up in double mode. Same rule in every profile.
-- **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
-- **One pod or two** - the right pod alone by default, or both pods with `ctrl+m`.
+- **One pod or two** - Both controllers or right only works out of the box.
+- **No Unlock Tricks** - No need to start Zwift App to unlock controllers. Everything is done for you automatically.
 - **Free and open source** - no subscription, no paid tier. The right pod needs no account.
 - **Starts your app for you** - each profile can launch its cycling app once Bluetooth is up, so one double-click on `zwiftboard.exe` opens the whole setup. See [Start a program with a profile](#start-a-program-with-a-profile).
 - **Clicks land in the right window** - optionally bring your app to the front before every key, so a press never goes to the wrong window.
+- **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
 - **Windows, Zwift Click V2** - the pair this tool is built for.
 
 ---
