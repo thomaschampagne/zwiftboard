@@ -94,42 +94,42 @@ profiles:
   # (Y), right / left steering (A / Z).
   mywhoosh-hd:
     single:
-      PLUS: i            # shift down (easier gear)
+      PLUS: i             # shift down (easier gear)
       A: right
-      B: k         # shift up (harder gear)
-      Y: u            # U-turn / minimal UI toggle
+      B: k                # shift up (harder gear)
+      Y: u                # U-turn / minimal UI toggle
       Z: left
     double:
-      LEFT: left         # left pod: steer left
-      RIGHT: right       # left pod: steer right
+      LEFT: left          # left pod: steer left
+      RIGHT: right        # left pod: steer right
       UP: up              # left pod: arrow up (up key)
       DOWN: down          # left pod: arrow down (down key)
-      PLUS: i            # shift down (easier gear)
-      MIN: k            # left pod: shift up (harder gear)
+      PLUS: i             # shift down (easier gear)
+      MIN: k              # left pod: shift up (harder gear)
       A: right
-      B: k         # shift up (harder gear)
-      Y: u            # U-turn / minimal UI toggle
+      B: enter
+      Y: u                # U-turn / minimal UI toggle
       Z: left
     focusProgramNamePrefixOnClick: "MyWhooshHD"   # try MyWhoosh to always land in the game
     startProgram: "MyWhooshTechnologyService.MyWhoosh_eps1123pz0kt0!MYWHOOSH" # MS Store App Id (retrieved with powershell cmd: "Get-StartApps | Where-Object Name -like '*whoosh*'")
 
   mywhoosh:
     single:
-      PLUS: i            # shift down (easier gear)
+      PLUS: i             # shift down (easier gear)
       A: right
-      B: k         # shift up (harder gear)
-      Y: u            # U-turn / minimal UI toggle
+      B: k                # shift up (harder gear)
+      Y: u                # U-turn / minimal UI toggle
       Z: left
     double:
-      LEFT: left         # left pod: steer left
-      RIGHT: right       # left pod: steer right
+      LEFT: left          # left pod: steer left
+      RIGHT: right        # left pod: steer right
       UP: up              # left pod: arrow up (up key)
       DOWN: down          # left pod: arrow down (down key)
-      PLUS: i            # shift down (easier gear)
-      MIN: k            # left pod: shift up (harder gear)
+      PLUS: i             # shift down (easier gear)
+      MIN: k              # left pod: shift up (harder gear)
       A: right
-      B: k         # shift up (harder gear)
-      Y: u            # U-turn / minimal UI toggle
+      B: enter
+      Y: u                # U-turn / minimal UI toggle
       Z: left
     focusProgramNamePrefixOnClick: "MyWhoosh"   # try MyWhoosh to always land in the game
     startProgram: "MyWhooshTechnologyService.MyWhoosh_eps1123pz0kt0!MYWHOOSH" # verified MS Store App Id (retrieved with powershell cmd: "Get-StartApps | Where-Object Name -like '*whoosh*'")
