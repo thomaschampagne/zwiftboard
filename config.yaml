@@ -90,7 +90,8 @@ profiles:
     focusProgramNamePrefixOnClick: "Notepad"
     startProgram: "notepad.exe"
 
-  # MyWhoosh: I = shift down (PLUS), K = shift up (B, MIN), u = U-turn / minimal UI
+  # MyWhoosh: single — I = shift down (PLUS), K = shift up (B). Double is
+  # swapped: PLUS = K (shift up), MIN = I (shift down). u = U-turn / minimal UI
   # (Y), right / left steering (A / Z).
   mywhoosh-hd:
     single:
@@ -104,8 +105,8 @@ profiles:
       RIGHT: right        # left pod: steer right
       UP: up              # left pod: arrow up (up key)
       DOWN: down          # left pod: arrow down (down key)
-      PLUS: i             # shift down (easier gear)
-      MIN: k              # left pod: shift up (harder gear)
+      PLUS: k             # shift up (harder gear) — swapped on request
+      MIN: i              # left pod: shift down (easier gear) — swapped on request
       A: right
       B: enter
       Y: u                # U-turn / minimal UI toggle
@@ -125,8 +126,8 @@ profiles:
       RIGHT: right        # left pod: steer right
       UP: up              # left pod: arrow up (up key)
       DOWN: down          # left pod: arrow down (down key)
-      PLUS: i             # shift down (easier gear)
-      MIN: k              # left pod: shift up (harder gear)
+      PLUS: k             # shift up (harder gear) — swapped on request
+      MIN: i              # left pod: shift down (easier gear) — swapped on request
       A: right
       B: enter
       Y: u                # U-turn / minimal UI toggle
