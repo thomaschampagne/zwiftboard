@@ -176,14 +176,25 @@ func main() {
 		}
 	}
 
+	// Startup mode: the file's defaultMode (last used), double when absent.
+	// Computed once so the KeyMap, the screen, and the VK index all agree.
+	mode := cfg.DefaultMode
+	if mode == "" {
+		mode = config.ModeDouble
+	}
 	if tuiMode {
 		if *demo {
-			runTUI(tuiConfig(cfg, true, logBuf, *configPath), nil)
+			runTUI(tuiConfig(cfg, true, mode, logBuf, *configPath), nil)
 		}
-		km := ble.NewKeyMap(cfg.Double)
+		var km *ble.KeyMap
+		if mode == config.ModeSingle {
+			km = ble.NewKeyMap(cfg.Single)
+		} else {
+			km = ble.NewKeyMap(cfg.Double)
+		}
 		names, _ := config.ProfileList(*configPath)
-		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, mode: config.ModeDouble, km: km}
 		idx := vkIndex(cfg.Double)
+		state := &profileState{path: *configPath, names: names, idx: indexOf(names, cfg.Profile), cur: cfg, mode: mode, km: km}
 		state.vkIdx.Store(&idx)
 		auth := tuiAuth(client, authErr, func() {
 			// A successful sign-in renews the LEFT pod's time-limited unlock:
@@ -194,7 +205,7 @@ func main() {
 			// solver. The RIGHT pod is never ended by a sign-in.
 			ble.EndSessionsForSide(zwift.PodLeft)
 		})
-		tcfg := tuiConfig(cfg, false, logBuf, *configPath)
+		tcfg := tuiConfig(cfg, false, mode, logBuf, *configPath)
 		tcfg.Profiles = names
 		tcfg.ProfileIndex = state.idx
 		tcfg.SwitchProfile = state.switchBy
@@ -216,7 +227,7 @@ func main() {
 					return tui.Config{}, false
 				}
 				restoredNames, restoredIdx := state.reset(rebuilt)
-				next := tuiConfig(rebuilt, false, logBuf, path)
+				next := tuiConfig(rebuilt, false, mode, logBuf, path)
 				next.Profiles = restoredNames
 				next.ProfileIndex = restoredIdx
 				next.SwitchProfile = state.switchBy

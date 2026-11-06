@@ -46,12 +46,18 @@ func nextProfileIndex(n, idx, delta int) int {
 	return ((idx+delta)%n + n) % n
 }
 
-// tuiConfig turns the loaded config into what the status screen displays.
-func tuiConfig(cfg config.Config, demo bool, logs *tui.LogBuffer, configPath string) tui.Config {
+// tuiConfig turns the loaded config into what the status screen displays. mode
+// is the active controller mode (the file's defaultMode, else double) so the
+// screen shows that mode's bindings from the start — not always double.
+func tuiConfig(cfg config.Config, demo bool, mode config.Mode, logs *tui.LogBuffer, configPath string) tui.Config {
+	bind := cfg.Double
+	if mode == config.ModeSingle {
+		bind = cfg.Single
+	}
 	return tui.Config{
 		Profile:      cfg.Profile,
-		Mode:         config.ModeDouble,
-		Bindings:     bindingTokens(cfg.Double),
+		Mode:         mode,
+		Bindings:     bindingTokens(bind),
 		LeftButtons:  zwift.LeftButtons,
 		RightButtons: zwift.RightButtons,
 		Focus:        cfg.FocusProgramNamePrefixOnClick,

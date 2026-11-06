@@ -49,6 +49,53 @@ func TestOpenConfigFileReportsStartFailure(t *testing.T) {
 
 var errTest = testErr("start failed")
 
+func TestTUIConfigUsesTheStartupModeNotAlwaysDouble(t *testing.T) {
+	path := writeProfileConfig(t, `defaultProfile: mywhoosh
+profiles:
+  mywhoosh:
+    single:
+      PLUS: i
+      A: right
+      B: k
+      Y: u
+      Z: left
+    double:
+      LEFT: left
+      RIGHT: right
+      UP: up
+      DOWN: down
+      PLUS: i
+      MIN: k
+      A: right
+      B: enter
+      Y: u
+      Z: left
+`)
+	cfg, err := config.Load(path, "")
+	if err != nil {
+		t.Fatalf("Load = %v", err)
+	}
+	for _, mode := range []config.Mode{config.ModeSingle, config.ModeDouble} {
+		tcfg := tuiConfig(cfg, false, mode, nil, "config.yaml")
+		if tcfg.Mode != mode {
+			t.Errorf("mode = %q, want %q", tcfg.Mode, mode)
+		}
+		want := cfg.Double
+		if mode == config.ModeSingle {
+			want = cfg.Single
+		}
+		wantTok := bindingTokens(want)
+		if len(tcfg.Bindings) != len(wantTok) {
+			t.Errorf("bindings len = %d, want %d for mode %q", len(tcfg.Bindings), len(wantTok), mode)
+		}
+		for btn, tok := range wantTok {
+			if tcfg.Bindings[btn] != tok {
+				t.Errorf("mode %q: %s = %q, want %q", mode, btn, tcfg.Bindings[btn], tok)
+			}
+		}
+	}
+}
+
 type testErr string
 
 func (e testErr) Error() string { return string(e) }
@@ -309,4 +356,35 @@ func TestLoginClosureMapsErrAuthAndArmsOnSignedIn(t *testing.T) {
 	if armed != 1 {
 		t.Fatalf("onSignedIn called %d times on success, want 1", armed)
 	}
+}
+
+func checkPersisted(t *testing.T, path string, profile string, mode config.Mode) {
+	t.Helper()
+	cfg, err := config.Load(path, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Profile != profile || cfg.DefaultMode != mode {
+		t.Fatalf("persisted %q/%q, want %q/%q", cfg.Profile, cfg.DefaultMode, profile, mode)
+	}
+}
+
+func TestSwitchAndTogglePersistSelection(t *testing.T) {
+	path := writeProfileConfig(t, "# head\ndefaultProfile: a\nprofiles:\n  a:\n    A: space\n  b:\n    A: enter\n")
+	km := ble.NewKeyMap(map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}})
+	s := &profileState{path: path, names: []string{"a", "b"}, idx: 0, mode: config.ModeSingle, km: km}
+	s.vkIdx.Store(&map[uint16][]string{})
+
+	s.switchBy(1)
+	checkPersisted(t, path, "b", config.ModeSingle)
+
+	s.toggleMode()
+	checkPersisted(t, path, "b", config.ModeDouble)
+}
+
+func TestPersistSelectionMissingFileWarnsOnly(t *testing.T) {
+	km := ble.NewKeyMap(map[string]keys.Binding{"A": {VK: 0x41, Token: "space"}})
+	s := &profileState{path: filepath.Join(t.TempDir(), "absent.yml"), mode: config.ModeDouble, km: km}
+	s.vkIdx.Store(&map[uint16][]string{})
+	s.toggleMode() // must not panic; the failure is a Warn, never a live-mode rollback
 }
