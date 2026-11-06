@@ -398,7 +398,7 @@ func (m Model) footer() string {
 		segs = append(segs, hint("ctrl+s", "start"))
 	}
 	if m.cfg.SwitchProfile != nil && len(m.cfg.Profiles) > 1 {
-		segs = append(segs, hint("ctrl+←/→", "switch profile"))
+		segs = append(segs, hint("ctrl+←/→", "profile"))
 	}
 	if m.cfg.Auth.Login != nil {
 		segs = append(segs, hint("ctrl+z", "sign in"))
