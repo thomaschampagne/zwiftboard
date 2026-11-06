@@ -1,12 +1,12 @@
 {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Turn a Zwift Click V2 controller into a Bluetooth keyboard for indoor cycling apps or any apps.",
     "homepage": "https://github.com/thomaschampagne/zwiftboard",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/thomaschampagne/zwiftboard/releases/download/1.3.0/zwiftboard.exe",
-            "hash": "86f5a811ebd596f7b1bd704e1547ace2c401ec78722b5bd921096e7e1b92e708"
+            "url": "https://github.com/thomaschampagne/zwiftboard/releases/download/1.4.0/zwiftboard.exe",
+            "hash": "b9a5138cc5c38ed987f02cc8b14e45893c289d278cf47cbd6c07c635a6eda543"
         }
     },
     "bin": "zwiftboard.exe",
