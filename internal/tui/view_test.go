@@ -216,15 +216,15 @@ func TestViewFooterProfileSwitchHint(t *testing.T) {
 	cfg := testCfg()
 	cfg.SwitchProfile = func(int) {}
 	cfg.Profiles = []string{"a", "b"}
-	has(t, on(cfg, PodConnected, PodConnected).View(), "ctrl+←/→ switch profile")
+	has(t, on(cfg, PodConnected, PodConnected).View(), "ctrl+←/→ profile")
 
 	// A single profile hides the hint even though switching is wired.
 	one := testCfg()
 	one.SwitchProfile = func(int) {}
 	one.Profiles = []string{"a"}
-	lacks(t, on(one, PodConnected, PodConnected).View(), "switch profile")
+	lacks(t, on(one, PodConnected, PodConnected).View(), "profile")
 
-	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "switch profile")
+	lacks(t, on(testCfg(), PodConnected, PodConnected).View(), "profile")
 }
 
 func TestViewFooterActionHints(t *testing.T) {
@@ -558,5 +558,5 @@ func TestViewFooterFitsCardWidth(t *testing.T) {
 		}
 	}
 	has(t, m.View(), "ctrl+l logs", "ctrl+e edit", "ctrl+r reload", "ctrl+s start",
-		"ctrl+←/→ switch profile", "ctrl+z sign in", "ctrl+c quit")
+		"ctrl+←/→ profile", "ctrl+z sign in", "ctrl+c quit")
 }
