@@ -223,12 +223,13 @@ func TestShippedProfilesSplitIntoModes(t *testing.T) {
 	}
 }
 
-// shiftKeys is the double-mode shift pair per profile: PLUS shifts down (easier)
-// and the left pod's MIN shifts up (harder). Programs with no keyboard gear key
-// use the closest documented effort or resistance key, noted per entry.
+// shiftKeys is the double-mode PLUS/MIN pair per profile ([PLUS, MIN]).
+// Direction is noted per entry: MyWhoosh is user-swapped (PLUS shifts up,
+// MIN shifts down); every other profile keeps PLUS down / MIN up. Programs
+// with no keyboard gear key use the closest documented stand-in key.
 var shiftKeys = map[string][2]string{
-	"mywhoosh":      {"i", "k"},             // MyWhoosh: I shifts down, K shifts up
-	"mywhoosh-hd":   {"i", "k"},             // same keys as mywhoosh
+	"mywhoosh":      {"k", "i"},             // swapped on request: PLUS shifts up (K), MIN shifts down (I)
+	"mywhoosh-hd":   {"k", "i"},             // swapped on request: same as mywhoosh
 	"biketerra":     {"s", "w"},             // Biketerra: W/S shift; direction per the GearPad guide
 	"rouvy":         {",", "."},             // Rouvy: comma shifts down, period shifts up
 	"trainingpeaks": {"-", "="},             // TrainingPeaks Virtual: - and = change base resistance
@@ -237,8 +238,8 @@ var shiftKeys = map[string][2]string{
 	"trainerroad":   {"left", "right"},      // TrainerRoad: resistance level arrows
 }
 
-// TestDoubleModeShiftKeys: in double mode PLUS shifts down and MIN shifts up
-// in every program that has a gear (or stand-in) key.
+// TestDoubleModeShiftKeys: in double mode each profile's PLUS/MIN pair maps
+// the gear keys listed in shiftKeys (direction noted per entry).
 func TestDoubleModeShiftKeys(t *testing.T) {
 	path := writeDefaultConfig(t)
 	for name, want := range shiftKeys {
