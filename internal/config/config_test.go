@@ -494,3 +494,36 @@ func TestMappingSelectsTheModeMap(t *testing.T) {
 		t.Error("double mode should use the double map")
 	}
 }
+
+func TestDefaultMode(t *testing.T) {
+	path := writeConfig(t, "profiles:\n  a:\n    A: space\n")
+	cfg, err := Load(path, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DefaultMode != "" {
+		t.Fatalf("DefaultMode = %q, want \"\" when the key is absent", cfg.DefaultMode)
+	}
+
+	for _, c := range []struct {
+		mode string
+		want Mode
+	}{
+		{"single", ModeSingle},
+		{"double", ModeDouble},
+	} {
+		path := writeConfig(t, "defaultMode: "+c.mode+"\nprofiles:\n  a:\n    A: space\n")
+		cfg, err := Load(path, "a")
+		if err != nil {
+			t.Fatalf("%s: %v", c.mode, err)
+		}
+		if cfg.DefaultMode != c.want {
+			t.Fatalf("DefaultMode = %q, want %q", cfg.DefaultMode, c.want)
+		}
+	}
+
+	path = writeConfig(t, "defaultMode: both\nprofiles:\n  a:\n    A: space\n")
+	if _, err := Load(path, "a"); err == nil || !strings.Contains(err.Error(), "bad defaultMode") {
+		t.Fatalf("err = %v, want a bad-defaultMode load error", err)
+	}
+}

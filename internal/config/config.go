@@ -56,17 +56,22 @@ const maxConfigBytes = 1 << 20
 type doc struct {
 	LogLevel                      string               `yaml:"loglevel"`
 	DefaultProfile                string               `yaml:"defaultProfile"`                // profile used when -p is absent
+	DefaultMode                   string               `yaml:"defaultMode"`                   // single | double: last mode used
 	FocusProgramNamePrefixOnClick *string              `yaml:"focusProgramNamePrefixOnClick"` // set at top level = error (moved into profiles)
 	Profiles                      map[string]yaml.Node `yaml:"profiles"`
 }
 
 // Config is the parsed config file for the selected profile.
 type Config struct {
-	Single  map[string]keys.Binding // right controller; nil when the file is missing
-	Double  map[string]keys.Binding // left and right controllers; nil when the file is missing
-	Profile string                  // resolved profile name
-	Level   slog.Level              // from loglevel:, default info
-	Missing bool                    // config file not found
+	Single      map[string]keys.Binding // right controller; nil when the file is missing
+	Double      map[string]keys.Binding // left and right controllers; nil when the file is missing
+	Profile     string                  // resolved profile name
+	Level       slog.Level              // from loglevel:, default info
+	Missing     bool                    // config file not found
+	DefaultMode Mode                    // single | double: last mode used
+	// DefaultMode is the parsed top-level defaultMode: key — the last
+	// controller mode used. "" when absent (the caller falls back to the
+	// historical ModeDouble).
 	// FocusProgramNamePrefixOnClick is the program (window title or .exe name,
 	// per-profile key) brought to the foreground before every key tap; ""
 	// disables the feature (focusProgramNamePrefixOnClick: null).
@@ -110,6 +115,14 @@ func Load(path, profile string) (Config, error) {
 	if def := strings.TrimSpace(d.DefaultProfile); !explicit && def != "" {
 		profile = def
 		cfg.Profile = profile
+	}
+	if m := strings.TrimSpace(d.DefaultMode); m != "" {
+		switch m {
+		case string(ModeSingle), string(ModeDouble):
+			cfg.DefaultMode = Mode(m)
+		default:
+			return cfg, fmt.Errorf("%s: bad defaultMode %q (use single or double)", path, d.DefaultMode)
+		}
 	}
 	if d.LogLevel != "" {
 		if err := cfg.Level.UnmarshalText([]byte(d.LogLevel)); err != nil {

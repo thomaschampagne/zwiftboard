@@ -6,7 +6,10 @@
 #
 # defaultProfile: profile loaded at startup when -p is not passed. It must name
 # a profile defined under `profiles:` below, or startup fails; -p overrides it.
+# defaultMode: last controller mode used (single | double), persisted by
+# zwiftboard whenever you switch profile or mode; "double" when absent.
 defaultProfile: notepad
+defaultMode: single
 #
 # loglevel: debug | info | warn | error — -v on the CLI forces debug.
 loglevel: info

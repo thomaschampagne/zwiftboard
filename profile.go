@@ -97,17 +97,33 @@ func (s *profileState) reset(next config.Config) ([]string, int) {
 
 // toggleMode flips the active profile between single and double (the TUI "m"
 // shortcut) and swaps the KeyMap to the other map. The mode survives profile
-// switches.
+// switches and is persisted as defaultMode right away.
 func (s *profileState) toggleMode() {
 	s.mu.Lock()
 	s.mode = s.mode.Toggle()
 	s.installLocked(s.cur)
-	mode, prog := s.mode, s.prog
+	mode, prog, name := s.mode, s.prog, s.cur.Profile
 	bindings := bindingTokens(s.cur.Mapping(mode))
 	s.mu.Unlock()
 
+	if name == "" {
+		return
+	}
+	s.persistSelection(name, mode)
+
 	if prog != nil {
 		prog.Send(tui.ModeMsg{Mode: mode, Bindings: bindings})
+	}
+}
+
+// persistSelection records the last used profile and mode in the config file
+// (defaultProfile / defaultMode) so the next start reopens them. The blocking
+// write runs OUTSIDE the caller's mutex; any failure only costs the memory of
+// the selection, never the live switch. A missing config file warns too (the
+// first launch creates one, so absence means an explicit -config path).
+func (s *profileState) persistSelection(profile string, mode config.Mode) {
+	if err := config.SaveSelection(s.path, profile, mode); err != nil {
+		slog.Warn("cannot persist last profile/mode — selection lost on restart", "file", s.path, "error", err)
 	}
 }
 
@@ -156,6 +172,9 @@ func (s *profileState) apply(name string, launchProgram bool) {
 
 	if launchProgram {
 		launchProfile(next)
+		// launchProgram also means "a real profile switch" (reload passes
+		// false), so the last-used selection is written to the file here only.
+		s.persistSelection(next.Profile, mode)
 	}
 	if prog != nil {
 		prog.Send(tui.ProfileMsg{
