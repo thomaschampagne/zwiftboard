@@ -23,6 +23,11 @@ Zwift locks the Click V2 to its own app. `zwiftboard` frees it: connect over Blu
 - **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
 - **Windows, Zwift Click V2** - the pair this tool is built for.
 
+An experimental Android app is also available in [`android/`](android/README.md).
+It runs as a foreground BLE service and sends Click controls through an
+experimental MyWhoosh Link TCP server; Link endpoint discovery is not yet
+implemented or verified.
+
 ---
 
 ## Demo with Notepad
