@@ -51,8 +51,8 @@ github.com/saltosystems/winrt-go v0.0.0-20261016124014-b298124d7472/go.mod h1:CI
 github.com/sirupsen/logrus v1.5.0/go.mod h1:+F7Ogzej0PZc/94MaYx/nvG9jOFMD2osvC3s+Squfpo=
 github.com/sirupsen/logrus v1.10.2 h1:G2SED73/qrAu6YwbdxOD6peLkCBI3z7L+ykJFTXJBBo=
 github.com/sirupsen/logrus v1.10.2/go.mod h1:SLEg8TqYulVKKfIGHldVp2K2aYz2DKSVBq4g/H5bR7Q=
-github.com/soypat/cyw43439 v0.1.2-0.20260731160358-f2a6af121857 h1:FupkkbuNKByxNhVcFMOu7ZT3v4b+et0sE4ZzC66hIl0=
-github.com/soypat/cyw43439 v0.1.2-0.20260731160358-f2a6af121857/go.mod h1:hStbAH1nOOWlo1ltrPd6V1GoIQYoW5/L6HcKZRlVp04=
+github.com/soypat/cyw43439 v0.2.0 h1:xG85waKoeFgwToHMdExVPMZdITNdbdO9gUuDZk3WrHs=
+github.com/soypat/cyw43439 v0.2.0/go.mod h1:PXS9E4wJ2f3BK3Vqf//gw1tE2kipMlNuubNm5au5RGc=
 github.com/soypat/lneto v0.4.0 h1:oBTcMnhEIBERXmAfwK4uDpItRaF7RiT1K2pljFVxtQc=
 github.com/soypat/lneto v0.4.0/go.mod h1:Be5PjwoYukvHFiUXxpYi8+ppH2F/gw/vjGBvFdv+Ti8=
 github.com/soypat/seqs v0.0.0-20260125140838-2c1c6b1bd69e h1:xF3R+8683ngGNUeIy8PHJZiJZ/XIw+hlGgxg572P0Mw=
@@ -145,7 +145,7 @@ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-tinygo.org/x/bluetooth v0.16.0 h1:vadiRkyCWukpGkYL9xBwY7j/vslReiZZ3BAWdVE0G4E=
-tinygo.org/x/bluetooth v0.16.0/go.mod h1:MRj/k5a7rBNIRpC0bAX0VNuSilv+JD83thE4zjxs2EM=
-tinygo.org/x/espradio v0.4.0 h1:xq/DJKr0ibL0R6Q+zlS2Lpfin7aHdmoABd6qMVNg4zA=
-tinygo.org/x/espradio v0.4.0/go.mod h1:PI7GtwabAzn6R+JN6eIyHjYZpGf1/ABkh4OzpDFQJ3E=
+tinygo.org/x/bluetooth v0.17.0 h1:jB93QDKgjw7jLarR/3hrzm1aIgpyzqTQye7QuLJ4BSY=
+tinygo.org/x/bluetooth v0.17.0/go.mod h1:sKTLhHAyD9jKiE1EHLw0KJOdHaHkKIcLK0sqSNX+JQ0=
+tinygo.org/x/espradio v0.5.0 h1:K+Kq4LUW2lG5ck9o4tbCwhlKA1Dog4ODZjV/HhmBOVo=
+tinygo.org/x/espradio v0.5.0/go.mod h1:2SwdQCIZTp+TshZXtf89YHNbM7mMVtAGmg/v056XSx0=
