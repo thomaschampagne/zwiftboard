@@ -2,6 +2,7 @@ package launch
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,42 @@ func TestLaunchUnresolvedBareExe(t *testing.T) {
 	}
 	if err := e.Launch("zwiftboard_no_such_program_12345.exe"); err == nil || started {
 		t.Fatal("unresolved bare exe should warn/skip")
+	}
+}
+
+func TestStartProgramExpandLocalAppData(t *testing.T) {
+	t.Setenv("LOCALAPPDATA", `C:\Users\Sample User\AppData\Local`)
+	path := `%localappdata%\BikeTerra\BikeTerra.exe`
+	want := `C:\Users\Sample User\AppData\Local\BikeTerra\BikeTerra.exe`
+	var checked, started bool
+	e := Env{
+		Exists: func(got string) bool {
+			checked = true
+			if got != want {
+				t.Errorf("exists path = %q, want %q", got, want)
+			}
+			return true
+		},
+		Running: func(string) bool { return false },
+		Start: func(cmd *exec.Cmd) error {
+			started = true
+			if len(cmd.Args) != 1 || cmd.Args[0] != want {
+				t.Errorf("command = %q, want %q", cmd.Args, want)
+			}
+			return nil
+		},
+	}
+	if err := e.Launch(path); err != nil {
+		t.Fatal(err)
+	}
+	if !checked || !started {
+		t.Fatalf("expected existence check and launch: checked=%v started=%v", checked, started)
+	}
+}
+
+func TestExpandEnvUnknownVariableLeftUnchanged(t *testing.T) {
+	const spec = `%ZWIFTBOARD_THIS_IS_NOT_AN_ENV_VARIABLE%\app.exe`
+	if got := expandEnv(spec); !strings.HasPrefix(got, `%ZWIFTBOARD_THIS_IS_NOT_AN_ENV_VARIABLE%`) {
+		t.Fatalf("unknown variable should remain unchanged, got %q", got)
 	}
 }

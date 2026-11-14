@@ -79,12 +79,14 @@ type Env struct {
 	Start   func(*exec.Cmd) error
 }
 
-// Launch applies the launch policy: empty is a no-op; an already-running exe is
+// Launch expands Windows environment variables in paths (e.g.
+// %LOCALAPPDATA%\BikeTerra\BikeTerra.exe), then applies the launch policy:
+// empty is a no-op; an already-running exe is
 // skipped; a bare name is resolved via PATH then Windows App Paths (warn if
 // unresolved); an existing path that is missing is skipped with a warning;
 // anything else is started.
 func (e Env) Launch(spec string) error {
-	spec = strings.TrimSpace(spec)
+	spec = expandEnv(strings.TrimSpace(spec))
 	if spec == "" {
 		return nil
 	}

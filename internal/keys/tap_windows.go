@@ -14,7 +14,8 @@ import (
 
 var (
 	user32                  = windows.NewLazySystemDLL("user32.dll")
-	procKeybdEvent          = user32.NewProc("keybd_event")
+	procSendInput           = user32.NewProc("SendInput")
+	procMapVirtualKey       = user32.NewProc("MapVirtualKeyW")
 	procGetWindowText       = user32.NewProc("GetWindowTextW")
 	procIsIconic            = user32.NewProc("IsIconic")
 	procIsWindowVisible     = user32.NewProc("IsWindowVisible")
@@ -23,18 +24,92 @@ var (
 )
 
 const (
-	keyEventKeyUp = 0x0002 // KEYEVENTF_KEYUP
-	vkMenu        = 0x12   // VK_MENU, used to release the foreground lock
-	swRestore     = 9      // SW_RESTORE
+	inputKeyboard       = 1      // INPUT_KEYBOARD
+	keyEventExtendedKey = 0x0001 // KEYEVENTF_EXTENDEDKEY
+	keyEventKeyUp       = 0x0002 // KEYEVENTF_KEYUP
+	keyEventScanCode    = 0x0008 // KEYEVENTF_SCANCODE
+	mapVKtoVSCEx        = 4      // MAPVK_VK_TO_VSC_EX
+	vkMenu              = 0x12   // VK_MENU, used to release the foreground lock
+	swRestore           = 9      // SW_RESTORE
 
 	// keyRepeatDelay/keyRepeatInterval mimic a real keyboard: Windows' shortest
-	// repeat delay and its default repeat rate. A synthetic keybd_event down is
+	// repeat delay and its default repeat rate. A synthetic SendInput keydown is
 	// a single event with NO OS auto-repeat — games that poll the key state see
 	// the hold, but text apps (Notepad, chat) need the repeated WM_KEYDOWN a
 	// physical key produces, so Down re-sends the press on this schedule.
 	keyRepeatDelay    = 250 * time.Millisecond
 	keyRepeatInterval = 33 * time.Millisecond
 )
+
+// Windows INPUT contains a union of MOUSEINPUT, KEYBDINPUT, and HARDWAREINPUT.
+// Model the union using its largest member (MOUSEINPUT) so the structure has
+// the correct size and alignment on both 32-bit and 64-bit Windows. Write a
+// KEYBDINPUT into the beginning of that union for keyboard events.
+type mouseInput struct {
+	dx        int32
+	dy        int32
+	mouseData uint32
+	flags     uint32
+	time      uint32
+	extraInfo uintptr
+}
+
+type keyboardInput struct {
+	vk        uint16
+	scan      uint16
+	flags     uint32
+	time      uint32
+	extraInfo uintptr
+}
+
+type input struct {
+	typ  uint32
+	data mouseInput // size and alignment of the Windows INPUT union
+}
+
+func newKeyboardInput(vk uint16, flags uint32) input {
+	in := input{typ: inputKeyboard}
+	*(*keyboardInput)(unsafe.Pointer(&in.data)) = keyboardInput{vk: vk, flags: flags}
+	return in
+}
+
+// newScanKeyboardInput constructs a physical-scan-code event. Chromium uses
+// the scan code to populate KeyboardEvent.code. Virtual-key-only SendInput
+// events can have a zero scan code, which some web apps cannot match reliably.
+// MapVirtualKeyW(MAPVK_VK_TO_VSC_EX) returns 0xE0 in the high byte for keys
+// like the arrow keys; Windows requires KEYEVENTF_EXTENDEDKEY for those.
+//
+// Fallback to virtual keys when a scan-code mapping is unavailable or uses
+// the uncommon E1 prefix (which cannot be represented by this INPUT layout).
+func newScanKeyboardInput(vk uint16, mappedScan uint32, flags uint32) input {
+	prefix := (mappedScan >> 8) & 0xff
+	scan := uint16(mappedScan & 0xff)
+	if scan == 0 || prefix == 0xE1 {
+		return newKeyboardInput(vk, flags)
+	}
+	if prefix == 0xE0 {
+		flags |= keyEventExtendedKey
+	}
+	in := input{typ: inputKeyboard}
+	*(*keyboardInput)(unsafe.Pointer(&in.data)) = keyboardInput{
+		vk: 0, scan: scan, flags: flags | keyEventScanCode,
+	}
+	return in
+}
+
+// sendKeyboardInput sends a physical scan-code press or release where possible.
+// SendInput returning 1 means Windows accepted an event for injection; it does
+// NOT prove that the foreground app handled it. UIPI can block elevated apps.
+func sendKeyboardInput(vk uint16, flags uint32) bool {
+	mapped, _, _ := procMapVirtualKey.Call(uintptr(vk), mapVKtoVSCEx)
+	in := newScanKeyboardInput(vk, uint32(mapped), flags)
+	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&in)), unsafe.Sizeof(in))
+	if sent != 1 {
+		slog.Warn("SendInput failed", "vk", vk, "mapped_scan", mapped, "flags", flags, "error", err)
+		return false
+	}
+	return true
+}
 
 // repeatStop cancels a held key's repeat goroutine (closed to stop).
 var (
@@ -60,13 +135,13 @@ func focusTarget() bool {
 	return true
 }
 
-// Tap presses and releases a virtual key via keybd_event.
+// Tap presses and releases a key using scan-code SendInput.
 func Tap(b Binding) {
 	Down(b)
 	Up(b)
 }
 
-// Down presses a virtual key and leaves it held (a button is being held).
+// Down presses a scan-code-backed key and leaves it held (a button is being held).
 // It also starts keyboard auto-repeat: without it a synthetic press is a
 // single event and repeated presses in a text app (Notepad, chat) never
 // happen while the button is held. It reports whether the key actually went
@@ -76,18 +151,19 @@ func Down(b Binding) bool {
 	if !focusTarget() {
 		return false
 	}
+	if !sendKeyboardInput(b.VK, 0) {
+		return false
+	}
 	startRepeat(b.VK)
-	procKeybdEvent.Call(uintptr(b.VK), 0, 0, 0)
 	return true
 }
 
-// Up releases a virtual key previously pressed with Down (button released).
-// Always true (a keyup for a key that is not down is a harmless no-op); the
-// bool keeps Down/Up symmetric for the hold tracker.
+// Up releases a key previously pressed with Down (button released).
+// It reports whether SendInput accepted the release; the bool keeps Down/Up
+// symmetric for the hold tracker.
 func Up(b Binding) bool {
 	stopRepeat(b.VK)
-	procKeybdEvent.Call(uintptr(b.VK), 0, keyEventKeyUp, 0)
-	return true
+	return sendKeyboardInput(b.VK, keyEventKeyUp)
 }
 
 // ReleaseVK force-releases a virtual key. ble.ReleaseAll uses it to free
@@ -95,7 +171,7 @@ func Up(b Binding) bool {
 // controller can never leave a key stuck down.
 func ReleaseVK(vk uint16) {
 	stopRepeat(vk)
-	procKeybdEvent.Call(uintptr(vk), 0, keyEventKeyUp, 0)
+	sendKeyboardInput(vk, keyEventKeyUp)
 }
 
 // startRepeat idempotently re-sends vk as a press after keyRepeatDelay and
@@ -123,7 +199,9 @@ func startRepeat(vk uint16) {
 			case <-stop:
 				return
 			case <-t.C:
-				procKeybdEvent.Call(uintptr(vk), 0, 0, 0)
+				if !sendKeyboardInput(vk, 0) {
+					return // avoid repeating a blocked injection every 33ms
+				}
 			}
 		}
 	}()
@@ -195,8 +273,10 @@ func focusWindow(hwnd uintptr) {
 	if r, _, _ := procSetForegroundWindow.Call(hwnd); r != 0 {
 		return
 	}
-	procKeybdEvent.Call(vkMenu, 0, 0, 0)
-	procKeybdEvent.Call(vkMenu, 0, keyEventKeyUp, 0)
+	if !sendKeyboardInput(vkMenu, 0) {
+		return
+	}
+	sendKeyboardInput(vkMenu, keyEventKeyUp)
 	procSetForegroundWindow.Call(hwnd)
 }
 

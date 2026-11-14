@@ -17,7 +17,7 @@ Zwift locks the Click V2 to its own app. `zwiftboard` frees it: connect over Blu
 
 - **One pod or two** - Both controllers or right only works out of the box.
 - **No Unlock Tricks** - No need to start Zwift App to unlock controllers. Everything is done for you automatically.
-- **Free and open source** - no subscription, no paid tier.
+- **Free and open source** - no subscription, no paid tier. The right pod needs no account.
 - **Starts your app for you** - each profile can launch its cycling app once Bluetooth is up, so one double-click on `zwiftboard.exe` opens the whole setup. See [Start a program with a profile](#start-a-program-with-a-profile).
 - **Clicks land in the right window** - optionally bring your app to the front before every key, so a press never goes to the wrong window.
 - **Ready for your app** - profiles for MyWhoosh, Zwift, TrainerRoad, Rouvy, TrainingPeaks Virtual, Biketerra, Tacx Training and Wahoo SYSTM. Or map any program yourself.
@@ -189,6 +189,9 @@ Launch your cycling app automatically once Bluetooth is up — per profile, so e
 setup starts its own program. The `startProgram` value accepts:
 
 - an `.exe` path (`C:\Zwift\ZwiftApp.exe`);
+- a per-user path containing a Windows environment variable, such as
+  `startProgram: '%LOCALAPPDATA%\Programs\BikeTerra\BikeTerra.exe'`;  use single quotes
+  in YAML so backslashes stay literal;
 - a bare `.exe` name (`MyWhooshHD.exe`), resolved via `PATH` / App Paths;
 - a `.bat` or `.cmd` script;
 - a `.ps1` PowerShell script;
@@ -289,7 +292,7 @@ Every shipped profile has a `double:` map that adds the LEFT pod's arrows (`LEFT
 │   protobuf bitmap,         │ write  │   4. edge-triggered diff (pair MIRRORS    │
 │   0 = pressed              │ indic. │      every press on both units)           │
 │                            │        │   5. keys.Down/Up → focus target window,  │
-│                            │        │      then user32 keybd_event              │
+│                            │        │      then user32 scan-code SendInput                │
 └────────────────────────────┘        └───────────────────┬───────────────────────┘
                                                           │ simulated keystroke
                                         ┌─────────────────▼───────────────────────┐
@@ -324,7 +327,7 @@ Every shipped profile has a `double:` map that adds the LEFT pod's arrows (`LEFT
    Dedup is edge-triggered: a handler only acts on bits that changed since
    the previous frame, and an identical mirrored bitmap changes nothing. If
    `focusProgramNamePrefixOnClick` is set, the configured window is brought
-   to the foreground before the key goes out via Windows `keybd_event`.
+   to the foreground before the key goes out via Windows `SendInput` using hardware scan codes (with a virtual-key fallback).
 
 **Both pods connected, both mappable.** The Click V2 ships as two pods
 that work as a _pair_: the LEFT pod is the pair's BLE anchor and the RIGHT pod
@@ -437,7 +440,7 @@ Layout — a single binary, entry point at the repo root:
 main.go               flags, logger setup, target registry, wiring
 internal/zwift/       protocol facts: GATT UUIDs, button bits, frame decode
 internal/ble/         scan (Watch), connect (Session), decode, hold + cross-session dedup
-internal/keys/        config token → VK code; Down/Up/ReleaseVK (keybd_event on Windows)
+internal/keys/        config token → VK code; Down/Up/ReleaseVK (SendInput on Windows)
 internal/config/      config.yaml: loglevel + profiles (returns errors)
 ```
 

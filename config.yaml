@@ -33,6 +33,7 @@ loglevel: info
 #
 #   startProgram: MyWhooshHD.exe
 #   startProgram: C:\Zwift\ZwiftApp.exe
+#   startProgram: '%LOCALAPPDATA%\Programs\BikeTerra\BikeTerra.exe'  # example: per-user path; adjust to the actual installed location
 #   startProgram: MyWhoosh.MyWhoosh_abc!App
 #
 # Find an MS Store app's AUMID with PowerShell — copy the AppID column into
@@ -226,25 +227,26 @@ profiles:
 
   # Biketerra: W/S shift the virtual drivetrain (official virtual-shifting
   # help), arrows navigate the menu, U toggles the UI.
-  biketerra:
+ biketerra:
     single:
-      PLUS: s          # shift to an easier gear
-      A: right         # menu / steer right
-      B: w             # shift to a harder gear
-      Y: u             # toggle the UI
-      Z: left          # menu / steer left
+      PLUS: s # shift to an easier gear
+      A: right # menu / steer right
+      B: w # shift to a harder gear
+      Y: c # cycle camera
+      Z: left # menu / steer left
     double:
-      LEFT: left       # left pod: arrow key (menu)
-      RIGHT: right     # left pod: arrow key (menu)
-      UP: up              # left pod: arrow up (up key)
-      DOWN: down          # left pod: arrow down (down key)
-      PLUS: s          # shift to an easier gear
-      MIN: w            # left pod: shift up
-      A: right         # menu / steer right
-      B: w             # shift to a harder gear
-      Y: u             # toggle the UI
-      Z: left          # menu / steer left
-    focusProgramNamePrefixOnClick: null   # browser or native app window
+      LEFT: left # left pod: arrow key (menu)
+      RIGHT: right # left pod: arrow key (menu)
+      UP: up # left pod: arrow up (up key)
+      DOWN: down # left pod: arrow down (down key)
+      PLUS: s # shift to an easier gear
+      MIN: w # left pod: shift up
+      A: c # cycle camera
+      B: b # look behind
+      Y: p # toggle ride actions
+      Z: enter # select (menu)
+    focusProgramNamePrefixOnClick: null #"Biketerra" # browser or native app window
+    startProgram: '%LOCALAPPDATA%\Biketerra\biketerra.exe'
 
   # Rouvy: comma/period are the desktop keyboard's default shift keys.
   rouvy:

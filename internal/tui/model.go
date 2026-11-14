@@ -13,7 +13,7 @@ import (
 )
 
 // toggleModeKey switches the active profile between single and double mode.
-const toggleModeKey = "ctrl+m"
+const toggleModeKey = "ctrl+k"
 
 // KeyStateMsg reports one emulated key's transition: Down true on press,
 // false on release. The mirrored pair fires it twice; Update dedups.

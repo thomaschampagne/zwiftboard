@@ -79,7 +79,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
 - `internal/ble/` — scan (`Watch`), connect (`Session`), button decode, hold + cross-session dedup, and the challenge hook (`Session` takes a `ChallengeSolver`; nil = the old `ff 04 00` ack).
   Scan/reconnect windows and the idle-reset are internal defaults now (the old
   `-scan`/`-reconnect`/`-addr`/`-ack`/`-idle-reset` flags were removed)
-- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (keybd_event on windows, no-op elsewhere)
+- `internal/keys/` — config token → Windows VK code; `Down`/`Up`/`ReleaseVK` (SendInput on windows, no-op elsewhere)
 - `internal/launch/` — per-profile `startProgram` launcher (exe/script/MS Store);
   Windows impl (`process_windows.go`) + no-op stub (`process_other.go`); the
   classify/resolve policy lives in `launch.go`
@@ -150,7 +150,7 @@ the TUI key-state model, pod states, the log buffer and the config-path tests.
   buttons ONLY from the left unit (seen in zwiftboard.log, 2026-10-21). Dedup
   is edge-triggered per handler: only bits that changed since the previous
   frame act, so an identical mirrored bitmap changes nothing.
-- A synthetic `keybd_event` down has NO OS auto-repeat: it is a single event
+- A synthetic `SendInput` down has NO OS auto-repeat: it is a single event
   and the keyboard driver does not repeat it for you. Games that poll the key
   state see the hold, but text apps (Notepad, chat) need the repeated
   WM_KEYDOWN a physical key produces while it is held down — so `Down`

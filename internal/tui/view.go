@@ -383,25 +383,25 @@ func (m Model) footer() string {
 		status = sWarn.Render(m.status) + "\n"
 	}
 	hint := func(k, label string) string { return sKeyHint.Render(k) + sMuted.Render(" "+label) }
-	logs := hint("ctrl+l", "logs")
+	logs := hint("ctrl+l", "show logs")
 	if m.showLogs {
 		logs = hint("ctrl+l", "hide logs")
 	}
 	segs := []string{logs}
 	if m.cfg.OpenConfig != nil {
-		segs = append(segs, hint("ctrl+e", "edit"))
+		segs = append(segs, hint("ctrl+e", "edit config"))
 	}
 	if m.cfg.Reload != nil {
-		segs = append(segs, hint("ctrl+r", "reload"))
+		segs = append(segs, hint("ctrl+r", "reload profile"))
 	}
 	if m.cfg.LaunchProgram != nil && m.cfg.StartProgram != "" {
-		segs = append(segs, hint("ctrl+s", "start"))
+		segs = append(segs, hint("ctrl+s", "start program"))
 	}
 	if m.cfg.SwitchProfile != nil && len(m.cfg.Profiles) > 1 {
-		segs = append(segs, hint("ctrl+←/→", "profile"))
+		segs = append(segs, hint("ctrl+←/→ OR p/n", "prev/next profile"))
 	}
 	if m.cfg.Auth.Login != nil {
-		segs = append(segs, hint("ctrl+z", "sign in"))
+		segs = append(segs, hint("ctrl+z", "zwift sign in"))
 	}
 	if m.cfg.ToggleMode != nil {
 		segs = append(segs, hint(toggleModeKey, "mode"))

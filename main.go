@@ -3,7 +3,7 @@
 //	go run . [-v] [-config path] [-p mywhoosh] [-log zwiftboard.log]
 //
 // Button presses are logged and, if config.yaml maps them, typed as real
-// keyboard keys (Windows keybd_event). Log level comes from config.yaml
+// keyboard keys (Windows SendInput). Log level comes from config.yaml
 // (loglevel: debug|info|warn|error); -v forces debug.
 //
 // Click V2 is a pair of devices (LEFT: arrows + minus, RIGHT: Y/Z/A/B + plus).
